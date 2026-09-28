@@ -267,10 +267,18 @@ grid2.position.y = 0.02; grid2.material.transparent = true; grid2.material.opaci
 /* ---------- supplied imagery as 3D hologram layers (depth + parallax) ---------- */
 const texLoader = new THREE.TextureLoader();
 function imagePlane(src, w, h, x,y,z, opacity){
-  const tex = texLoader.load(src, t=>{ t.colorSpace = THREE.SRGBColorSpace; });
+  // Start hidden: an untextured plane would paint as a white quad. It only
+  // becomes visible once its texture has actually decoded; on failure it
+  // stays hidden instead of flashing white over the scene.
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h),
-    new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity,
+    new THREE.MeshBasicMaterial({transparent:true, opacity,
       blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  m.visible = false;
+  texLoader.load(src,
+    t=>{ t.colorSpace = THREE.SRGBColorSpace; m.material.map = t;
+         m.material.needsUpdate = true; m.visible = true; },
+    undefined,
+    ()=>{ m.visible = false; });
   m.position.set(x,y,z); scene.add(m); return m;
 }
 // distant wireframe city skyline (7.png — no text, pure geometry)
@@ -291,12 +299,12 @@ videoTex.minFilter = THREE.LinearFilter; videoTex.magFilter = THREE.LinearFilter
 const screenGlow = new THREE.Mesh(new THREE.PlaneGeometry(10, 6),
   new THREE.MeshBasicMaterial({color:0x0a4d80, transparent:true, opacity:0.35,
     blending:THREE.AdditiveBlending, depthWrite:false}));
-screenGlow.position.set(0, 4.7, -8.5); scene.add(screenGlow);
+screenGlow.position.set(0, 4.7, -8.5); screenGlow.visible = false; scene.add(screenGlow);
 
 // the holographic video screen itself (16:9) — smaller + pushed back so it never blocks the hub
 const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(7.6, 4.28),
   new THREE.MeshBasicMaterial({map:videoTex, transparent:true, opacity:0.96, fog:false}));
-screenMesh.position.set(0, 4.7, -8.3); scene.add(screenMesh);
+screenMesh.position.set(0, 4.7, -8.3); screenMesh.visible = false; scene.add(screenMesh);
 
 // tech frame + corner brackets around screen
 const frameGroup = new THREE.Group(); frameGroup.position.copy(screenMesh.position); scene.add(frameGroup);

@@ -70,10 +70,10 @@
   /* top logo — sharp, floating, corporate */
   .brand{position:absolute;top:22px;left:50%;transform:translateX(-50%);z-index:10;
     display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
-  .brand .logo-wrap{width:min(620px,80vw);position:relative;
-    filter:drop-shadow(0 0 22px rgba(56,198,255,.35));}
+  .brand .logo-wrap{width:min(620px,80vw);position:relative;background:transparent;}
   .brand .logo-wrap img{width:100%;height:auto;max-height:150px;object-fit:contain;object-position:center;
-    mix-blend-mode:screen;opacity:.94;display:block}
+    background:transparent;mix-blend-mode:screen;opacity:.94;display:block;
+    filter:drop-shadow(0 0 22px rgba(56,198,255,.35));}
   .brand .sub{font-size:10px;letter-spacing:.52em;text-indent:.52em;color:var(--cyan);
     font-weight:600;opacity:.95;white-space:nowrap}
   .brand .sub2{font-size:9px;letter-spacing:.34em;text-indent:.34em;color:rgba(207,238,255,.55);font-weight:400}

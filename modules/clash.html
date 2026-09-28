@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Clash Analysis Dashboard</title>
+<meta name="description" content="A client-side BIM coordination dashboard for tracking clash detection results: open/resolved rates, priority breakdown, and discipline pairs.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230A1E40' width='100' height='100' rx='15'/><text x='50' y='68' text-anchor='middle' fill='%23F5A623' font-size='44' font-family='Arial' font-weight='bold'>CL</text></svg>">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; connect-src http://localhost:* http://127.0.0.1:*; base-uri 'self'; form-action 'self';">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha384-D/t0ZMqQW31H3az8ktEiNb39wyKnS82iFY52QPACM+IjKW3jDUhyIgh2PApRqJZs" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" integrity="sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3" crossorigin="anonymous"></script>
+<style>
+:root{
+  --b1:#0A1E40;--b2:#163F80;--b3:#1B4F9B;--b4:#2563B8;
+  --g1:#F5A623;--g2:#FFB830;--g3:#FFD280;
+  --ok:#27AE60;--ok2:#1E8A4A;--fail:#E03535;--fail2:#C42B2B;
+  --warn:#E67E22;--info:#4A5FBB;--na:#8E9BB3;
+  --bg:#F2F6FC;--white:#fff;--border:#D0DAE8;
+  --muted:#5D7494;--text:#1A2B45;--light:#EEF3FA;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+body.dark{--bg:#0D1526;--white:#111C33;--border:#233252;--muted:#8AA0C4;--text:#E7EDF7;--light:#17223C}
+body.dark header{box-shadow:0 4px 24px rgba(0,0,0,.55)}
+body.dark .kpi-val{color:#E7EDF7}
+body.dark .kpi-val.ok{color:#3FB950}
+body.dark .kpi-val.bad{color:#FF7B72}
+body.dark .kpi-val.gold{color:#D29922}
+body.dark .kpi-val.blue{color:#58A6FF}
+
+
+#import-overlay{
+  position:fixed;inset:0;z-index:999;overflow-y:auto;
+  background:linear-gradient(160deg,var(--b1) 0%,#0D2750 55%,#163F80 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:22px;padding:40px 20px;
+}
+.io-card{background:rgba(255,255,255,.05);border:1.5px solid rgba(245,166,35,.3);border-radius:16px;
+  padding:34px 42px;text-align:center;max-width:920px;width:96%;box-sizing:border-box}
+.io-card h2{font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;color:#fff;
+  letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px}
+.io-card>p.io-lead{color:var(--g3);font-size:.86rem;margin-bottom:26px;opacity:.9;line-height:1.5}
+.io-projname{margin-bottom:22px;text-align:left}
+.io-projname label{font-family:'Barlow Condensed',sans-serif;font-size:.72rem;font-weight:800;color:rgba(255,255,255,.55);
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;display:block}
+.io-projname input{width:100%;padding:9px 14px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.07);color:#fff;font-size:.88rem;font-family:inherit;outline:none}
+.dropzone{border:2px dashed rgba(245,166,35,.4);border-radius:12px;padding:22px 16px;cursor:pointer;
+  transition:all .2s;text-align:center;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dropzone:hover,.dropzone.over{border-color:var(--g2);background:rgba(245,166,35,.07)}
+.dropzone.done{border-style:solid;border-color:var(--ok);background:rgba(39,174,96,.08)}
+.dropzone .dz-icon{font-size:2rem;margin-bottom:8px}
+.dropzone p{color:rgba(255,255,255,.7);font-size:.85rem;margin-bottom:3px}
+.dropzone small{color:rgba(255,255,255,.3);font-size:.72rem}
+.btn-gold{background:linear-gradient(135deg,var(--g1),var(--g2));color:var(--b1);border:none;padding:11px 26px;
+  border-radius:7px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:.95rem;letter-spacing:1.5px;
+  cursor:pointer;text-transform:uppercase}
+.btn-gold:disabled{opacity:.35;cursor:not-allowed}
+.io-actions{display:flex;gap:10px;margin-top:22px;justify-content:center;flex-wrap:wrap}
+
+.map-panel{background:rgba(255,255,255,.05);border:1.5px solid rgba(74,95,187,.4);border-radius:12px;
+  padding:20px 22px;text-align:left;margin-top:18px;display:none}
+.map-panel.show{display:block}
+.map-panel h4{font-family:'Barlow Condensed',sans-serif;font-size:.92rem;font-weight:800;color:var(--g3);
+  letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+.map-panel .map-sub{color:rgba(255,255,255,.45);font-size:.74rem;margin-bottom:14px}
+.map-row{display:flex;align-items:center;gap:12px;margin-bottom:11px;flex-wrap:wrap}
+.map-row label{min-width:190px;color:rgba(255,255,255,.8);font-size:.82rem;font-weight:600}
+.map-row select{flex:1;min-width:200px;padding:8px 10px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.08);color:#fff;font-family:inherit;font-size:.8rem}
+.map-row option{color:#000}
+.status-check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 14px;
+  max-height:160px;overflow-y:auto;padding:10px;background:rgba(0,0,0,.18);border-radius:8px;margin-top:6px}
+.status-check{display:flex;align-items:center;gap:7px;font-size:.78rem;color:rgba(255,255,255,.8)}
+.status-check input{accent-color:var(--g1)}
+
+header{background:linear-gradient(120deg,#0B2347 0%,#1A5296 40%,#2A70CC 70%,#1B4F9B 100%);padding:0 32px;
+  display:flex;align-items:center;justify-content:space-between;height:70px;border-bottom:3px solid var(--g1);
+  position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(0,0,0,.3)}
+.hdr-center{text-align:center}
+.hdr-project{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:#fff;
+  letter-spacing:2px;text-transform:uppercase;text-shadow:0 2px 8px rgba(0,0,0,.7)}
+.hdr-sub{font-size:.66rem;color:var(--g3);letter-spacing:1.5px;opacity:.85}
+.hdr-actions{display:flex;gap:8px}
+.hbtn{border:1.5px solid rgba(245,166,35,.5);color:var(--g3);padding:7px 14px;border-radius:6px;
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;letter-spacing:1.5px;
+  cursor:pointer;background:transparent;text-transform:uppercase}
+.hbtn:hover{background:rgba(245,166,35,.15);border-color:var(--g2)}
+.hbtn.pdf{border-color:rgba(224,53,53,.5);color:#FF9898}
+.hbtn.pdf:hover{background:rgba(224,53,53,.2)}
+
+.tabs-bar{background:var(--white);border-bottom:2px solid var(--border);display:flex;padding:0 32px;
+  position:sticky;top:70px;z-index:99;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow-x:auto}
+.tab-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.88rem;letter-spacing:1.5px;
+  text-transform:uppercase;padding:13px 20px;cursor:pointer;border:none;background:transparent;color:var(--muted);
+  border-bottom:3px solid transparent;margin-bottom:-2px}
+.tab-btn.active{color:var(--b3);border-bottom-color:var(--g1)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+main{padding:24px 32px;max-width:1600px;margin:0 auto}
+.sec{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800;color:var(--b3);
+  letter-spacing:2.5px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.sec::after{content:'';flex:1;height:2px;background:linear-gradient(90deg,var(--g1),transparent)}
+
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--white);border-radius:10px;padding:16px 18px;border:1px solid var(--border);
+  position:relative;overflow:hidden;box-shadow:0 2px 8px rgba(27,79,155,.06)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.c-blue::before{background:var(--b3)}.kpi.c-gold::before{background:var(--g1)}
+.kpi.c-green::before{background:var(--ok)}.kpi.c-red::before{background:var(--fail)}
+.kpi.c-warn::before{background:var(--warn)}
+.kpi-lbl{font-size:.66rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px}
+.kpi-val{font-family:'Barlow Condensed',sans-serif;font-size:2.2rem;font-weight:900;line-height:1;margin-bottom:3px}
+.kpi-val.ok{color:var(--ok2)}.kpi-val.bad{color:var(--fail)}.kpi-val.gold{color:#A06A00}.kpi-val.blue{color:var(--b3)}
+.kpi-sub{font-size:.72rem;color:var(--muted)}
+
+.row2{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;margin-bottom:20px}
+@media(max-width:1000px){.row2{grid-template-columns:1fr}}
+.ccard{background:var(--white);border-radius:11px;padding:20px 22px;border:1px solid var(--border);box-shadow:0 2px 8px rgba(27,79,155,.05)}
+.ccard h3{font-family:'Barlow Condensed',sans-serif;font-size:.88rem;font-weight:800;color:var(--b3);
+  letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;padding-bottom:8px;border-bottom:1.5px solid var(--border)}
+.ch{position:relative;height:230px}
+
+.filter-bar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.filter-bar input[type=text]{padding:7px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.82rem;
+  min-width:220px;background:var(--white)}
+.filter-select{padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;background:var(--white);font-size:.8rem}
+.filter-count{margin-left:auto;font-size:.78rem;color:var(--muted);font-weight:600}
+table.dtbl{width:100%;border-collapse:collapse;font-size:.82rem;background:var(--white);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+table.dtbl th{background:var(--light);text-align:left;padding:9px 12px;font-size:.68rem;letter-spacing:.6px;
+  text-transform:uppercase;color:var(--muted);font-weight:700}
+table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
+.badge{display:inline-flex;padding:2px 9px;border-radius:20px;font-size:.7rem;font-weight:700}
+.badge-high{background:#FDEAEA;color:var(--fail2)}
+.badge-medium{background:#FFF3E0;color:#A06A00}
+.badge-low{background:#EEF1F6;color:var(--na)}
+.badge-unspec{background:var(--light);color:var(--muted)}
+.badge-open{background:#FFF3E0;color:var(--warn)}
+.badge-closed{background:#E8F9EF;color:var(--ok2)}
+.tbl-wrap{overflow-x:auto;max-height:560px;overflow-y:auto}
+
+.empty-hint{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:40px;text-align:center;color:var(--muted)}
+#toast-host{position:fixed;bottom:22px;right:22px;z-index:200}
+.toast{background:var(--b1);color:#fff;padding:11px 16px;border-radius:8px;font-size:.83rem;border-left:3px solid var(--g1);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+</style>
+</head>
+<body>
+
+<!-- IMPORT OVERLAY -->
+<div id="import-overlay">
+  <div class="io-card">
+    <h2>Clash Analysis Dashboard</h2>
+    <p class="io-lead">Import a clash test export (CSV) &mdash; e.g. a Navisworks Clash Detective report. Map your columns below; this tool doesn't assume a fixed schema since clash exports vary by coordination tool.</p>
+
+    <div class="io-projname">
+      <label>Project name <span style="font-weight:400;opacity:.7">(header &amp; exports)</span></label>
+      <input id="project-name-input" type="text" placeholder="e.g. OCC-HT01-ZZ-CL">
+    </div>
+
+    <input type="file" id="fi-csv" accept=".csv,.txt,.xlsx,.xls,.xlsm,.xml,.html,.htm" style="position:absolute;width:1px;height:1px;opacity:0" onchange="handleFile(this.files[0])">
+    <div class="dropzone" id="dz-csv" onclick="document.getElementById('fi-csv').click()"
+         ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
+         ondrop="event.preventDefault();this.classList.remove('over');handleFile(event.dataTransfer.files[0])">
+      <div class="dz-icon">💥</div>
+      <p>Drop your clash export here (CSV, Excel, Navisworks XML or HTML report)</p>
+      <small>any column layout &mdash; you'll map fields in the next step</small>
+    </div>
+    <div id="io-file-name" style="color:var(--g3);font-size:.78rem;margin-top:8px;"></div>
+<details style="margin-top:14px;text-align:left;">
+  <summary style="cursor:pointer;color:var(--g3);font-size:.78rem;">⬇ Load from Hub export server instead</summary>
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+    <input type="text" id="hub-server-url" placeholder="http://localhost:8787" style="flex:1;min-width:170px;padding:7px 10px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78rem;">
+    <input type="text" id="hub-model-name" placeholder="model / project folder name" style="flex:1;min-width:170px;padding:7px 10px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78rem;">
+    <button type="button" class="hbtn" onclick="hubLoadLatest('clash')">Load latest</button>
+  </div>
+  <div id="hub-fetch-status" style="font-size:.72rem;margin-top:6px;color:rgba(255,255,255,.6);"></div>
+</details>
+
+
+    <div class="map-panel" id="map-panel">
+      <h4>Map your columns</h4>
+      <p class="map-sub">Item A / Item B name are required. Everything else is optional &mdash; leave as "&mdash; none &mdash;" if your export doesn't have it.</p>
+      <div class="map-row"><label>Clash / test name</label><select id="map-test"></select></div>
+      <div class="map-row"><label>Item A &mdash; name <span style="color:var(--g3)">*</span></label><select id="map-a-name"></select></div>
+      <div class="map-row"><label>Item A &mdash; discipline</label><select id="map-a-disc"></select></div>
+      <div class="map-row"><label>Item B &mdash; name <span style="color:var(--g3)">*</span></label><select id="map-b-name"></select></div>
+      <div class="map-row"><label>Item B &mdash; discipline</label><select id="map-b-disc"></select></div>
+      <div class="map-row"><label>Distance / clearance</label><select id="map-distance"></select></div>
+      <div class="map-row"><label>Priority / severity</label><select id="map-priority"></select></div>
+      <div class="map-row"><label>Found date</label><select id="map-date"></select></div>
+      <div class="map-row"><label>Clash name</label><select id="map-clash"></select></div>
+      <div class="map-row"><label>Grid / location</label><select id="map-grid"></select></div>
+      <div class="map-row"><label>Item A &mdash; element ID</label><select id="map-a-id"></select></div>
+      <div class="map-row"><label>Item B &mdash; element ID</label><select id="map-b-id"></select></div>
+      <div class="map-row"><label>Status <span style="color:var(--g3)">*</span></label><select id="map-status" onchange="renderStatusChecklist()"></select></div>
+      <div id="status-checklist-wrap" style="display:none;">
+        <p class="map-sub" style="margin-top:10px;margin-bottom:4px;">Which status values count as <b>Closed</b>? (everything else is treated as Open)</p>
+        <div class="status-check-grid" id="status-checklist"></div>
+      </div>
+    </div>
+
+    <div class="io-actions">
+      <button class="btn-gold" id="gen-btn" style="display:none" onclick="generateDashboard()">⚡ &nbsp;GENERATE DASHBOARD</button>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dash" style="display:none">
+<header>
+  <div style="width:38px"></div>
+  <div class="hdr-center">
+    <div class="hdr-project" id="hdr-proj">&mdash;</div>
+    <div class="hdr-sub">CLASH ANALYSIS &middot; COORDINATION DASHBOARD</div>
+  </div>
+  <div class="hdr-actions">
+    <button class="hbtn" onclick="location.reload()">↺ IMPORT</button>
+    <button class="hbtn pdf" onclick="exportPDF()">EXPORT PDF</button>
+    <button class="hbtn" onclick="exportExcel()">EXPORT EXCEL</button>
+    <button class="hbtn" onclick="toggleDark()" title="Toggle dark mode">Dark</button>
+  </div>
+</header>
+<div class="tabs-bar">
+  <button class="tab-btn active" data-tab="t-overview" onclick="switchTab('t-overview')">Overview</button>
+  <button class="tab-btn" data-tab="t-clashes" onclick="switchTab('t-clashes')">Clashes</button>
+  <button class="tab-btn" data-tab="t-disc" onclick="switchTab('t-disc')">Disciplines</button>
+</div>
+<main>
+  <div class="tab-content active" id="t-overview">
+    <div class="sec">Overview</div>
+    <div class="kpi-row" id="kpi-row"></div>
+    <div class="row2">
+      <div class="ccard"><h3>Open vs Closed</h3><div class="ch"><canvas id="ch-status"></canvas></div></div>
+      <div class="ccard"><h3>Priority breakdown</h3><div class="ch"><canvas id="ch-priority"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="t-clashes">
+    <div class="sec">Clashes</div>
+    <div class="filter-bar">
+      <input type="text" id="cl-search" placeholder="🔍 Search item names / test..." oninput="renderClashTable()">
+      <select class="filter-select" id="cl-priority-f" onchange="renderClashTable()"><option value="">All priorities</option></select>
+      <select class="filter-select" id="cl-status-f" onchange="renderClashTable()"><option value="">All statuses</option><option value="Open">Open</option><option value="Closed">Closed</option></select>
+      <select class="filter-select" id="cl-pair-f" onchange="renderClashTable()"><option value="">All pairs</option></select>
+      <button class="hbtn" style="color:var(--b3);border-color:var(--border)" onclick="copyVisibleClashes()">Copy visible list</button>
+      <span class="filter-count" id="cl-count"></span>
+    </div>
+    <div class="tbl-wrap"><table class="dtbl" id="cl-table"></table></div>
+  </div>
+
+  <div class="tab-content" id="t-disc">
+    <div class="sec">Discipline pairs</div>
+    <div class="ccard"><h3>Clash count by discipline pair</h3><div class="ch" style="height:340px"><canvas id="ch-disc"></canvas></div></div>
+  </div>
+</main>
+</div>
+
+<div id="toast-host"></div>
+
+<script>
+"use strict";
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function toast(msg){ var h=document.getElementById('toast-host'); var t=document.createElement('div'); t.className='toast'; t.textContent=msg; h.innerHTML=''; h.appendChild(t); setTimeout(function(){h.innerHTML='';},2600); }
+
+var RAW_ROWS = [], HEADERS = [], CLASH_ITEMS = [], DISTINCT_STATUS = [], STATUS_CLOSED_SET = {};
+var CHARTS = {};
+
+function handleFile(file){
+  if(!file) return;
+  document.getElementById('io-file-name').textContent = '\u2713 ' + file.name;
+  if(/\.xlsx?$|\.xlsm$/i.test(file.name)){
+    if(typeof XLSX==='undefined'){ toast('Excel library did not load (offline?) \u2014 use CSV'); return; }
+    var br = new FileReader();
+    br.onload = function(e){
+      try{
+        var wb = XLSX.read(e.target.result, {type:'array'});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        ingestCsvText(XLSX.utils.sheet_to_csv(ws), file.name);
+      }catch(err){ toast('Could not read Excel file: '+err.message); }
+    };
+    br.readAsArrayBuffer(file);
+    return;
+  }
+  var reader = new FileReader();
+  if(/\.html?$/i.test(file.name)){
+    reader.onload = function(e){ ingestNavisHtmlText(e.target.result, file.name); };
+  } else if(/\.xml$/i.test(file.name)){
+    reader.onload = function(e){ ingestXmlText(e.target.result, file.name); };
+  } else {
+    reader.onload = function(e){ ingestCsvText(e.target.result, file.name); };
+  }
+  reader.readAsText(file);
+}
+
+function clashXmlAttr(el, names){
+  for(var i=0;i<names.length;i++){
+    var v = el.getAttribute(names[i]);
+    if(v!=null && String(v).trim()!=="") return String(v).trim();
+  }
+  return "";
+}
+function clashObjectLabel(obj){
+  var nodes = obj.getElementsByTagName("node");
+  if(nodes.length){
+    var t = (nodes[nodes.length-1].textContent||"").replace(/\s+/g," ").trim();
+    if(t) return t.slice(0,140);
+  }
+  var ids = obj.getElementsByTagName("objectid");
+  if(ids.length){
+    var s = (ids[0].textContent||"").trim();
+    if(s) return "ID "+s;
+  }
+  return ((obj.textContent||"").replace(/\s+/g," ").trim()).slice(0,140);
+}
+function clashRowFromResult(el, testName){
+  var status = clashXmlAttr(el, ["status","approval","state","result_status"]);
+  var dist = clashXmlAttr(el, ["distance","clearance","separation","overlap"]);
+  var date = clashXmlAttr(el, ["date","created","found","timestamp","datetime"]);
+  var names = [];
+  var objs = el.getElementsByTagName("object");
+  for(var i=0;i<objs.length && names.length<2;i++){
+    var lbl = clashObjectLabel(objs[i]);
+    if(lbl) names.push(lbl);
+  }
+  return {
+    "Test": testName || clashXmlAttr(el, ["test","clashtest"]),
+    "Item A": names[0]||"", "Item B": names[1]||"",
+    "Status": status, "Distance": dist, "Date": date
+  };
+}
+function ingestXmlText(text, name){
+  var rows = [];
+  try{
+    var xml = new DOMParser().parseFromString(text, "text/xml");
+    if(xml.getElementsByTagName("parsererror").length) throw new Error("not valid XML");
+    var tests = xml.getElementsByTagName("clashtest");
+    var i, j;
+    if(!tests.length){
+      var flat = xml.getElementsByTagName("clashresult");
+      for(i=0;i<flat.length;i++) rows.push(clashRowFromResult(flat[i], ""));
+    } else {
+      for(i=0;i<tests.length;i++){
+        var tname = clashXmlAttr(tests[i], ["name","title"]);
+        var results = tests[i].getElementsByTagName("clashresult");
+        for(j=0;j<results.length;j++) rows.push(clashRowFromResult(results[j], tname));
+      }
+    }
+  }catch(err){ toast("Could not read XML file: "+(err.message||err)); return; }
+  rows = rows.filter(function(r){ return r["Item A"] || r["Item B"] || r["Status"]; });
+  if(!rows.length){
+    var nTests = 0;
+    try{ nTests = (typeof xml!=="undefined" && xml) ? xml.getElementsByTagName("clashtest").length : 0; }catch(e){}
+    if(nTests) toast("This XML defines "+nTests+" clash tests but holds no results \u2014 import the Clash Report HTML instead");
+    else toast("No clash results found in that XML");
+    return;
+  }
+  ingestCsvText(Papa.unparse(rows), name);
+  toast("Parsed "+rows.length+" clash result(s) from XML \u2014 confirm the mapping");
+}
+
+function navisCellText(el){ return el ? el.textContent.replace(/\s+/g," ").trim() : ""; }
+function navisItemId(el){
+  var s = navisCellText(el);
+  var m = s.match(/(\d[\d,]*)\s*$/);
+  return m ? m[1].replace(/,/g,"") : s;
+}
+function ingestNavisHtmlText(text, name){
+  var rows = [];
+  try{
+    var doc = new DOMParser().parseFromString(text, "text/html");
+    var mains = doc.querySelectorAll("table.mainTable");
+    if(!mains.length) throw new Error("no Navisworks clash tables found");
+    var summaries = doc.querySelectorAll("table.testSummaryTable");
+    mains.forEach(function(tbl, ti){
+      var testName = "";
+      if(summaries[ti]){
+        var tn = summaries[ti].querySelector(".testName");
+        if(tn) testName = navisCellText(tn);
+      }
+      if(!testName){
+        var sib = tbl.previousElementSibling, guard = 0;
+        while(sib && guard++<8){
+          if(sib.tagName==="TABLE" && sib.classList.contains("testSummaryTable")){
+            var tn2 = sib.querySelector(".testName");
+            if(tn2) testName = navisCellText(tn2);
+            break;
+          }
+          sib = sib.previousElementSibling;
+        }
+      }
+      var trs = tbl.querySelectorAll("tr.contentRow");
+      trs.forEach(function(tr){
+        var g = tr.querySelectorAll("td.contentCell");
+        var a = tr.querySelectorAll("td.item1Content");
+        var b = tr.querySelectorAll("td.item2Content");
+        if((!g.length || g.length<6) && !a.length) return;
+        rows.push({
+          "Test": testName,
+          "Clash": navisCellText(g[1]),
+          "Status": navisCellText(g[2]),
+          "Distance": navisCellText(g[3]),
+          "Grid": navisCellText(g[4]),
+          "Item A": navisCellText(a[1]),
+          "Item A ID": navisItemId(a[0]),
+          "Item B": navisCellText(b[1]),
+          "Item B ID": navisItemId(b[0])
+        });
+      });
+    });
+  }catch(err){ toast("Could not read HTML report: "+(err.message||err)); return; }
+  rows = rows.filter(function(r){ return r["Clash"] || r["Item A"] || r["Item B"]; });
+  if(!rows.length){ toast("No clash rows found in that HTML report"); return; }
+  toast("Parsing "+rows.length+" listed clashes \u2014 report summaries may claim more (the HTML lists a subset)");
+  ingestCsvText(Papa.unparse(rows), name);
+}
+
+function ingestCsvText(text, name){
+    var parsed = Papa.parse(text, {header:true, skipEmptyLines:true});
+    RAW_ROWS = parsed.data;
+    HEADERS = parsed.meta.fields || [];
+    if(RAW_ROWS.length===0){ toast('No rows found in '+(name||'that file')); return; }
+    buildMappingUI();
+    document.getElementById('map-panel').classList.add('show');
+    document.getElementById('gen-btn').style.display = 'inline-flex';
+    document.getElementById('dz-csv').classList.add('done');
+}
+
+function guessCol(candidates){
+  var lowHeaders = HEADERS.map(function(h){return h.toLowerCase();});
+  for(var i=0;i<candidates.length;i++){
+    var idx = lowHeaders.findIndex(function(h){ return h.indexOf(candidates[i])>-1; });
+    if(idx>-1) return HEADERS[idx];
+  }
+  return '';
+}
+
+function fillSelect(id, guess){
+  var sel = document.getElementById(id);
+  sel.innerHTML = '<option value="">\u2014 none \u2014</option>' +
+    HEADERS.map(function(h){ return '<option value="'+escapeHtml(h)+'" '+(h===guess?'selected':'')+'>'+escapeHtml(h)+'</option>'; }).join('');
+}
+
+function buildMappingUI(){
+  fillSelect('map-test', guessCol(['test','clash name','name']));
+  fillSelect('map-a-name', guessCol(['item1 name','item a','object1','item1']));
+  fillSelect('map-a-disc', guessCol(['item1 layer','item1 discipline','discipline1','layer1']));
+  fillSelect('map-b-name', guessCol(['item2 name','item b','object2','item2']));
+  fillSelect('map-b-disc', guessCol(['item2 layer','item2 discipline','discipline2','layer2']));
+  fillSelect('map-distance', guessCol(['distance','clearance']));
+  fillSelect('map-priority', guessCol(['priority','severity']));
+  fillSelect('map-date', guessCol(['found date','date','created']));
+  fillSelect('map-clash', guessCol(['clash name','clash']));
+  fillSelect('map-grid', guessCol(['grid location','grid','location']));
+  fillSelect('map-a-id', guessCol(['item a id','element id','item id']));
+  fillSelect('map-b-id', guessCol(['item b id','element id','item id']));
+  fillSelect('map-status', guessCol(['status','approval']));
+  renderStatusChecklist();
+}
+
+function renderStatusChecklist(){
+  var col = document.getElementById('map-status').value;
+  var wrap = document.getElementById('status-checklist-wrap');
+  if(!col){ wrap.style.display='none'; return; }
+  var vals = {};
+  RAW_ROWS.forEach(function(r){ var v=(r[col]||'').toString().trim(); if(v) vals[v]=true; });
+  DISTINCT_STATUS = Object.keys(vals).sort();
+  var closedHeuristic = /resolved|approved|closed|reviewed|fixed|complete/i;
+  document.getElementById('status-checklist').innerHTML = DISTINCT_STATUS.map(function(v){
+    var checked = closedHeuristic.test(v) ? 'checked' : '';
+    return '<label class="status-check"><input type="checkbox" data-status="'+escapeHtml(v)+'" '+checked+'> '+escapeHtml(v)+'</label>';
+  }).join('');
+  wrap.style.display = DISTINCT_STATUS.length ? 'block' : 'none';
+}
+
+function priorityBucket(raw){
+  if(!raw) return 'Unspecified';
+  var v = raw.toLowerCase();
+  if(/critical|high/.test(v)) return 'High';
+  if(/medium|moderate/.test(v)) return 'Medium';
+  if(/low|minor/.test(v)) return 'Low';
+  return 'Unspecified';
+}
+
+function generateDashboard(){
+  var mAName = document.getElementById('map-a-name').value;
+  var mBName = document.getElementById('map-b-name').value;
+  var mStatus = document.getElementById('map-status').value;
+  if(!mAName || !mBName || !mStatus){ toast('Item A name, Item B name and Status are required'); return; }
+
+  var mTest = document.getElementById('map-test').value;
+  var mADisc = document.getElementById('map-a-disc').value;
+  var mBDisc = document.getElementById('map-b-disc').value;
+  var mDist = document.getElementById('map-distance').value;
+  var mPri = document.getElementById('map-priority').value;
+  var mDate = document.getElementById('map-date').value;
+  var mClash = document.getElementById('map-clash').value;
+  var mGrid = document.getElementById('map-grid').value;
+  var mAId = document.getElementById('map-a-id').value;
+  var mBId = document.getElementById('map-b-id').value;
+
+  STATUS_CLOSED_SET = {};
+  document.querySelectorAll('#status-checklist input[type=checkbox]').forEach(function(cb){
+    if(cb.checked) STATUS_CLOSED_SET[cb.getAttribute('data-status')] = true;
+  });
+
+  CLASH_ITEMS = RAW_ROWS.map(function(r, i){
+    var statusRaw = (r[mStatus]||'').toString().trim();
+    return {
+      id: i+1,
+      test: mTest ? (r[mTest]||'') : ('Clash '+(i+1)),
+      aName: r[mAName]||'', aDisc: mADisc ? (r[mADisc]||'Unspecified') : 'Unspecified',
+      bName: r[mBName]||'', bDisc: mBDisc ? (r[mBDisc]||'Unspecified') : 'Unspecified',
+      distance: mDist ? (r[mDist]||'') : '',
+      priority: priorityBucket(mPri ? r[mPri] : ''),
+      statusRaw: statusRaw,
+      bucket: STATUS_CLOSED_SET[statusRaw] ? 'Closed' : 'Open',
+      date: mDate ? (r[mDate]||'') : '',
+      clash: mClash ? (r[mClash]||'') : '',
+      grid: mGrid ? (r[mGrid]||'') : '',
+      aId: mAId ? (r[mAId]||'') : '',
+      bId: mBId ? (r[mBId]||'') : ''
+    };
+  }).filter(function(c){ return c.aName || c.bName; });
+
+  if(CLASH_ITEMS.length===0){ toast('No usable rows after mapping \u2014 check your column choices'); return; }
+
+  var pname = document.getElementById('project-name-input').value.trim();
+  document.getElementById('hdr-proj').textContent = pname || 'Clash Analysis';
+
+  document.getElementById('import-overlay').style.display = 'none';
+  document.getElementById('dash').style.display = 'block';
+
+  renderAll();
+  try{
+    if(typeof window.OrascomHubReportScore === 'function'){
+      var stats = computeStats();
+      window.OrascomHubReportScore(stats.resolutionRate, stats.open, {projectField: pname});
+    }
+  }catch(e){}
+}
+
+function computeStats(){
+  var total = CLASH_ITEMS.length;
+  var open = CLASH_ITEMS.filter(function(c){return c.bucket==='Open';}).length;
+  var closed = total - open;
+  var byPriority = {High:0, Medium:0, Low:0, Unspecified:0};
+  CLASH_ITEMS.forEach(function(c){ byPriority[c.priority] = (byPriority[c.priority]||0)+1; });
+  return {
+    total: total, open: open, closed: closed,
+    openPct: total? Math.round(open/total*100):0,
+    resolutionRate: total? Math.round(closed/total*100):0,
+    byPriority: byPriority
+  };
+}
+
+function renderAll(){
+  renderKPIs();
+  renderCharts();
+  populatePriorityFilter();
+  populatePairFilter();
+  renderClashTable();
+  renderDisciplineChart();
+}
+
+function clashPair(c){ return (c.aDisc||'Unspecified') + ' \u2194 ' + (c.bDisc||'Unspecified'); }
+
+function populatePairFilter(){
+  var sel = document.getElementById('cl-pair-f');
+  var cur = sel.value || '';
+  var pairs = {};
+  CLASH_ITEMS.forEach(function(c){ pairs[clashPair(c)] = true; });
+  var list = Object.keys(pairs).sort();
+  sel.innerHTML = '<option value="">All pairs ('+list.length+')</option>' +
+    list.map(function(p){ return '<option value="'+escapeHtml(p)+'"'+(p===cur?' selected':'')+'>'+escapeHtml(p)+'</option>'; }).join('');
+  if(list.indexOf(cur)===-1) sel.value = '';
+}
+
+function renderKPIs(){
+  var s = computeStats();
+  var host = document.getElementById('kpi-row');
+  function card(cls, lbl, val, sub){
+    return '<div class="kpi '+cls+'"><div class="kpi-lbl">'+lbl+'</div><div class="kpi-val '+
+      (cls==='c-red'?'bad':cls==='c-green'?'ok':cls==='c-gold'?'gold':'blue')+'">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';
+  }
+  host.innerHTML =
+    card('c-blue','Total Clashes', s.total, s.total+' clash instance'+(s.total===1?'':'s')) +
+    card('c-red','Open Clashes %', s.openPct+'%', s.open+' still open') +
+    card('c-green','Resolution Rate %', s.resolutionRate+'%', s.closed+' resolved / closed') +
+    card('c-red','High Priority', s.byPriority.High||0, (s.total? Math.round((s.byPriority.High||0)/s.total*100):0)+'% of total') +
+    card('c-gold','Medium Priority', s.byPriority.Medium||0, (s.total? Math.round((s.byPriority.Medium||0)/s.total*100):0)+'% of total') +
+    card('c-blue','Low Priority', s.byPriority.Low||0, (s.total? Math.round((s.byPriority.Low||0)/s.total*100):0)+'% of total');
+}
+
+function renderCharts(){
+  var s = computeStats();
+  if(CHARTS.status) CHARTS.status.destroy();
+  if(CHARTS.priority) CHARTS.priority.destroy();
+  CHARTS.status = new Chart(document.getElementById('ch-status'), {
+    type:'doughnut',
+    data:{ labels:['Open','Closed'], datasets:[{ data:[s.open, s.closed], backgroundColor:['#E67E22','#27AE60'] }] },
+    options:{ maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+  CHARTS.priority = new Chart(document.getElementById('ch-priority'), {
+    type:'bar',
+    data:{ labels:['High','Medium','Low','Unspecified'],
+      datasets:[{ data:[s.byPriority.High||0, s.byPriority.Medium||0, s.byPriority.Low||0, s.byPriority.Unspecified||0],
+        backgroundColor:['#E03535','#F5A623','#8E9BB3','#5D7494'] }] },
+    options:{ maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{precision:0}}} }
+  });
+}
+
+function renderDisciplineChart(){
+  var counts = {};
+  CLASH_ITEMS.forEach(function(c){
+    var pair = (c.aDisc||'Unspecified') + ' \u2194 ' + (c.bDisc||'Unspecified');
+    counts[pair] = (counts[pair]||0)+1;
+  });
+  var entries = Object.entries(counts).sort(function(a,b){return b[1]-a[1];}).slice(0,12);
+  if(CHARTS.disc) CHARTS.disc.destroy();
+  CHARTS.disc = new Chart(document.getElementById('ch-disc'), {
+    type:'bar',
+    data:{ labels:entries.map(function(e){return e[0];}), datasets:[{ data:entries.map(function(e){return e[1];}), backgroundColor:'#2563B8' }] },
+    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true,ticks:{precision:0}}} }
+  });
+}
+
+function populatePriorityFilter(){
+  var sel = document.getElementById('cl-priority-f');
+  sel.innerHTML = '<option value="">All priorities</option>' +
+    ['High','Medium','Low','Unspecified'].map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('');
+}
+
+function priorityBadgeClass(p){
+  return p==='High'?'badge-high':p==='Medium'?'badge-medium':p==='Low'?'badge-low':'badge-unspec';
+}
+
+var lastFiltered = [];
+function renderClashTable(){
+  var q = (document.getElementById('cl-search').value||'').toLowerCase();
+  var pf = document.getElementById('cl-priority-f').value;
+  var sf = document.getElementById('cl-status-f').value;
+  var pairF = document.getElementById('cl-pair-f').value;
+  var list = CLASH_ITEMS.filter(function(c){
+    if(pf && c.priority!==pf) return false;
+    if(sf && c.bucket!==sf) return false;
+    if(pairF && clashPair(c)!==pairF) return false;
+    if(q){
+      var hay=(c.test+' '+c.aName+' '+c.bName+' '+c.aDisc+' '+c.bDisc).toLowerCase();
+      if(hay.indexOf(q)===-1) return false;
+    }
+    return true;
+  });
+  lastFiltered = list;
+  document.getElementById('cl-count').textContent = list.length+' / '+CLASH_ITEMS.length;
+  var html = '<tr><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th>Distance</th><th>Priority</th><th>Status</th><th>Date</th></tr>';
+  list.slice(0,800).forEach(function(c){
+    html += '<tr><td>'+escapeHtml(c.test)+'</td>'+
+      '<td>'+escapeHtml(c.clash||'\u2014')+(c.grid?'<br><small style="color:var(--muted)">'+escapeHtml(c.grid)+'</small>':'')+'</td>'+
+      '<td>'+escapeHtml(c.aName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.aDisc)+(c.aId?' \u00b7 ID '+escapeHtml(c.aId):'')+'</small></td>'+
+      '<td>'+escapeHtml(c.bName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.bDisc)+(c.bId?' \u00b7 ID '+escapeHtml(c.bId):'')+'</small></td>'+
+      '<td>'+escapeHtml(c.distance)+'</td>'+
+      '<td><span class="badge '+priorityBadgeClass(c.priority)+'">'+c.priority+'</span></td>'+
+      '<td><span class="badge '+(c.bucket==='Open'?'badge-open':'badge-closed')+'">'+escapeHtml(c.statusRaw||c.bucket)+'</span></td>'+
+      '<td>'+escapeHtml(c.date)+'</td></tr>';
+  });
+  if(list.length>800) html += '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:10px">Showing first 800 of '+list.length+' \u2014 use filters or export to see all.</td></tr>';
+  document.getElementById('cl-table').innerHTML = html;
+}
+
+function copyVisibleClashes(){
+  if(lastFiltered.length===0){ toast('Nothing to copy'); return; }
+  var text = lastFiltered.map(function(c){
+    return [c.test, (c.clash||''), c.aName+' ('+c.aDisc+(c.aId?'; ID '+c.aId:'')+')', c.bName+' ('+c.bDisc+(c.bId?'; ID '+c.bId:'')+')', c.priority, c.bucket, c.date].join('\t');
+  }).join('\n');
+  var full = 'Test\tClash\tItem A\tItem B\tPriority\tStatus\tDate\n' + text;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(full).then(function(){ toast('Copied '+lastFiltered.length+' clashes to clipboard'); },
+      function(){ toast('Could not access clipboard'); });
+  } else {
+    toast('Clipboard not available in this browser');
+  }
+}
+
+
+function toggleDark(){
+  if(typeof hubToggleTheme==="function" && hubToggleTheme()) return;
+  setDarkTheme(!document.body.classList.contains("dark"));
+}
+function setDarkTheme(on){
+  on = !!on;
+  if(document.body.classList.contains("dark")===on) return;
+  document.body.classList.toggle("dark", on);
+  try{ localStorage.setItem("clash-dark", on?"1":"0"); }catch(e){}
+}
+try{ if(localStorage.getItem("clash-dark")==="1"){ setDarkTheme(true); } }catch(e){}
+function switchTab(id){
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===id); });
+  document.querySelectorAll('.tab-content').forEach(function(c){ c.classList.toggle('active', c.id===id); });
+  setTimeout(function(){ Object.values(CHARTS).forEach(function(ch){ if(ch) ch.resize(); }); }, 60);
+}
+
+function exportExcel(){
+  var wb = new ExcelJS.Workbook();
+  var s = computeStats();
+  var NAVY = 'FF0A1E40';
+  var ws1 = wb.addWorksheet('Overview');
+  ws1.addRow(['Metric','Value']).eachCell(function(c){ c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; });
+  ws1.addRow(['Total clashes', s.total]);
+  ws1.addRow(['Open clashes', s.open]);
+  ws1.addRow(['Closed clashes', s.closed]);
+  ws1.addRow(['Open %', s.openPct]);
+  ws1.addRow(['Resolution rate %', s.resolutionRate]);
+  ws1.addRow(['High priority', s.byPriority.High||0]);
+  ws1.addRow(['Medium priority', s.byPriority.Medium||0]);
+  ws1.addRow(['Low priority', s.byPriority.Low||0]);
+  ws1.columns.forEach(function(c){ c.width = 24; });
+
+  var ws2 = wb.addWorksheet('Clashes');
+  ws2.addRow(['Test','Clash','Grid','Item A','Item A ID','Item A Discipline','Item B','Item B ID','Item B Discipline','Distance','Priority','Status','Date']).eachCell(function(c){
+    c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}};
+  });
+  CLASH_ITEMS.forEach(function(c){ ws2.addRow([c.test,(c.clash||''),(c.grid||''),c.aName,(c.aId||''),c.aDisc,c.bName,(c.bId||''),c.bDisc,c.distance,c.priority,c.statusRaw||c.bucket,c.date]); });
+  ws2.columns.forEach(function(c){ c.width = 20; });
+
+  wb.xlsx.writeBuffer().then(function(buf){
+    var blob = new Blob([buf], {type:'application/octet-stream'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'clash-analysis-report.xlsx';
+    a.click();
+  });
+}
+
+function exportPDF(){
+  var s = computeStats();
+  var doc = new jspdf.jsPDF();
+  doc.setFillColor(10,30,64); doc.rect(0,0,210,26,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(16);
+  doc.text('Clash Analysis Report', 14, 12);
+  doc.setFontSize(9); doc.setTextColor(245,166,35);
+  doc.text(document.getElementById('hdr-proj').textContent, 14, 19);
+  doc.setTextColor(20,20,20); doc.setFontSize(11);
+  doc.text('Total clashes: '+s.total, 14, 36);
+  doc.text('Open: '+s.open+' ('+s.openPct+'%)', 14, 43);
+  doc.text('Resolution rate: '+s.resolutionRate+'%', 14, 50);
+  doc.text('High / Medium / Low: '+(s.byPriority.High||0)+' / '+(s.byPriority.Medium||0)+' / '+(s.byPriority.Low||0), 14, 57);
+  doc.autoTable({
+    startY: 65,
+    head: [['Test','Item A','Item B','Priority','Status']],
+    body: CLASH_ITEMS.slice(0,300).map(function(c){ return [c.test,c.aName,c.bName,c.priority,c.statusRaw||c.bucket]; }),
+    styles:{fontSize:8}, headStyles:{fillColor:[10,30,64]}
+  });
+  doc.save('clash-analysis-report.pdf');
+}
+</script>
+
+<script>
+/* Orascom Hub context bridge -- added for Hub integration only; does not alter native tool logic */
+(function(){
+  window.OrascomHubContext = window.OrascomHubContext || null;
+  window.addEventListener("message", function(ev){
+    if (ev && ev.data && ev.data.source === "orascom-hub" && ev.data.type === "set-context") {
+      window.OrascomHubContext = ev.data.context || null;
+      try { document.dispatchEvent(new CustomEvent("orascom-hub-context", { detail: window.OrascomHubContext })); } catch(e) {}
+    }
+  });
+  window.OrascomHubReportScore = function(score, issues, meta){
+    try{
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          source: "orascom-hub-module", type: "score-update",
+          score: Math.round(score * 10) / 10,
+          issues: Math.max(0, Math.round(issues || 0)),
+          meta: meta || null,
+          context: window.OrascomHubContext || null
+        }, "*");
+      }
+    }catch(e){}
+  };
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ source: "orascom-hub-module", type: "ready" }, "*");
+    }
+  } catch(e) {}
+})();
+</script>
+<script>
+/* Orascom Hub -- load-latest-from-server (added for Hub integration only) */
+(function(){
+  function $(id){ return document.getElementById(id); }
+  var urlEl, modelEl, statusEl;
+  document.addEventListener("DOMContentLoaded", function(){
+    urlEl = $("hub-server-url"); modelEl = $("hub-model-name"); statusEl = $("hub-fetch-status");
+    if(urlEl) urlEl.value = localStorage.getItem("hub_export_server") || "http://localhost:8787";
+    if(modelEl) modelEl.value = localStorage.getItem("hub_export_model") || "";
+  });
+  document.addEventListener("orascom-hub-context", function(ev){
+    if(modelEl && !modelEl.value && ev.detail && (ev.detail.code||ev.detail.name)){
+      modelEl.value = ev.detail.code || ev.detail.name;
+    }
+  });
+  window.hubLoadLatest = function(type){
+    if(!urlEl) urlEl = $("hub-server-url");
+    if(!modelEl) modelEl = $("hub-model-name");
+    if(!statusEl) statusEl = $("hub-fetch-status");
+    var base = (urlEl.value||"").trim().replace(/\/$/,"");
+    var model = (modelEl.value||"").trim();
+    if(!base || !model){ statusEl.textContent = "Enter a server URL and model name"; return; }
+    localStorage.setItem("hub_export_server", base);
+    localStorage.setItem("hub_export_model", model);
+    statusEl.textContent = "Loading …";
+    fetch(base + "/latest?model=" + encodeURIComponent(model) + "&type=" + type)
+      .then(function(res){
+        if(!res.ok) return res.text().then(function(t){ throw new Error(t||("HTTP "+res.status)); });
+        var fname = res.headers.get("X-Export-Filename") || (type+"-export");
+        return res.blob().then(function(blob){ return {blob:blob, fname:fname}; });
+      })
+      .then(function(r){
+        var file = new File([r.blob], r.fname, {type:r.blob.type});
+        statusEl.textContent = "Loaded " + r.fname;
+        handleFile(file);
+      })
+      .catch(function(err){
+        statusEl.textContent = "Could not load: " + err.message;
+      });
+  };
+})();
+</script>
+
+<script>
+/* Orascom Hub Data Center push -- added for Hub integration only; feeds Hub-pushed files into the native import queue */
+(function(){
+  window.addEventListener("message", function(ev){
+    if(!ev || !ev.data || ev.data.source!=="orascom-hub" || ev.data.type!=="hub-files") return;
+    try{ hubReceiveFiles(ev.data.files||[], ev.data.role||""); }catch(e){}
+  });
+  window.hubReceiveFiles = function(files, role){
+    var list = Array.prototype.slice.call(files||[]);
+    if(!list.length) return;
+    try{
+      if(typeof handleFile==='function'&&list[0]) handleFile(list[0]);
+      toast('Received '+list.length+' file(s) from Data Center \u2014 map columns, then Generate');
+    }catch(e){}
+  };
+})();
+</script>
+
+<script>
+/* Orascom Hub theme follow -- Hub topbar is the single source of truth when embedded; standalone keeps local key */
+(function(){
+  var KEY="clash-dark";
+  function applyHubTheme(mode){
+    try{
+      if(typeof setDarkTheme==="function"){ setDarkTheme(mode==="dark"); return; }
+      document.body.classList.toggle("dark", mode==="dark");
+    }catch(e){}
+    try{ localStorage.setItem(KEY, mode==="dark"?"1":"0"); }catch(e){}
+  }
+  function readStored(){ try{ return localStorage.getItem(KEY)==="1"?"dark":null; }catch(e){ return null; } }
+  window.addEventListener("message", function(ev){
+    if(!ev || !ev.data || ev.data.source!=="orascom-hub") return;
+    if(ev.data.type==="set-theme" && ev.data.theme){ applyHubTheme(ev.data.theme); return; }
+    if(ev.data.type==="set-context"){
+      if(ev.data.theme) applyHubTheme(ev.data.theme);
+      else if(readStored()==="dark") applyHubTheme("dark");
+    }
+  });
+  window.hubToggleTheme = function(){
+    try{ if(window.parent && window.parent!==window){ window.parent.postMessage({source:"orascom-hub-module", type:"theme-toggle"}, "*"); return true; } }catch(e){}
+    return false;
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orascom BIM Digital Delivery Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<link rel="stylesheet" href="assets/css/hub.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="assets/img/orascom-logo.svg" alt="Orascom Construction" onerror="this.src='assets/img/orascom-logo.png'">
+      <div class="brand-text">
+        <strong>Orascom Construction</strong>
+        <span>BIM DIGITAL DELIVERY HUB</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-group-label">Overview</div>
+      <div class="nav-item" data-view="dashboard"><span class="ic">🏠</span> Dashboard</div>
+      <div class="nav-item" data-view="projects"><span class="ic">🏢</span> Projects</div>
+      <div class="nav-item" data-view="models"><span class="ic">🧩</span> Models</div>
+      <div class="nav-item" data-view="datacenter"><span class="ic">📥</span> Data Center</div>
+
+      <div class="nav-group-label">Validation modules</div>
+      <div class="nav-item" data-view="midp"><span class="ic">📋</span> Delivery Verification</div>
+      <div class="nav-item" data-view="naming"><span class="ic">🔤</span> Naming Convention</div>
+      <div class="nav-item" data-view="qaqc"><span class="ic">🛡</span> Model Quality</div>
+      <div class="nav-item" data-view="workset"><span class="ic">🧩</span> Workset Validator</div>
+      <div class="nav-item" data-view="parameters"><span class="ic">🏷</span> Parameter Validator</div>
+      <div class="nav-item" data-view="clash"><span class="ic">💥</span> Clash Analysis</div>
+
+      <div class="nav-group-label">Governance</div>
+      <div class="nav-item" data-view="quality-center"><span class="ic">✅</span> BIM Quality Center</div>
+      <div class="nav-item" data-view="reports"><span class="ic">📊</span> Reports</div>
+      <div class="nav-item" data-view="delivery"><span class="ic">📅</span> Delivery Overview</div>
+
+      <div class="nav-group-label">System</div>
+      <div class="nav-item" data-view="settings"><span class="ic">⚙</span> Settings</div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div><a href="index.html" style="color:var(--g3);font-weight:700;text-decoration:none;">← Back to Hub homepage</a></div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn" id="menu-toggle" style="display:none;" aria-label="Toggle navigation">☰</button>
+      <div>
+        <h1 class="page-title" id="page-title">Executive Dashboard</h1>
+        <div class="crumb" id="page-crumb">Home</div>
+      </div>
+
+      <div class="project-picker">
+        <select id="project-picker-select" aria-label="Active project"></select>
+        <button class="btn btn-outline btn-sm" onclick="OHub.openProjectModal()">+ Project</button>
+        <button class="btn btn-outline btn-sm" onclick="OHub.openAcc()" title="Open this project in Autodesk Construction Cloud (new tab)">ACC ↗</button>
+        <button class="btn btn-ghost btn-sm" onclick="OHub.startTour()" title="Guided tour">▶ Tour</button>
+        <button class="btn btn-ghost btn-sm" id="theme-toggle" onclick="OHub.toggleDark()" title="Toggle dark mode">🌙</button>
+      </div>
+
+      <div class="search-wrap">
+        <span class="ic">🔍</span>
+        <input type="text" id="global-search" placeholder="Search projects, issues, modules…" autocomplete="off">
+        <div class="search-results" id="search-results"></div>
+      </div>
+    </header>
+
+    <div class="view-host">
+
+      <!-- ---------- Dashboard ---------- -->
+      <section class="view active" id="view-dashboard">
+        <div id="dash-content"></div>
+      </section>
+
+      <!-- ---------- Projects ---------- -->
+      <section class="view" id="view-projects">
+        <div class="card-head" style="margin-bottom:14px;">
+          <h3 style="font-size:1.1rem;">All projects</h3>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <div class="view-toggle">
+              <button type="button" class="view-toggle-btn active" data-mode="grid">Grid</button>
+              <button type="button" class="view-toggle-btn" data-mode="map">Map</button>
+              <button type="button" class="view-toggle-btn" data-mode="compare">Compare</button>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="OHub.openProjectModal()">+ Add project</button>
+          </div>
+        </div>
+        <div class="grid grid-3" id="projects-grid"></div>
+        <div id="projects-map" style="display:none;"></div>
+        <div id="projects-compare" style="display:none;"></div>
+      </section>
+
+      <!-- ---------- Models ---------- -->
+      <section class="view" id="view-models">
+        <div class="card-head" style="margin-bottom:14px;">
+          <h3 style="font-size:1.1rem;">Models</h3>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="models-pkg-filter" aria-label="Filter by package" onchange="OHub.switchView('models')" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);"><option value="">All packages</option></select>
+            <button class="btn btn-primary btn-sm" onclick="OHub.openModelModal()">+ Add model</button>
+          </div>
+        </div>
+        <div id="models-runbar" class="card" style="margin-bottom:14px;display:none;"></div>
+        <div id="models-grid"></div>
+      </section>
+
+      <!-- ---------- Data Center ---------- -->
+      <section class="view" id="view-datacenter">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-head"><h3>Import once — push to any module</h3></div>
+          <p style="font-size:.83rem;color:var(--muted);margin-bottom:14px;">Drop shared files here a single time, then send them to any validator. Files stay in this browser tab&rsquo;s memory only (never uploaded anywhere). Sending opens the module automatically &mdash; Naming and Model Quality run immediately, mapping-based modules wait for your column review before they run.</p>
+          <div class="dc-drop" id="dc-drop" onclick="OHub.dcPick()" ondragover="OHub.dcDragOver(event)" ondrop="OHub.dcDrop(event)">
+            <div style="font-size:1.6rem">📥</div>
+            <div style="font-weight:700;">Drop files here</div>
+            <div style="font-size:.74rem;color:var(--muted)">Model Checker .html &middot; schedules .csv / .json &middot; workbooks .xlsx &middot; Navisworks clash HTML (auto-detected) &mdash; multiple allowed</div>
+          </div>
+          <input id="dc-file" type="file" multiple style="display:none" onchange="OHub.dcAddFiles(this.files)">
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="OHub.dcSendAllHtml()">Send all HTML &rarr; Naming + Model Quality</button>
+            <button class="btn btn-outline btn-sm" onclick="OHub.dcSendAllCsv()">Send all CSV &rarr; Workset + Parameter</button>
+            <button class="btn btn-primary btn-sm" onclick="OHub.syncFromServer(true)">Sync from export server</button>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-head"><h3>ACC models — pick what to test</h3><span class="hint" id="acc-root-label">no folder chosen</span></div>
+          <p style="font-size:.83rem;color:var(--muted);margin-bottom:12px;">Browse your <b>Desktop Connector synced</b> ACC project right here — no API key, no admin. Tick the models to test, then download the selection: the nightly job reads it and runs only those. Tip: right-click folders in Connector → <i>Always keep on this device</i> first.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <button class="btn btn-primary btn-sm" onclick="OHub.accPickFolder()">Browse synced folder</button>
+            <button class="btn btn-ghost btn-sm" id="acc-rescan" onclick="OHub.accRescan()" style="display:none">Rescan</button>
+            <input id="acc-dir-input" type="file" webkitdirectory style="display:none" onchange="OHub.accDirInput(this)">
+          </div>
+          <div id="acc-tree"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="OHub.accSelectAll(true)">All</button>
+            <button class="btn btn-ghost btn-sm" onclick="OHub.accSelectAll(false)">None</button>
+            <button class="btn btn-primary btn-sm" onclick="OHub.accDownload()">Download selection</button>
+            <button class="btn btn-gold btn-sm" onclick="OHub.accRegisterChecked()">Add checked &#8594; Models</button>
+            <span id="acc-count" style="font-size:.78rem;color:var(--muted);"></span>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-head"><h3>ACC cloud — browse live</h3><span class="hint" id="acc-cloud-status">not connected</span></div>
+          <p style="font-size:.83rem;color:var(--muted);margin-bottom:12px;">Sign in with your Autodesk account and browse the live ACC project tree — no Desktop Connector needed. Read-only (<code>data:read</code>); the sign-in is completed by the local runner on this machine, the token never leaves it. Saving writes <code>selected_models.json</code> for the pyRevit cloud lane (<code>batch_export.py</code>).</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="OHub.accCloudConnect()">Connect to ACC</button>
+            <button class="btn btn-ghost btn-sm" onclick="OHub.accCloudLogout()">Disconnect</button>
+            <select id="acc-cloud-hub" aria-label="ACC hub" onchange="OHub.accCloudHubChanged(this)" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);max-width:220px;"><option value="">Pick a hub…</option></select>
+            <select id="acc-cloud-proj" aria-label="ACC project" onchange="OHub.accCloudProjChanged(this)" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);max-width:260px;"><option value="">Pick a project…</option></select>
+          </div>
+          <div id="acc-cloud-tree"><p style="font-size:.82rem;color:var(--muted);">Connect first — then pick a hub and project to browse live folders.</p></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="OHub.accCloudSelectAll(true)">All</button>
+            <button class="btn btn-ghost btn-sm" onclick="OHub.accCloudSelectAll(false)">None</button>
+            <button class="btn btn-primary btn-sm" onclick="OHub.accCloudSave()">Save selection</button>
+            <button class="btn btn-gold btn-sm" onclick="OHub.accCloudRegister()">Add checked &#8594; Models</button>
+            <span id="acc-cloud-count" style="font-size:.78rem;color:var(--muted);"></span>
+          </div>
+          <p style="font-size:.74rem;color:var(--muted);margin-top:10px;">One-time: register <code id="acc-cloud-callback">http://localhost:8787/acc-callback</code> as a Callback URL on your APS app (port = your runner port), and add the app under ACC Account Admin → Custom Integrations.</p>
+        </div>
+        <div id="dc-registry"></div>
+      </section>
+
+      <!-- ---------- Module: Delivery Verification ---------- -->
+      <section class="view" id="view-midp">
+        <div class="module-frame-wrap"><iframe id="frame-midp" title="Delivery Verification"></iframe></div>
+      </section>
+
+      <!-- ---------- Module: Naming Convention ---------- -->
+      <section class="view" id="view-naming">
+        <div class="module-frame-wrap"><iframe id="frame-naming" title="Naming Convention Checker"></iframe></div>
+      </section>
+
+      <!-- ---------- Module: Model Quality ---------- -->
+      <section class="view" id="view-qaqc">
+        <div class="module-frame-wrap"><iframe id="frame-qaqc" title="BIM Model Quality Dashboard"></iframe></div>
+      </section>
+
+      <!-- ---------- Module: Workset ---------- -->
+      <section class="view" id="view-workset">
+        <div class="module-frame-wrap"><iframe id="frame-workset" title="Workset Validator Dashboard"></iframe></div>
+      </section>
+
+      <!-- ---------- Module: Parameters ---------- -->
+      <section class="view" id="view-parameters">
+        <div class="module-frame-wrap"><iframe id="frame-parameters" title="Parameter Validator Dashboard"></iframe></div>
+      </section>
+
+      <!-- ---------- Module: Clash Analysis ---------- -->
+      <section class="view" id="view-clash">
+        <div class="module-frame-wrap"><iframe id="frame-clash" title="Clash Analysis Dashboard"></iframe></div>
+      </section>
+
+      <!-- ---------- Quality Center ---------- -->
+      <section class="view" id="view-quality-center">
+        <div id="qc-content"></div>
+      </section>
+
+      <!-- ---------- Reports ---------- -->
+      <section class="view" id="view-reports">
+        <div id="reports-content"></div>
+      </section>
+
+      <!-- ---------- Delivery Overview ---------- -->
+      <section class="view" id="view-delivery">
+        <div class="card">
+          <div class="card-head"><h3>BIM Digital Delivery workflow</h3></div>
+          <div class="pipeline">
+            <div class="pipeline-step"><div class="ps-n">1</div><h4>Plan</h4><p>MIDP &mdash; delivery planning and submission scheduling.</p></div>
+            <div class="pipeline-step"><div class="ps-n">2</div><h4>Produce</h4><p>Model production by each discipline team.</p></div>
+            <div class="pipeline-step"><div class="ps-n">3</div><h4>Validate</h4><p>QA/QC &mdash; naming, modelling and file-health checks.</p></div>
+            <div class="pipeline-step"><div class="ps-n">4</div><h4>Check information</h4><p>Parameter Validator &mdash; LOIN parameter completeness.</p></div>
+            <div class="pipeline-step"><div class="ps-n">5</div><h4>Check structure</h4><p>Workset Validator &mdash; workset naming &amp; assignment.</p></div>
+            <div class="pipeline-step"><div class="ps-n">6</div><h4>Review</h4><p>BIM coordination and clash/issue resolution.</p></div>
+            <div class="pipeline-step"><div class="ps-n">7</div><h4>Deliver</h4><p>Information delivery to the client / CDE.</p></div>
+            <div class="pipeline-step"><div class="ps-n">8</div><h4>Archive / AIM</h4><p>As-built record into the Asset Information Model.</p></div>
+          </div>
+        </div>
+        <div style="height:18px;"></div>
+        <div class="card" id="deliverables-content"></div>
+      </section>
+
+      <!-- ---------- Settings ---------- -->
+      <section class="view" id="view-settings">
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-head"><h3>BIM Delivery Health weighting</h3></div>
+            <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px;">Controls how each module contributes to the overall health score on the Dashboard and Quality Center. Not hard-coded &mdash; adjust to match your programme.</p>
+            <div id="settings-weights"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Status thresholds</h3></div>
+            <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px;">Where &ldquo;Good&rdquo;, &ldquo;Attention&rdquo; and &ldquo;Critical&rdquo; start &mdash; used everywhere a score gets a color or a label.</p>
+            <div id="settings-thresholds"></div>
+          </div>
+        </div>
+        <div style="height:16px;"></div>
+        <div class="card">
+          <div class="card-head"><h3>Export server auto-sync</h3></div>
+          <p style="font-size:.8rem;color:var(--muted);">Pulls the newest nightly exports (<span style="font-family:monospace;">serve_exports.py</span>) into Data Center and queues them to every module automatically. Mapping modules wait at their mapping screen; Naming and Model Quality run immediately.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+            <div class="field" style="flex:2;min-width:200px;margin:0;"><label>Server URL</label><input type="text" id="sync-url" placeholder="http://localhost:8787" oninput="OHub.saveSyncSettings()"></div>
+            <div class="field" style="flex:1;min-width:140px;margin:0;"><label>Model folder</label><input type="text" id="sync-model" oninput="OHub.saveSyncSettings()"></div>
+            <div class="field" style="margin:0;align-self:end;"><label style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><input type="checkbox" id="sync-auto" onchange="OHub.saveSyncSettings()" style="width:auto;"> Auto-sync on load</label></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-ghost btn-sm" onclick="OHub.testSyncServer()">Test connection</button>
+            <button class="btn btn-primary btn-sm" onclick="OHub.syncFromServer(true)">Sync now</button>
+            <span id="sync-status" style="font-size:.78rem;color:var(--muted);"></span>
+          </div>
+        </div>
+        <div style="height:16px;"></div>
+        <div class="card">
+          <div class="card-head"><h3>Autodesk Forma <span class="hint">file import · no account needed</span></h3></div>
+          <p style="font-size:.8rem;color:var(--muted);">Export Area metrics / Units from Forma (CSV) and drop the file in the <a href="#" onclick="OHub.switchView('datacenter');return false;">Data Center</a> — the Hub detects it and saves the figures to the active project. Works offline, from <span style="font-family:monospace;">file://</span>, with zero accounts or tokens.</p>
+          <div style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="OHub.switchView('datacenter')">Open Data Center</button></div>
+          <details style="margin-top:12px;">
+            <summary style="cursor:pointer;font-size:.78rem;color:var(--muted);">Advanced: live API link (optional, free APS read APIs)</summary>
+            <p style="font-size:.76rem;color:var(--muted);margin:8px 0;">Needs a free APS app (Client ID) and the Hub served over HTTP — login does not work from <span style="font-family:monospace;">file://</span>. Tokens stay in this browser; Disconnect wipes them.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+              <div class="field" style="flex:2;min-width:200px;margin:0;"><label>APS Client ID</label><input type="text" id="forma-client" placeholder="paste from aps.autodesk.com/myapps" oninput="OForma.saveCfg({clientId:this.value,region:document.getElementById('forma-region').value});OHub.renderFormaSettings();"></div>
+              <div class="field" style="flex:0;min-width:110px;margin:0;"><label>Region</label><select id="forma-region" onchange="OForma.saveCfg({clientId:document.getElementById('forma-client').value,region:this.value});OHub.renderFormaSettings();"><option>EMEA</option><option>US</option></select></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+              <button class="btn btn-primary btn-sm" onclick="OForma.beginLogin('settings')">Connect Forma</button>
+              <button class="btn btn-ghost btn-sm" onclick="OForma.disconnect()">Disconnect</button>
+              <span id="forma-status" style="font-size:.78rem;color:var(--muted);"></span>
+            </div>
+          </details>
+        </div>
+        <div style="height:16px;"></div>
+        <div class="card">
+          <div class="card-head"><h3>Hub registry</h3></div>
+          <p style="font-size:.85rem;color:var(--b1);margin-bottom:8px;"><span id="settings-project-count">0</span> project(s) tracked · <span id="settings-model-count">0</span> model(s) · <span id="settings-issue-count">0</span> issue(s) logged · <span id="settings-deliverable-count">0</span> deliverable(s) tracked</p>
+          <p style="font-size:.8rem;color:var(--muted);">All Hub data (projects, models, scores, issues, deliverables, weights, thresholds) lives in this browser's local storage. Nothing is sent to a server. Manage projects from the <a href="#" onclick="OHub.switchView('projects');return false;">Projects</a> page.</p>
+          <div style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="OHub.exportProjectJson()">Export active project JSON</button></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+<div class="modal-backdrop" id="model-modal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="mm-title">Add model</h3><button class="close-x" onclick="OHub.closeModelModal()">✕</button></div>
+    <form id="mm-form">
+      <div class="modal-body">
+        <div class="field"><label>Model name</label><input type="text" id="mm-name" placeholder="e.g. Architectural Model" required></div>
+        <div class="field"><label>Model code</label><input type="text" id="mm-code" placeholder="e.g. SA39-AR"></div>
+        <div class="field"><label>Package <span style="font-weight:400;color:var(--muted);">(optional — e.g. Package 01)</span></label><input type="text" id="mm-package" placeholder="e.g. Package 01"></div>
+        <div class="field"><label>Discipline</label>
+          <select id="mm-discipline">
+            <option>AR</option><option>ST</option><option>MEP</option><option>EL</option><option>WS</option><option>AC</option><option>CIVIL</option><option>ID</option>
+          </select>
+        </div>
+        <div class="field"><label>File path <span style="font-weight:400;color:var(--muted);">(relative to Connector <i>Project Files</i> root — e.g. 07- UB02 UTILITY BUILDING/Architecture/P0152-…-AR-000001.rvt)</span></label><input type="text" id="mm-path" placeholder="07- UB02 UTILITY BUILDING/Architecture/…-AR-000001.rvt"></div>
+        <div class="field"><label>Revision</label><input type="text" id="mm-revision" placeholder="e.g. P02"></div>
+        <div class="field"><label>Status</label>
+          <select id="mm-status">
+            <option>WIP</option><option>Shared</option><option>Published</option><option>Archived</option>
+          </select>
+        </div>
+        <div class="field"><label>Owner</label><input type="text" id="mm-owner" placeholder="e.g. BIM Team"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="OHub.closeModelModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save model</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="project-modal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="pm-title">Add project</h3><button class="close-x" onclick="OHub.closeProjectModal()">✕</button></div>
+    <form id="pm-form">
+      <div class="modal-body">
+        <div class="field"><label>Project name</label><input type="text" id="pm-name" required></div>
+        <div class="field"><label>Project code</label><input type="text" id="pm-code" placeholder="e.g. SA39"></div>
+        <div class="field"><label>Client</label><input type="text" id="pm-client"></div>
+        <div class="field"><label>ACC link <span style="font-weight:400;color:var(--muted);">(optional — defaults to Ras El Hekma Docs)</span></label><input type="text" id="pm-accurl" placeholder="https://acc.autodesk.com/docs/files/projects/…"></div>
+        <div class="field"><label>Stage</label>
+          <select id="pm-stage">
+            <option>Design</option><option>Construction</option><option>Handover</option><option>Operations</option>
+          </select>
+        </div>
+        <div class="field" style="display:flex;gap:10px;">
+          <div style="flex:1;"><label>Latitude <span style="font-weight:400;color:var(--muted);">(optional)</span></label><input type="text" id="pm-lat" placeholder="e.g. 27.2172"></div>
+          <div style="flex:1;"><label>Longitude <span style="font-weight:400;color:var(--muted);">(optional)</span></label><input type="text" id="pm-lng" placeholder="e.g. 33.7899"></div>
+        </div>
+        <p style="font-size:.74rem;color:var(--muted);margin-top:-6px;">Add coordinates to place this project on the Projects &rarr; Map view.</p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="OHub.closeProjectModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save project</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="score-modal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="sm-title">Record result</h3><button class="close-x" onclick="OHub.closeScoreModal()">✕</button></div>
+    <form id="sm-form">
+      <div class="modal-body">
+        <div class="field"><label>Compliance score (%)</label><input type="number" id="sm-score" min="0" max="100" step="1" required></div>
+        <div class="field"><label>Open issue count</label><input type="number" id="sm-issues" min="0" step="1"></div>
+        <p style="font-size:.76rem;color:var(--muted);">Most modules report this automatically once you generate their dashboard. Use this to correct it or to record a result before that's wired up.</p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="OHub.closeScoreModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save result</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="issue-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>Add issue — <span id="im-project-label"></span></h3><button class="close-x" onclick="OHub.closeIssueModal()">✕</button></div>
+    <form id="im-form">
+      <div class="modal-body">
+        <div class="field"><label>Description</label><input type="text" id="im-desc" required></div>
+        <div class="field"><label>Validation area</label>
+          <select id="im-module">
+            <option value="midp">Delivery Verification</option>
+            <option value="naming">Naming Convention</option>
+            <option value="qaqc">Model Quality</option>
+            <option value="workset">Workset Validator</option>
+            <option value="parameters">Parameter Validator</option>
+            <option value="clash">Clash Analysis</option>
+          </select>
+        </div>
+        <div class="field"><label>Severity</label>
+          <select id="im-severity"><option>Critical</option><option>High</option><option selected>Medium</option><option>Low</option></select>
+        </div>
+        <div class="field"><label>Model <span style="font-weight:400;color:var(--muted);">(optional)</span></label>
+          <select id="im-model"><option value="">— No specific model —</option></select>
+        </div>
+        <div class="field"><label>Responsible</label><input type="text" id="im-resp" placeholder="e.g. A. Hassan"></div>
+        <div class="field"><label>Due date</label><input type="text" id="im-due" placeholder="YYYY-MM-DD"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="OHub.closeIssueModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add issue</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="deliverable-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>Add deliverable — <span id="dm-project-label"></span></h3><button class="close-x" onclick="OHub.closeDeliverableModal()">✕</button></div>
+    <form id="dm-form">
+      <div class="modal-body">
+        <div class="field"><label>Deliverable name</label><input type="text" id="dm-name" placeholder="e.g. ARC 100% DD Model" required></div>
+        <div class="field"><label>Discipline</label><input type="text" id="dm-discipline" placeholder="e.g. Architecture"></div>
+        <div class="field"><label>Due date</label><input type="text" id="dm-due" placeholder="YYYY-MM-DD"></div>
+        <div class="field"><label>Status</label>
+          <select id="dm-status">
+            <option>Upcoming</option><option>In Progress</option><option>Submitted</option><option>Delayed</option><option>Milestone</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" onclick="OHub.closeDeliverableModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add deliverable</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast-host"></div>
+<div class="tour-overlay" id="tour-overlay" style="display:none"></div>
+
+<script src="assets/js/forma.js"></script>
+<script src="assets/js/hub.js"></script>
+</body>
+</html>

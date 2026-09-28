@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ORASCOM — BIM QA/QC Digital Delivery Hub | Hero</title>
+<style>
+  :root{
+    --bg:#040b18; --cyan:#38c6ff; --cyan-dim:#1a7fbf; --ice:#cfeeff;
+    --green:#3dffc8; --line:rgba(56,198,255,.22); --glass:rgba(6,20,38,.55);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;
+    font-family:"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ice)}
+  #stage{position:fixed;inset:0}
+  #webgl{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* ---- creative video layers ---- */
+  #bgVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    opacity:.34;filter:saturate(1.35) contrast(1.08) brightness(.72) hue-rotate(-8deg);
+    transform:scale(1.06);transition:opacity .8s}
+  #bgGrade{position:absolute;inset:0;z-index:2;pointer-events:none;
+    background:
+      linear-gradient(to bottom, rgba(4,11,24,.92) 0%, rgba(4,11,24,.35) 22%, rgba(4,11,24,.15) 50%, rgba(4,11,24,.55) 78%, rgba(4,11,24,.94) 100%),
+      radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(2,6,14,.6) 100%);}
+  body.cinema #bgVideo{opacity:.85;transform:scale(1)}
+  body.cinema .panel, body.cinema #meta-l, body.cinema #meta-r{opacity:0;pointer-events:none}
+  .panel{transition:opacity .6s}
+  /* holographic screen HUD label */
+  #screenHud{position:absolute;z-index:6;left:50%;top:158px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:10px;pointer-events:none;white-space:nowrap;
+    font-size:9px;letter-spacing:.34em;text-indent:.1em;color:rgba(160,225,255,.85)}
+  #screenHud .rec{width:8px;height:8px;border-radius:50%;background:#ff5d5d;
+    box-shadow:0 0 12px #ff5d5d;animation:pulse 1.4s infinite}
+  /* cinema dock */
+  #dock{position:absolute;z-index:11;left:50%;bottom:86px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:12px;
+    background:rgba(4,12,26,.62);border:1px solid rgba(56,198,255,.22);
+    border-radius:14px;padding:10px 14px;backdrop-filter:blur(12px);white-space:nowrap}
+  #dock button{cursor:pointer;border:1px solid rgba(56,198,255,.35);background:rgba(20,60,100,.5);
+    color:#dff2ff;font-size:11px;letter-spacing:.12em;border-radius:9px;padding:7px 12px}
+  #dock button:hover{background:rgba(56,198,255,.35)}
+  #dock button.on{background:var(--cyan);color:#04263c;border-color:var(--cyan);font-weight:700}
+  #btnEnter{background:linear-gradient(135deg,#F5A623,#FFB830);color:#0A1E40;border-color:transparent;font-weight:800}
+  #btnEnter:hover{background:linear-gradient(135deg,#FFB830,#FFD280)}
+  /* ---- modules overlay ---- */
+  #modPanel{position:absolute;z-index:12;left:50%;bottom:148px;transform:translateX(-50%) translateY(12px);
+    width:min(860px,92vw);background:rgba(4,12,26,.78);border:1px solid rgba(56,198,255,.25);
+    border-radius:16px;padding:18px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    box-shadow:0 18px 60px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .35s,transform .35s}
+  #modPanel.on{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+  #modPanel h3{font-size:10px;letter-spacing:.34em;text-indent:.1em;color:var(--cyan);font-weight:700;margin-bottom:4px}
+  #modPanel p.sub{font-size:11px;color:rgba(207,238,255,.6);margin-bottom:12px}
+  .modGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .modCard{display:block;text-decoration:none;color:var(--ice);
+    background:linear-gradient(160deg,rgba(10,32,58,.8),rgba(5,14,28,.6));
+    border:1px solid rgba(56,198,255,.2);border-radius:10px;padding:12px 13px;transition:all .18s}
+  .modCard:hover{border-color:var(--cyan);background:linear-gradient(160deg,rgba(16,48,86,.9),rgba(6,20,38,.7));
+    box-shadow:0 0 18px rgba(56,198,255,.25);transform:translateY(-2px)}
+  .modCard .t{font-size:12.5px;font-weight:700;color:#fff;letter-spacing:.04em;margin:6px 0 4px}
+  .modCard .d{font-size:11px;line-height:1.45;color:rgba(207,238,255,.68)}
+  .modCard .go{display:inline-block;margin-top:8px;font-size:10px;letter-spacing:.2em;color:var(--green);font-weight:700}
+  .modCard .ico{font-size:17px}
+  @media (max-width:900px){ .modGrid{grid-template-columns:1fr 1fr} #modPanel{bottom:170px} }
+  #vprog{width:170px;height:4px;background:rgba(56,198,255,.18);border-radius:3px;overflow:hidden}
+  #vprog i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),var(--green));
+    box-shadow:0 0 8px rgba(56,198,255,.9)}
+  #vlabel{font-size:9px;letter-spacing:.24em;color:rgba(207,238,255,.75);min-width:150px}
+  @media (max-width:900px){ #dock{bottom:120px;scale:.85} #screenHud{display:none} }
+  /* cinematic vignette + grades */
+  .vignette{position:absolute;inset:0;pointer-events:none;z-index:3;
+    background:
+      linear-gradient(to bottom, rgba(4,11,24,.88) 0%, rgba(4,11,24,.25) 18%, transparent 32%, transparent 68%, rgba(4,11,24,.82) 100%),
+      radial-gradient(ellipse at 50% 55%, transparent 42%, rgba(2,6,14,.55) 100%);}
+  .grain{position:absolute;inset:0;z-index:3;opacity:.05;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");}
+  /* top logo — sharp, floating, corporate */
+  .brand{position:absolute;top:22px;left:50%;transform:translateX(-50%);z-index:10;
+    display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+  .brand .logo-wrap{width:min(390px,62vw);position:relative;
+    filter:drop-shadow(0 0 18px rgba(56,198,255,.35));}
+  .brand .logo-wrap img{width:100%;height:auto;max-height:92px;object-fit:contain;object-position:center;
+    mix-blend-mode:screen;display:block}
+  .brand .sub{font-size:10px;letter-spacing:.52em;text-indent:.52em;color:var(--cyan);
+    font-weight:600;opacity:.95;white-space:nowrap}
+  .brand .sub2{font-size:9px;letter-spacing:.34em;text-indent:.34em;color:rgba(207,238,255,.55);font-weight:400}
+  .rule{width:220px;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.7}
+  /* floating QA panels */
+  .panel{position:absolute;z-index:5;min-width:198px;max-width:230px;
+    background:linear-gradient(160deg, rgba(10,32,58,.72), rgba(5,14,28,.55));
+    border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    box-shadow:0 8px 32px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08);}
+  .panel::before{content:"";position:absolute;top:-1px;left:14px;right:14px;height:1px;
+    background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+  .panel h4{font-size:9px;letter-spacing:.22em;color:rgba(207,238,255,.65);font-weight:600;margin-bottom:8px}
+  .panel .big{font-size:22px;font-weight:700;color:#fff;letter-spacing:.02em}
+  .panel .big small{font-size:11px;color:var(--cyan);font-weight:600}
+  .panel .row{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.06em;
+    color:rgba(230,245,255,.88);padding:5px 0;border-top:1px solid rgba(56,198,255,.12)}
+  .panel .row:first-of-type{border-top:none}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 10px var(--green);flex-shrink:0;animation:pulse 2.2s ease-in-out infinite}
+  .dot.amber{background:#ffcf5c;box-shadow:0 0 10px #ffcf5c}
+  .dot.cyan{background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+  .bar{height:3px;background:rgba(56,198,255,.15);border-radius:2px;overflow:hidden;margin-top:6px}
+  .bar i{display:block;height:100%;border-radius:2px;
+    background:linear-gradient(90deg,var(--cyan-dim),var(--cyan),var(--green));
+    box-shadow:0 0 8px rgba(56,198,255,.8);animation:barloop 6s ease-in-out infinite}
+  @keyframes barloop{0%{width:72%}50%{width:98%}100%{width:72%}}
+  .check{width:16px;height:16px;border:1px solid var(--green);border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;color:var(--green);
+    font-size:10px;flex-shrink:0}
+  #p-left{left:3.5vw;top:32%}
+  #p-right{right:3.5vw;top:30%}
+  #p-left2{left:3.5vw;bottom:20%}
+  #p-right2{right:3.5vw;bottom:20%}
+  /* story stepper */
+  .story{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);z-index:10;
+    display:flex;align-items:center;gap:0;pointer-events:none;
+    background:rgba(4,12,26,.55);border:1px solid rgba(56,198,255,.18);
+    border-radius:100px;padding:10px 22px;backdrop-filter:blur(12px);white-space:nowrap}
+  .story .step{display:flex;align-items:center;gap:8px;font-size:9.5px;letter-spacing:.2em;
+    color:rgba(207,238,255,.42);font-weight:600;transition:all .6s}
+  .story .step .n{width:20px;height:20px;border-radius:50%;border:1px solid rgba(56,198,255,.3);
+    display:inline-flex;align-items:center;justify-content:center;font-size:9px}
+  .story .step.active{color:#fff;text-shadow:0 0 14px rgba(56,198,255,.9)}
+  .story .step.active .n{background:var(--cyan);border-color:var(--cyan);color:#04263c;
+    box-shadow:0 0 16px rgba(56,198,255,.9)}
+  .story .step.done{color:var(--green)}
+  .story .step.done .n{border-color:var(--green);color:var(--green)}
+  .story .link{width:34px;height:1px;background:rgba(56,198,255,.25);margin:0 10px;position:relative;overflow:hidden}
+  .story .link::after{content:"";position:absolute;inset:0;background:var(--cyan);
+    transform:translateX(-100%);animation:flow 5s linear infinite}
+  @keyframes flow{to{transform:translateX(100%)}}
+  .meta{position:absolute;z-index:10;font-size:9px;letter-spacing:.28em;color:rgba(207,238,255,.4)}
+  #meta-l{left:3.5vw;bottom:30px} #meta-r{right:3.5vw;bottom:30px;text-align:right}
+  .meta b{color:var(--cyan)}
+  /* scanline sweep hint */
+  #loader{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
+    gap:14px;align-items:center;justify-content:center;transition:opacity .8s}
+  #loader.off{opacity:0;pointer-events:none}
+  #loader .t{font-size:10px;letter-spacing:.5em;text-indent:.5em;color:var(--cyan)}
+  #loader .l{width:180px;height:1px;background:rgba(56,198,255,.2);overflow:hidden}
+  #loader .l i{display:block;height:100%;width:40%;background:var(--cyan);animation:flow 1s linear infinite}
+  @media (max-width:900px){ .panel{display:none} .brand .logo-wrap{width:260px;height:52px}
+    .brand .logo-wrap img{height:160px} .story{transform:translateX(-50%) scale(.72)} }
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="bgVideo" autoplay muted loop playsinline preload="auto">
+    <source src="showreel.mp4" type="video/mp4" />
+  </video>
+  <div id="bgGrade"></div>
+  <canvas id="webgl"></canvas>
+  <div class="vignette"></div><div class="grain"></div>
+  <div id="screenHud"><span class="rec"></span> LIVE SHOWREEL — HOLOGRAPHIC SCREEN · <span id="hudTime">00:00</span></div>
+
+  <div class="brand">
+    <div class="logo-wrap"><img src="10.png" alt="ORASCOM CONSTRUCTION" /></div>
+    <div class="rule"></div>
+    <div class="sub">BIM QA/QC DIGITAL DELIVERY HUB</div>
+    <div class="sub2">MODEL &nbsp;·&nbsp; VALIDATE &nbsp;·&nbsp; VERIFY &nbsp;·&nbsp; DELIVER</div>
+  </div>
+
+  <div class="panel" id="p-left">
+    <h4>PARAMETER VALIDATION</h4>
+    <div class="big">98.7<small>%</small></div>
+    <div class="bar"><i></i></div>
+    <div class="row" style="margin-top:8px"><span class="check">✓</span> Data consistency</div>
+    <div class="row"><span class="check">✓</span> Model completeness</div>
+    <div class="row"><span class="dot amber"></span> Discipline review</div>
+  </div>
+
+  <div class="panel" id="p-right">
+    <h4>QA / QC STATUS</h4>
+    <div class="row"><span class="dot"></span> Checks passed — 1,284</div>
+    <div class="row"><span class="dot cyan"></span> Coordination — clash-free</div>
+    <div class="row"><span class="check">✓</span> Verified deliverables</div>
+    <div class="bar"><i style="animation-delay:-2s"></i></div>
+  </div>
+
+  <div class="panel" id="p-left2">
+    <h4>MODEL COORDINATION</h4>
+    <div class="row"><span class="dot cyan"></span> ARCH · STR · MEP aligned</div>
+    <div class="row"><span class="dot"></span> Worksets controlled</div>
+  </div>
+
+  <div class="panel" id="p-right2">
+    <h4>DIGITAL DELIVERY</h4>
+    <div class="row"><span class="check">✓</span> Approved · issued</div>
+    <div class="row"><span class="dot"></span> CDE sync active</div>
+  </div>
+
+  <div class="story" id="story"></div>
+  <div id="dock">
+    <button id="btnEnter" onclick="location.href='hub.html'">ENTER HUB →</button>
+    <button id="btnModules" onclick="toggleModules()">MODULES</button>
+    <button id="btnPlay">PAUSE</button>
+    <button id="btnMute">MUTED</button>
+    <button id="btnCinema">CINEMA</button>
+    <button id="btnLoad">LOAD VIDEO</button>
+    <input type="file" id="filePick" accept="video/*" style="display:none" />
+    <div id="vprog"><i id="vbar"></i></div>
+    <div id="vlabel">SHOWREEL · LOADING...</div>
+  </div>
+  <div id="modPanel" role="dialog" aria-label="BIM Hub modules">
+    <h3>BIM DIGITAL DELIVERY HUB — VALIDATION MODULES</h3>
+    <p class="sub">Five preserved validators plus coordination review, unified under one roof. Select a module to enter the Hub directly in that workspace.</p>
+    <div class="modGrid">
+      <a class="modCard" href="hub.html#/midp"><span class="ico">📋</span><div class="t">Delivery Verification</div><div class="d">Verify BIM deliverables against MIDP requirements, As-Built models and file-exchange audit.</div><span class="go">OPEN →</span></a>
+      <a class="modCard" href="hub.html#/naming"><span class="ico">🔤</span><div class="t">Naming Convention Checker</div><div class="d">Validate model and file naming against the OCC naming convention, section by section.</div><span class="go">OPEN →</span></a>
+      <a class="modCard" href="hub.html#/parameters"><span class="ico">🏷</span><div class="t">Parameter Validator</div><div class="d">Validate Revit parameter completeness, applicability and information requirements.</div><span class="go">OPEN →</span></a>
+      <a class="modCard" href="hub.html#/qaqc"><span class="ico">🛡</span><div class="t">Revit Model Quality</div><div class="d">Analyze overall Revit model health, checks, file metrics and discipline trends.</div><span class="go">OPEN →</span></a>
+      <a class="modCard" href="hub.html#/workset"><span class="ico">🧩</span><div class="t">Workset Validator</div><div class="d">Validate workset structure, naming and element-to-workset assignments.</div><span class="go">OPEN →</span></a>
+      <a class="modCard" href="hub.html#/clash"><span class="ico">💥</span><div class="t">Clash Analysis</div><div class="d">Review coordination clashes, resolution rate and priority breakdown.</div><span class="go">OPEN →</span></a>
+    </div>
+  </div>
+  <script>
+    function toggleModules(){
+      var p = document.getElementById('modPanel');
+      var b = document.getElementById('btnModules');
+      p.classList.toggle('on');
+      b.classList.toggle('on', p.classList.contains('on'));
+    }
+  </script>
+  <div class="meta" id="meta-l">ORASCOM <b>●</b> ENTERPRISE BIM<br><span id="clock">LOOP 00:00 / 00:32</span></div>
+  <div class="meta" id="meta-r">HERO · 21:9 · SEAMLESS LOOP<br>MODEL → VERIFIED</div>
+</div>
+
+<div id="loader"><div class="t">INITIALIZING BIM HUB</div><div class="l"><i></i></div></div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const LOOP = 32; // seconds — seamless loop duration
+const canvas = document.getElementById('webgl');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x040b18, 0); // transparent → bg showreel video shines through
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x040b18, 0.028);
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 300);
+
+scene.add(new THREE.AmbientLight(0x8ecfff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 1.1); key.position.set(6,10,8); scene.add(key);
+const cyanPt = new THREE.PointLight(0x29b6ff, 60, 60); cyanPt.position.set(0,4,-4); scene.add(cyanPt);
+const hubLight = new THREE.PointLight(0x66e0ff, 80, 30); hubLight.position.set(0,2.5,0); scene.add(hubLight);
+
+/* ---------- ground grids ---------- */
+const grid1 = new THREE.GridHelper(220, 110, 0x2fb9ff, 0x0e2c4d);
+grid1.position.y = 0; grid1.material.transparent = true; grid1.material.opacity = 0.5; scene.add(grid1);
+const grid2 = new THREE.GridHelper(220, 22, 0x66d9ff, 0x0a1e36);
+grid2.position.y = 0.02; grid2.material.transparent = true; grid2.material.opacity = 0.35; scene.add(grid2);
+
+// soft glow disc under hub
+{
+  const c = document.createElement('canvas'); c.width=c.height=256;
+  const g = c.getContext('2d'); const gr = g.createRadialGradient(128,128,4,128,128,128);
+  gr.addColorStop(0,'rgba(80,210,255,0.9)'); gr.addColorStop(0.35,'rgba(50,160,255,0.28)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=gr; g.fillRect(0,0,256,256);
+  const tex = new THREE.CanvasTexture(c);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(16,16),
+    new THREE.MeshBasicMaterial({map:tex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
+  m.rotation.x = -Math.PI/2; m.position.y = 0.05; scene.add(m);
+}
+
+/* ---------- supplied imagery as 3D hologram layers (depth + parallax) ---------- */
+const texLoader = new THREE.TextureLoader();
+function imagePlane(src, w, h, x,y,z, opacity){
+  const tex = texLoader.load(src, t=>{ t.colorSpace = THREE.SRGBColorSpace; });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+    new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity,
+      blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+// distant wireframe city skyline (7.png — no text, pure geometry)
+const farCity = imagePlane('7.png', 56, 20, 0, 7.5, -34, 0.55);
+// mid sphinx scan hologram (9.png — dark bg drops out via additive)
+const sphinx = imagePlane('9.png', 20, 12.5, 0, 4.6, -14, 0.85);
+// faint second sphinx echo for depth
+const sphinxEcho = imagePlane('9.png', 30, 18.5, -9, 5.5, -22, 0.22);
+
+/* ---------- CREATIVE: showreel video as 3D holographic screen ---------- */
+const bgVideo = document.getElementById('bgVideo');
+bgVideo.muted = true;
+const videoTex = new THREE.VideoTexture(bgVideo);
+videoTex.colorSpace = THREE.SRGBColorSpace;
+videoTex.minFilter = THREE.LinearFilter; videoTex.magFilter = THREE.LinearFilter;
+
+// glow backdrop behind screen
+const screenGlow = new THREE.Mesh(new THREE.PlaneGeometry(10, 6),
+  new THREE.MeshBasicMaterial({color:0x0a4d80, transparent:true, opacity:0.35,
+    blending:THREE.AdditiveBlending, depthWrite:false}));
+screenGlow.position.set(0, 4.7, -8.5); scene.add(screenGlow);
+
+// the holographic video screen itself (16:9) — smaller + pushed back so it never blocks the hub
+const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(7.6, 4.28),
+  new THREE.MeshBasicMaterial({map:videoTex, transparent:true, opacity:0.96, fog:false}));
+screenMesh.position.set(0, 4.7, -8.3); scene.add(screenMesh);
+
+// tech frame + corner brackets around screen
+const frameGroup = new THREE.Group(); frameGroup.position.copy(screenMesh.position); scene.add(frameGroup);
+{
+  const w=7.6, h=4.28;
+  const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(w+0.35,h+0.35)),
+    new THREE.LineBasicMaterial({color:0x5fd4ff, transparent:true, opacity:0.9}));
+  frameGroup.add(frame);
+  const cMat = new THREE.LineBasicMaterial({color:0x9fe8ff, transparent:true, opacity:1});
+  const L=0.7, ox=w/2+0.17, oy=h/2+0.17;
+  [[-ox,-oy,1,1],[ox,-oy,-1,1],[-ox,oy,1,-1],[ox,oy,-1,-1]].forEach(([cx,cy,sx,sy])=>{
+    const g=new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(cx,cy-sy*L,0.01), new THREE.Vector3(cx,cy,0.01), new THREE.Vector3(cx-sx*L,cy,0.01)]);
+    frameGroup.add(new THREE.Line(g,cMat));
+  });
+  // projector beam from hub up to screen
+  const bc=document.createElement('canvas');bc.width=64;bc.height=256;const bg2=bc.getContext('2d');
+  const grd=bg2.createLinearGradient(0,256,0,0);grd.addColorStop(0,'rgba(120,225,255,0.5)');grd.addColorStop(1,'rgba(120,225,255,0.02)');
+  bg2.fillStyle=grd;bg2.fillRect(0,0,64,256);
+  const btex=new THREE.CanvasTexture(bc);
+  const proj=new THREE.Mesh(new THREE.PlaneGeometry(5.5,4.2),
+    new THREE.MeshBasicMaterial({map:btex,transparent:true,opacity:0.16,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+  proj.position.set(0,-1.6,0.4); proj.rotation.x=0.5; frameGroup.add(proj);
+}
+
+/* ---------- cinema dock controls ---------- */
+const btnPlay=document.getElementById('btnPlay'), btnMute=document.getElementById('btnMute'),
+      btnCinema=document.getElementById('btnCinema'), btnLoad=document.getElementById('btnLoad'),
+      filePick=document.getElementById('filePick'), vbar=document.getElementById('vbar'),
+      vlabel=document.getElementById('vlabel'), hudTime=document.getElementById('hudTime');
+function setVideoVisible(ok){
+  screenMesh.visible=ok; frameGroup.visible=ok; screenGlow.visible=ok;
+  document.getElementById('screenHud').style.display=ok?'flex':'none';
+  document.getElementById('bgVideo').style.display=ok?'block':'none';
+  if(!ok){ vlabel.textContent='SHOWREEL · NOT FOUND — CLICK LOAD VIDEO'; }
+}
+function tryPlay(){ bgVideo.play().catch(()=>{ /* waits for user gesture */ }); }
+bgVideo.addEventListener('error', ()=>setVideoVisible(false));
+bgVideo.addEventListener('canplay', ()=>{ setVideoVisible(true); tryPlay(); });
+btnPlay.onclick=()=>{ if(bgVideo.paused){bgVideo.play();btnPlay.textContent='PAUSE';} else {bgVideo.pause();btnPlay.textContent='PLAY';} };
+btnMute.onclick=()=>{ bgVideo.muted=!bgVideo.muted; btnMute.textContent=bgVideo.muted?'MUTED':'SOUND'; btnMute.classList.toggle('on',!bgVideo.muted); };
+btnCinema.onclick=()=>{ document.body.classList.toggle('cinema'); btnCinema.classList.toggle('on',document.body.classList.contains('cinema')); };
+btnLoad.onclick=()=>filePick.click();
+filePick.onchange=()=>{ const f=filePick.files[0]; if(!f) return;
+  bgVideo.src=URL.createObjectURL(f); bgVideo.muted=false; btnMute.textContent='SOUND';
+  setVideoVisible(true); bgVideo.play().catch(()=>{}); };
+// graceful fallback: if the mp4 is missing/blocked, hide black boxes and keep pure 3D hero
+setTimeout(()=>{ if(bgVideo.readyState<2 && !bgVideo.currentSrc) setVideoVisible(false);
+  else if(bgVideo.readyState<2){ /* still buffering — keep trying, hide 3D screen only */ screenMesh.visible=false; }
+}, 4000);
+bgVideo.addEventListener('playing', ()=>{ setVideoVisible(true); screenMesh.visible=true; });
+// one-click anywhere unlocks autoplay under browser policy
+addEventListener('pointerdown', function unlock(){ tryPlay(); removeEventListener('pointerdown', unlock); }, {once:true});
+
+/* ---------- procedural BIM wireframe city ---------- */
+const city = new THREE.Group(); scene.add(city);
+const edgeMat = new THREE.LineBasicMaterial({color:0x35c2ff, transparent:true, opacity:0.85});
+const fillMat = new THREE.MeshBasicMaterial({color:0x061a33, transparent:true, opacity:0.55});
+function wireBox(w,h,d,x,z,op=0.85){
+  const g = new THREE.BoxGeometry(w,h,d);
+  const e = new THREE.LineSegments(new THREE.EdgesGeometry(g),
+    edgeMat.clone()); e.material.opacity = op;
+  e.position.set(x,h/2,z); city.add(e);
+  const f = new THREE.Mesh(g, fillMat); f.position.copy(e.position); city.add(f);
+  // floor lines
+  const floors = Math.max(2, Math.floor(h/1.4));
+  for(let i=1;i<floors;i++){
+    const l = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(w,d)),
+      new THREE.LineBasicMaterial({color:0x1f8fd6, transparent:true, opacity:0.25}));
+    l.rotation.x=-Math.PI/2; l.position.set(x, i*1.4, z); city.add(l);
+  }
+}
+[[-16,-10,3,7,3],[-11,-12,4,10,4],[-6,-13,3.4,13,3],[0,-14,4.5,17,4.5],
+ [6,-13,3.2,11,3],[11,-11,4,8,4],[16,-9,3,6,3],[-19,-6,2.5,5,2.5],[19,-6,2.6,5.5,2.6]]
+ .forEach(([x,z,w,h,d])=>wireBox(w,h,d,x,z,0.55+Math.random()*0.3));
+// pyramids — Giza reference, subtle
+[[-13,-18,5,4],[13,-19,6,5]].forEach(([x,z,w,h])=>{
+  const g = new THREE.ConeGeometry(w,h,4,1);
+  const e = new THREE.LineSegments(new THREE.EdgesGeometry(g),
+    new THREE.LineBasicMaterial({color:0x35c2ff,transparent:true,opacity:0.5}));
+  e.position.set(x,h/2,z); e.rotation.y=Math.PI/4; city.add(e);
+});
+// tower cranes (minimal line cranes)
+function crane(x,z,h,s=1){
+  const g = new THREE.Group(); const m = new THREE.LineBasicMaterial({color:0x5fd4ff,transparent:true,opacity:0.8});
+  const v = (a,b)=>{const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a),new THREE.Vector3(...b)]);g.add(new THREE.Line(geo,m));};
+  v([0,0,0],[0,h,0]); v([-4*s,h,0],[5*s,h,0]); v([0,h,0],[0,h+1.6*s,0]); v([0,h+1.6*s,0],[-4*s,h,0]); v([0,h+1.6*s,0],[5*s,h,0]);
+  v([4.2*s,h-1.4,0],[4.2*s,h,0]);
+  g.position.set(x,0,z); city.add(g); return g;
+}
+const cranes=[crane(-9,-12,13),crane(4,-13,15,1.15),crane(12,-10,11,0.9)];
+
+/* ---------- central digital hub ---------- */
+const hub = new THREE.Group(); hub.position.set(0,2.6,0); scene.add(hub);
+const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05,1),
+  new THREE.MeshStandardMaterial({color:0x0a2c4e, emissive:0x1899e0, emissiveIntensity:1.4,
+    wireframe:true, transparent:true, opacity:0.95}));
+hub.add(core);
+const coreSolid = new THREE.Mesh(new THREE.IcosahedronGeometry(0.72,2),
+  new THREE.MeshStandardMaterial({color:0x0b3a63, emissive:0x0a4a75, emissiveIntensity:0.7,
+    roughness:0.25, metalness:0.8, transparent:true, opacity:0.92}));
+hub.add(coreSolid);
+const rings=[];
+[[2.2,0x35c2ff,0.9,0],[2.9,0x1a7fbf,0.55,1],[3.7,0x9fe8ff,0.28,2]].forEach(([r,c,op,tilt])=>{
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(r,0.015,8,140),
+    new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:op}));
+  ring.rotation.x = Math.PI/2 + tilt*0.35; hub.add(ring); rings.push(ring);
+});
+// vertical light beam
+{
+  const c=document.createElement('canvas');c.width=16;c.height=256;const g=c.getContext('2d');
+  const gr=g.createLinearGradient(0,0,0,256);gr.addColorStop(0,'rgba(120,225,255,0)');
+  gr.addColorStop(0.6,'rgba(80,200,255,0.55)');gr.addColorStop(1,'rgba(160,240,255,0.95)');
+  g.fillStyle=gr;g.fillRect(0,0,16,256);
+  const tex=new THREE.CanvasTexture(c);
+  const beam=new THREE.Mesh(new THREE.PlaneGeometry(1.4,9),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+  beam.position.y=2.2; hub.add(beam);
+}
+
+/* ---------- data particles: model → hub → delivery ---------- */
+function makeParticles(n, color, size){
+  const pos = new Float32Array(n*3); const seed = new Float32Array(n);
+  for(let i=0;i<n;i++){ pos[i*3]=(Math.random()-0.5)*60; pos[i*3+1]=Math.random()*16; pos[i*3+2]=-30+Math.random()*34; seed[i]=Math.random()*100; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat = new THREE.PointsMaterial({color, size, transparent:true, opacity:0.85,
+    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true});
+  const pts = new THREE.Points(geo,mat); pts.userData.seed=seed; scene.add(pts); return pts;
+}
+const pCyan = makeParticles(900, 0x46ccff, 0.07);
+const pWhite = makeParticles(350, 0xdff4ff, 0.05);
+const pGreen = makeParticles(120, 0x3dffc8, 0.09);
+
+/* ---------- floating BIM components + QA nodes ---------- */
+const floaters = new THREE.Group(); scene.add(floaters);
+function floaterBox(x,y,z){
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.7,0.7),
+    new THREE.MeshStandardMaterial({color:0x0d3358, emissive:0x1a86c8, emissiveIntensity:0.5,
+      wireframe:true}));
+  g.add(m);
+  const inner = new THREE.Mesh(new THREE.OctahedronGeometry(0.22),
+    new THREE.MeshBasicMaterial({color:0x9fe8ff}));
+  g.add(inner); g.position.set(x,y,z); g.userData={bx:x,by:y,bz:z,ph:Math.random()*9};
+  floaters.add(g); return g;
+}
+const fb=[floaterBox(-5,3.4,-3),floaterBox(5,3.8,-4),floaterBox(-6.5,2.2,1),floaterBox(6.5,2.4,1.5),floaterBox(0,5.2,-6)];
+// QA check sprites (canvas texture)
+function checkTexture(){
+  const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');
+  g.strokeStyle='#3dffc8';g.lineWidth=5;g.shadowColor='#3dffc8';g.shadowBlur=18;
+  g.beginPath();g.arc(64,64,46,0,Math.PI*2);g.stroke();
+  g.lineWidth=9;g.lineCap='round';g.beginPath();g.moveTo(44,66);g.lineTo(59,81);g.lineTo(86,48);g.stroke();
+  const t=new THREE.CanvasTexture(c);return t;
+}
+const checkTex = checkTexture(); const checks=[];
+for(let i=0;i<7;i++){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:checkTex,transparent:true,
+    blending:THREE.AdditiveBlending,depthWrite:false,opacity:0.9}));
+  const a=(i/7)*Math.PI*2; s.position.set(Math.cos(a)*4.4, 2.2+Math.sin(i*2.3)*1.4, Math.sin(a)*3-1);
+  s.scale.setScalar(0.5); s.userData={a,ph:i}; scene.add(s); checks.push(s);
+}
+// scanning plane
+const scan = new THREE.Mesh(new THREE.PlaneGeometry(16,0.06),
+  new THREE.MeshBasicMaterial({color:0x7fe6ff, transparent:true, opacity:0.8,
+    blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
+scan.position.set(0,1,-2); scene.add(scan);
+const scanGlow = new THREE.Mesh(new THREE.PlaneGeometry(16,1.2),
+  new THREE.MeshBasicMaterial({color:0x1a86c8, transparent:true, opacity:0.14,
+    blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
+scanGlow.position.copy(scan.position); scene.add(scanGlow);
+
+/* ---------- seamless looping camera journey (closed curve) ---------- */
+const curve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0.6, 1.7, 7.5),    // 1. close to BIM geometry
+  new THREE.Vector3(3.4, 2.6, 11.5),   // 2. pull back, reveal layers
+  new THREE.Vector3(7.5, 3.6, 8.0),    // 3. travel right through environment
+  new THREE.Vector3(4.0, 4.6, 14.5),   // 4. QA interfaces wide
+  new THREE.Vector3(-4.5, 4.2, 13.5),  // 5. sweep to hub
+  new THREE.Vector3(-6.5, 2.8, 8.5),
+  new THREE.Vector3(-1.5, 1.9, 7.0),   // → back to start (closed)
+], true, 'catmullrom', 0.6);
+const lookTarget = new THREE.Vector3(0, 2.6, -2);
+
+/* ---------- story stepper UI ---------- */
+const STAGES = ["BIM MODEL","DATA","VALIDATION","QA/QC","VERIFIED","DELIVERY"];
+const storyEl = document.getElementById('story');
+storyEl.innerHTML = STAGES.map((s,i)=>`${i>0?'<div class="link"></div>':''}<div class="step" id="st${i}"><span class="n">${i+1}</span>${s}</div>`).join('');
+const clockEl = document.getElementById('clock');
+
+let mouseX=0, mouseY=0;
+addEventListener('pointermove', e=>{
+  mouseX=(e.clientX/innerWidth-0.5); mouseY=(e.clientY/innerHeight-0.5);
+});
+addEventListener('resize', ()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+renderer.setSize(innerWidth,innerHeight);
+
+const clock = new THREE.Clock();
+let firstFrame=true;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const el = clock.getElapsedTime();
+  const t = (el % LOOP) / LOOP;            // 0..1 seamless loop phase
+  const lt = el;                            // free time for shimmer
+
+  // camera on closed loop
+  const pos = curve.getPointAt(t);
+  camera.position.set(pos.x + mouseX*0.7, pos.y - mouseY*0.5, pos.z);
+  camera.lookAt(lookTarget.x + mouseX*0.4, lookTarget.y - mouseY*0.3, lookTarget.z);
+
+  // hub motion (loop-safe: use sin of loop phase + shimmer)
+  core.rotation.y = t*Math.PI*4; core.rotation.x = Math.sin(t*Math.PI*2)*0.4;
+  coreSolid.rotation.y = -t*Math.PI*3;
+  rings[0].rotation.z = t*Math.PI*4; rings[1].rotation.z = -t*Math.PI*3; rings[2].rotation.z = t*Math.PI*2;
+  hub.position.y = 2.6 + Math.sin(t*Math.PI*2)*0.15;
+  hubLight.intensity = 70 + Math.sin(t*Math.PI*4)*18;
+
+  // hologram breathing + parallax
+  sphinx.position.y = 4.6 + Math.sin(t*Math.PI*2)*0.18;
+  sphinx.material.opacity = 0.78 + Math.sin(t*Math.PI*2)*0.08;
+  farCity.position.x = Math.sin(t*Math.PI*2)*0.8 + mouseX*-1.2;
+  sphinxEcho.material.opacity = 0.16 + 0.08*Math.sin(t*Math.PI*2+1);
+
+  // showreel screen: gentle float + face camera + shimmer
+  screenMesh.position.y = 4.7 + Math.sin(t*Math.PI*2)*0.12;
+  frameGroup.position.y = screenMesh.position.y;
+  screenGlow.position.y = screenMesh.position.y;
+  const faceYaw = THREE.MathUtils.clamp(-camera.position.x*0.02,-0.18,0.18);
+  screenMesh.rotation.y += (faceYaw - screenMesh.rotation.y)*0.05;
+  frameGroup.rotation.y = screenMesh.rotation.y; screenGlow.rotation.y = screenMesh.rotation.y;
+  screenMesh.material.opacity = 0.9 + Math.sin(lt*2.2)*0.05;
+  if(bgVideo && bgVideo.duration){
+    const vt = bgVideo.currentTime / bgVideo.duration;
+    vbar.style.width = (vt*100).toFixed(1)+'%';
+    const mm = String(Math.floor(bgVideo.currentTime/60)).padStart(2,'0'),
+          ss2 = String(Math.floor(bgVideo.currentTime%60)).padStart(2,'0');
+    hudTime.textContent = mm+':'+ss2;
+    vlabel.textContent = 'SHOWREEL · '+STAGES[Math.min(5,Math.floor(vt*6))];
+  }
+
+  // particles drift upward, wrap with modulo → seamless
+  [pCyan,pWhite,pGreen].forEach((pts,pi)=>{
+    const p = pts.geometry.attributes.position; const seed = pts.userData.seed;
+    for(let i=0;i<p.count;i++){
+      let y = p.getY(i) + 0.008 + (pi===2?0.01:0);
+      if(y>15) y=0;
+      p.setY(i,y);
+      p.setX(i, p.getX(i) + Math.sin(lt*0.6+seed[i])*0.0025);
+    }
+    p.needsUpdate=true;
+    // converge toward hub: gentle opacity pulse with loop
+    pts.material.opacity = 0.65 + Math.sin(t*Math.PI*2+pi)*0.2;
+  });
+
+  // cranes subtle sway
+  cranes.forEach((c,i)=>{ c.rotation.z = Math.sin(lt*0.3+i)*0.004; });
+
+  // floaters bob + rotate
+  fb.forEach(f=>{
+    const u=f.userData;
+    f.position.y = u.by + Math.sin(lt*0.8+u.ph)*0.25;
+    f.rotation.x = lt*0.25+u.ph; f.rotation.y = lt*0.35+u.ph;
+  });
+  // QA checks orbit hub
+  checks.forEach((s,i)=>{
+    const a = s.userData.a + t*Math.PI*2*0.5;
+    s.position.x = Math.cos(a)*4.6; s.position.z = Math.sin(a)*3.2-1;
+    s.position.y = 2.4 + Math.sin(lt*1.1+i*1.7)*0.5;
+    const sc = 0.42 + Math.sin(lt*2+i)*0.08; s.scale.setScalar(sc);
+    s.material.opacity = 0.65 + Math.sin(lt*2+i*1.3)*0.25;
+  });
+
+  // scan line sweeps 0→1 each loop
+  const sy = 0.4 + t*8.5;
+  scan.position.y = sy; scanGlow.position.y = sy;
+  scan.material.opacity = (t>0.02 && t<0.97)?0.75:0;
+
+  // story stepper synced to same loop
+  const stageIdx = Math.min(5, Math.floor(t*6));
+  STAGES.forEach((_,i)=>{
+    const elx=document.getElementById('st'+i);
+    elx.classList.toggle('active', i===stageIdx);
+    elx.classList.toggle('done', i<stageIdx);
+  });
+  const ss = Math.floor(el%LOOP);
+  clockEl.textContent = `LOOP 00:${String(ss).padStart(2,'0')} / 00:${LOOP} · ${STAGES[stageIdx]}`;
+
+  // parallax on HTML panels
+  document.getElementById('p-left').style.transform=`translate(${mouseX*-10}px,${mouseY*-8}px)`;
+  document.getElementById('p-right').style.transform=`translate(${mouseX*10}px,${mouseY*-8}px)`;
+  document.getElementById('p-left2').style.transform=`translate(${mouseX*-14}px,${mouseY*8}px)`;
+  document.getElementById('p-right2').style.transform=`translate(${mouseX*14}px,${mouseY*8}px)`;
+
+  renderer.render(scene,camera);
+  if(firstFrame){firstFrame=false;document.getElementById('loader').classList.add('off');}
+}
+animate();
+</script>
+</body>
+</html>

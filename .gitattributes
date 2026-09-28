@@ -1,0 +1,9 @@
+# Keep Cloudflare Pages control files + web sources LF-clean on Windows checkouts.
+* text=auto
+_headers text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.svg text eol=lf
+*.png binary
+*.mp4 binary

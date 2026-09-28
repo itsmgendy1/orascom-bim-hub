@@ -1,0 +1,5 @@
+# Fully static site — nothing to exclude except OS/editor junk.
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log

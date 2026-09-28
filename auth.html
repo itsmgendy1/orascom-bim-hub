@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Forma login — Orascom BIM Hub</title>
+<style>body{font-family:'Segoe UI',Arial,sans-serif;background:#0A1E40;color:#cfe0f5;display:grid;place-items:center;min-height:100vh;margin:0}</style>
+</head>
+<body>
+<p id="auth-msg">Finishing Autodesk login…</p>
+<script src="assets/js/forma.js"></script>
+<script>
+  if(window.OForma) window.OForma.handleCallback();
+  else document.getElementById('auth-msg').textContent = 'Could not load the Hub connector.';
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Cloudflare Pages headers for the Orascom BIM Hub (static, hash-routed).
+# No _redirects file on purpose: all navigation is #/ hash routes, so no
+# SPA rewrite rule is needed and one would risk shadowing hub.html/modules.
+#
+# Notes:
+# - No Content-Security-Policy here: modules ship their own <meta> CSP and
+#   HTTP + meta policies intersect (most restrictive wins). A global CSP
+#   would silently break module CDN scripts. Meta policies stay as-is.
+# - X-Frame-Options SAMEORIGIN keeps Hub -> module iframes (same origin)
+#   working while blocking third-party clickjacking.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(self)
+  X-Frame-Options: SAMEORIGIN
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/modules/*
+  Cache-Control: public, max-age=3600
+/*.png
+  Cache-Control: public, max-age=86400
+/*.svg
+  Cache-Control: public, max-age=86400
+/*.mp4
+  Cache-Control: public, max-age=86400

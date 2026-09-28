@@ -24,7 +24,7 @@
       linear-gradient(to bottom, rgba(4,11,24,.92) 0%, rgba(4,11,24,.35) 22%, rgba(4,11,24,.15) 50%, rgba(4,11,24,.55) 78%, rgba(4,11,24,.94) 100%),
       radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(2,6,14,.6) 100%);}
   body.cinema #bgVideo{opacity:.85;transform:scale(1)}
-  body.cinema .panel, body.cinema #meta-l, body.cinema #meta-r{opacity:0;pointer-events:none}
+  body.cinema .panel{opacity:0;pointer-events:none}
   .panel{transition:opacity .6s}
   /* cinema dock */
   #dock{position:absolute;z-index:11;left:50%;bottom:86px;transform:translateX(-50%);
@@ -128,9 +128,6 @@
   .story .link::after{content:"";position:absolute;inset:0;background:var(--cyan);
     transform:translateX(-100%);animation:flow 5s linear infinite}
   @keyframes flow{to{transform:translateX(100%)}}
-  .meta{position:absolute;z-index:10;font-size:9px;letter-spacing:.28em;color:rgba(207,238,255,.4)}
-  #meta-l{left:3.5vw;bottom:30px} #meta-r{right:3.5vw;bottom:30px;text-align:right}
-  .meta b{color:var(--cyan)}
   /* scanline sweep hint */
   #loader{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
     gap:14px;align-items:center;justify-content:center;transition:opacity .8s}
@@ -219,8 +216,6 @@
       b.classList.toggle('on', p.classList.contains('on'));
     }
   </script>
-  <div class="meta" id="meta-l">ORASCOM <b>●</b> ENTERPRISE BIM<br><span id="clock">LOOP 00:00 / 00:32</span></div>
-  <div class="meta" id="meta-r">HERO · 21:9 · SEAMLESS LOOP<br>MODEL → VERIFIED</div>
 </div>
 
 <div id="loader"><div class="t">INITIALIZING BIM HUB</div><div class="l"><i></i></div></div>
@@ -418,17 +413,6 @@ const rings=[];
     new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:op}));
   ring.rotation.x = Math.PI/2 + tilt*0.35; hub.add(ring); rings.push(ring);
 });
-// vertical light beam
-{
-  const c=document.createElement('canvas');c.width=16;c.height=256;const g=c.getContext('2d');
-  const gr=g.createLinearGradient(0,0,0,256);gr.addColorStop(0,'rgba(120,225,255,0)');
-  gr.addColorStop(0.6,'rgba(80,200,255,0.55)');gr.addColorStop(1,'rgba(160,240,255,0.95)');
-  g.fillStyle=gr;g.fillRect(0,0,16,256);
-  const tex=new THREE.CanvasTexture(c);
-  const beam=new THREE.Mesh(new THREE.PlaneGeometry(1.4,9),
-    new THREE.MeshBasicMaterial({map:tex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-  beam.position.y=2.2; hub.add(beam);
-}
 
 /* ---------- data particles: model → hub → delivery ---------- */
 function makeParticles(n, color, size){
@@ -498,7 +482,6 @@ const lookTarget = new THREE.Vector3(0, 2.6, -2);
 const STAGES = ["BIM MODEL","DATA","VALIDATION","QA/QC","VERIFIED","DELIVERY"];
 const storyEl = document.getElementById('story');
 storyEl.innerHTML = STAGES.map((s,i)=>`${i>0?'<div class="link"></div>':''}<div class="step" id="st${i}"><span class="n">${i+1}</span>${s}</div>`).join('');
-const clockEl = document.getElementById('clock');
 
 let mouseX=0, mouseY=0;
 addEventListener('pointermove', e=>{
@@ -595,8 +578,6 @@ function animate(){
     elx.classList.toggle('active', i===stageIdx);
     elx.classList.toggle('done', i<stageIdx);
   });
-  const ss = Math.floor(el%LOOP);
-  clockEl.textContent = `LOOP 00:${String(ss).padStart(2,'0')} / 00:${LOOP} · ${STAGES[stageIdx]}`;
 
   // parallax on HTML panels
   document.getElementById('p-left').style.transform=`translate(${mouseX*-10}px,${mouseY*-8}px)`;

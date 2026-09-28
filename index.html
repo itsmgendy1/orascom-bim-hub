@@ -283,11 +283,11 @@ function imagePlane(src, w, h, x,y,z, opacity){
   m.position.set(x,y,z); scene.add(m); return m;
 }
 // distant wireframe city skyline (7.png — no text, pure geometry)
-const farCity = imagePlane('7.png', 56, 20, 0, 7.5, -34, 0.55);
+const farCity = imagePlane('7.png', 56, 20, 0, 7.5, -34, 0.30);
 // mid sphinx scan hologram (9.png — dark bg drops out via additive)
-const sphinx = imagePlane('9.png', 20, 12.5, 0, 4.6, -14, 0.85);
+const sphinx = imagePlane('9.png', 20, 12.5, 0, 4.6, -14, 0.55);
 // faint second sphinx echo for depth
-const sphinxEcho = imagePlane('9.png', 30, 18.5, -9, 5.5, -22, 0.22);
+const sphinxEcho = imagePlane('9.png', 30, 18.5, -9, 5.5, -22, 0.12);
 
 /* ---------- CREATIVE: showreel video as 3D holographic screen ---------- */
 const bgVideo = document.getElementById('bgVideo');
@@ -528,9 +528,9 @@ function animate(){
 
   // hologram breathing + parallax
   sphinx.position.y = 4.6 + Math.sin(t*Math.PI*2)*0.18;
-  sphinx.material.opacity = 0.78 + Math.sin(t*Math.PI*2)*0.08;
+  sphinx.material.opacity = 0.50 + Math.sin(t*Math.PI*2)*0.06;
   farCity.position.x = Math.sin(t*Math.PI*2)*0.8 + mouseX*-1.2;
-  sphinxEcho.material.opacity = 0.16 + 0.08*Math.sin(t*Math.PI*2+1);
+  sphinxEcho.material.opacity = 0.10 + 0.04*Math.sin(t*Math.PI*2+1);
 
   // showreel screen: gentle float + face camera + shimmer
   screenMesh.position.y = 4.7 + Math.sin(t*Math.PI*2)*0.12;

@@ -17,7 +17,7 @@
   #webgl{position:absolute;inset:0;width:100%;height:100%;display:block}
   /* ---- creative video layers ---- */
   #bgVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-    opacity:.34;filter:saturate(1.35) contrast(1.08) brightness(.72) hue-rotate(-8deg);
+    opacity:.16;filter:saturate(1.35) contrast(1.08) brightness(.72) hue-rotate(-8deg);
     transform:scale(1.06);transition:opacity .8s}
   #bgGrade{position:absolute;inset:0;z-index:2;pointer-events:none;
     background:
@@ -288,6 +288,11 @@ const farCity = imagePlane('7.png', 56, 20, 0, 7.5, -34, 0.30);
 const sphinx = imagePlane('9.png', 20, 12.5, 0, 4.6, -14, 0.55);
 // faint second sphinx echo for depth
 const sphinxEcho = imagePlane('9.png', 30, 18.5, -9, 5.5, -22, 0.12);
+// 9.png is bright daylight footage (mean ~143, >50% pixels near-white).
+// Additive blending adds that light to the scene, so knock both sphinx
+// layers down with a steel-blue multiplier into hologram range.
+sphinx.material.color.setHex(0x4a5a6e);
+sphinxEcho.material.color.setHex(0x4a5a6e);
 
 /* ---------- CREATIVE: showreel video as 3D holographic screen ---------- */
 const bgVideo = document.getElementById('bgVideo');

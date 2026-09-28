@@ -25,12 +25,6 @@
   body.cinema #bgVideo{opacity:.85;transform:scale(1)}
   body.cinema .panel, body.cinema #meta-l, body.cinema #meta-r{opacity:0;pointer-events:none}
   .panel{transition:opacity .6s}
-  /* holographic screen HUD label */
-  #screenHud{position:absolute;z-index:6;left:50%;top:158px;transform:translateX(-50%);
-    display:flex;align-items:center;gap:10px;pointer-events:none;white-space:nowrap;
-    font-size:9px;letter-spacing:.34em;text-indent:.1em;color:rgba(160,225,255,.85)}
-  #screenHud .rec{width:8px;height:8px;border-radius:50%;background:#ff5d5d;
-    box-shadow:0 0 12px #ff5d5d;animation:pulse 1.4s infinite}
   /* cinema dock */
   #dock{position:absolute;z-index:11;left:50%;bottom:86px;transform:translateX(-50%);
     display:flex;align-items:center;gap:12px;
@@ -65,7 +59,7 @@
   #vprog i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),var(--green));
     box-shadow:0 0 8px rgba(56,198,255,.9)}
   #vlabel{font-size:9px;letter-spacing:.24em;color:rgba(207,238,255,.75);min-width:150px}
-  @media (max-width:900px){ #dock{bottom:120px;scale:.85} #screenHud{display:none} }
+  @media (max-width:900px){ #dock{bottom:120px;scale:.85} }
   /* cinematic vignette + grades */
   .vignette{position:absolute;inset:0;pointer-events:none;z-index:3;
     background:
@@ -76,10 +70,10 @@
   /* top logo — sharp, floating, corporate */
   .brand{position:absolute;top:22px;left:50%;transform:translateX(-50%);z-index:10;
     display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
-  .brand .logo-wrap{width:min(390px,62vw);position:relative;
-    filter:drop-shadow(0 0 18px rgba(56,198,255,.35));}
-  .brand .logo-wrap img{width:100%;height:auto;max-height:92px;object-fit:contain;object-position:center;
-    mix-blend-mode:screen;display:block}
+  .brand .logo-wrap{width:min(620px,80vw);position:relative;
+    filter:drop-shadow(0 0 22px rgba(56,198,255,.35));}
+  .brand .logo-wrap img{width:100%;height:auto;max-height:150px;object-fit:contain;object-position:center;
+    mix-blend-mode:screen;opacity:.94;display:block}
   .brand .sub{font-size:10px;letter-spacing:.52em;text-indent:.52em;color:var(--cyan);
     font-weight:600;opacity:.95;white-space:nowrap}
   .brand .sub2{font-size:9px;letter-spacing:.34em;text-indent:.34em;color:rgba(207,238,255,.55);font-weight:400}
@@ -143,8 +137,8 @@
   #loader .t{font-size:10px;letter-spacing:.5em;text-indent:.5em;color:var(--cyan)}
   #loader .l{width:180px;height:1px;background:rgba(56,198,255,.2);overflow:hidden}
   #loader .l i{display:block;height:100%;width:40%;background:var(--cyan);animation:flow 1s linear infinite}
-  @media (max-width:900px){ .panel{display:none} .brand .logo-wrap{width:260px;height:52px}
-    .brand .logo-wrap img{height:160px} .story{transform:translateX(-50%) scale(.72)} }
+  @media (max-width:900px){ .panel{display:none} .brand .logo-wrap{width:min(420px,80vw)}
+    .brand .logo-wrap img{max-height:110px} .story{transform:translateX(-50%) scale(.72)} }
 </style>
 </head>
 <body>
@@ -155,7 +149,6 @@
   <div id="bgGrade"></div>
   <canvas id="webgl"></canvas>
   <div class="vignette"></div><div class="grain"></div>
-  <div id="screenHud"><span class="rec"></span> LIVE SHOWREEL — HOLOGRAPHIC SCREEN · <span id="hudTime">00:00</span></div>
 
   <div class="brand">
     <div class="logo-wrap"><img src="10.png" alt="ORASCOM CONSTRUCTION" /></div>
@@ -333,10 +326,9 @@ const frameGroup = new THREE.Group(); frameGroup.position.copy(screenMesh.positi
 const btnPlay=document.getElementById('btnPlay'), btnMute=document.getElementById('btnMute'),
       btnCinema=document.getElementById('btnCinema'), btnLoad=document.getElementById('btnLoad'),
       filePick=document.getElementById('filePick'), vbar=document.getElementById('vbar'),
-      vlabel=document.getElementById('vlabel'), hudTime=document.getElementById('hudTime');
+      vlabel=document.getElementById('vlabel');
 function setVideoVisible(ok){
   screenMesh.visible=ok; frameGroup.visible=ok; screenGlow.visible=ok;
-  document.getElementById('screenHud').style.display=ok?'flex':'none';
   document.getElementById('bgVideo').style.display=ok?'block':'none';
   if(!ok){ vlabel.textContent='SHOWREEL · NOT FOUND — CLICK LOAD VIDEO'; }
 }
@@ -542,9 +534,6 @@ function animate(){
   if(bgVideo && bgVideo.duration){
     const vt = bgVideo.currentTime / bgVideo.duration;
     vbar.style.width = (vt*100).toFixed(1)+'%';
-    const mm = String(Math.floor(bgVideo.currentTime/60)).padStart(2,'0'),
-          ss2 = String(Math.floor(bgVideo.currentTime%60)).padStart(2,'0');
-    hudTime.textContent = mm+':'+ss2;
     vlabel.textContent = 'SHOWREEL · '+STAGES[Math.min(5,Math.floor(vt*6))];
   }
 

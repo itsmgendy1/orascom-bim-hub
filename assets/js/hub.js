@@ -669,6 +669,82 @@
   // plus any custom project boundary. Assign actions write through the
   // same validated boundary path as the project form.
   var gisMapObj = null, gisLayers = [], gisTileTheme = '', gisTileLayer = null;
+  var gisMode = 'package', gisBase = 'auto', gisQuery = '', gisSearchFocus = false;
+  var gisPlotBounds = {};
+  var DP_COLORS = {DP01:'#14b8a6',DP02:'#22c55e',DP03:'#f59e0b',DP04:'#ec4899',DP05:'#8b5cf6',DP06:'#ef4444',DP07:'#3b82f6',DP08:'#84cc16'};
+  var GIS_MODES = [
+    {id:'package', label:'Design Package'},
+    {id:'review', label:'Review Status'},
+    {id:'stage', label:'Current Stage'},
+    {id:'overall', label:'Overall'},
+    {id:'issues', label:'Issues'}
+  ];
+  function gisTileSpec(which){
+    if(which==='aerial') return {url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attr:'Tiles \u00a9 Esri \u2014 Source: Esri, Maxar, Earthstar Geographics'};
+    if(which==='dark') return mapTileFor('dark');
+    if(which==='streets') return mapTileFor('light');
+    return mapTileFor(hubTheme()==='dark' ? 'dark' : 'light');
+  }
+  function holderGates(pid){
+    var total=0, approved=0, submitted=0, wip=0, furthest=-1;
+    Object.keys(state.gates||{}).forEach(function(k){
+      if(k.indexOf(pid+'|')!==0) return;
+      var st = state.gates[k];
+      var stage = k.split('|').slice(2).join('|');
+      var idx = GATE_STAGES.indexOf(stage);
+      total++;
+      if(st==='Approved'){ approved++; if(idx>furthest) furthest=idx; }
+      else if(st==='Submitted') submitted++;
+      else if(st==='In Progress') wip++;
+    });
+    return {total:total, approved:approved, submitted:submitted, wip:wip, furthest:furthest};
+  }
+  function holderOverdue(pid){
+    var d0 = new Date(); d0.setHours(0,0,0,0);
+    var tToday = d0.getTime();
+    return state.deliverables.filter(function(d){
+      if(d.project!==pid) return false;
+      var t = delivTime(d.due);
+      return t!=null && t<tToday && d.status!=='Submitted';
+    }).length;
+  }
+  function holderOpenIssues(pid){
+    return state.issues.filter(function(i){ return i.project===pid && (i.status==='Open'||i.status==='In Progress'); }).length;
+  }
+  function plotBucket(holder, g, overdue){
+    if(!holder) return 'Not Started';
+    if(overdue>0) return 'Delayed';
+    if(g.total>0 && g.approved===g.total) return 'Approved';
+    if(g.submitted>0) return 'Submitted';
+    if(g.wip>0) return 'In Progress';
+    return 'Not Started';
+  }
+  function bucketBadge(b){
+    if(b==='Approved') return '<span class="badge badge-ok">Approved</span>';
+    if(b==='Submitted') return '<span class="badge badge-info">Submitted</span>';
+    if(b==='In Progress') return '<span class="badge badge-warn">In Progress</span>';
+    if(b==='Delayed') return '<span class="badge badge-fail">Delayed</span>';
+    return '<span class="badge badge-muted">Not Started</span>';
+  }
+  function plotModeStyle(pl, holder, g, overdue, open){
+    if(gisMode==='package') return {color:DP_COLORS[pl.code]||'#8E9BB3', fill:0.30, dash:null, tag:pl.code};
+    if(!holder) return {color:'#8E9BB3', fill:0.06, dash:'4 4', tag:pl.code};
+    var h = computeHealth(holder.id);
+    if(gisMode==='review'){
+      if(overdue>0) return {color:'#E03535', fill:0.32, dash:null, tag:pl.code+' \u00b7 '+overdue+' overdue'};
+      return {color:TONE_HEX[tone(h.value)], fill:0.24, dash:null, tag:pl.code};
+    }
+    if(gisMode==='stage'){
+      var sc = ['#8E9BB3','#E67E22','#E67E22','#4A5FBB','#27AE60','#27AE60'][Math.min(5, g.furthest+1)];
+      return {color:sc, fill:0.30, dash:null, tag: g.furthest<0 ? pl.code : pl.code+' \u00b7 '+GATE_STAGES[g.furthest]};
+    }
+    if(gisMode==='issues'){
+      var ic = open===0 ? '#27AE60' : open<=2 ? '#E67E22' : '#E03535';
+      return {color:ic, fill:0.30, dash:null, tag:pl.code+' \u00b7 '+open+' open'};
+    }
+    return {color:TONE_HEX[tone(h.value)], fill:0.22, dash:null, tag:pl.code};
+  }
   function ringFlip(multi){
     var out = [];
     (multi||[]).forEach(function(poly){
@@ -690,6 +766,7 @@
     p.plotCode = code;
     persist('projects');
     logActivity('Assigned plot '+code+' to '+p.name);
+    gisSearchFocus = false;
     renderProjects(); renderDashboard();
     if(currentView==='gis') renderGis();
     toast(code+' assigned to '+p.name);
@@ -708,15 +785,16 @@
       gisMapObj = L.map('gis-map', {scrollWheelZoom:true});
       gisMapObj.setView([27.807, 31.205], 13);
     }
-    var wantTheme = hubTheme();
-    if(gisTileTheme!==wantTheme){
+    var wantBase = gisBase==='auto' ? (hubTheme()==='dark' ? 'dark' : 'streets') : gisBase;
+    if(gisTileTheme!==wantBase){
       if(gisTileLayer){ try{ gisMapObj.removeLayer(gisTileLayer); }catch(e){} gisTileLayer = null; }
-      var spec = mapTileFor(wantTheme);
+      var spec = gisTileSpec(wantBase);
       gisTileLayer = L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr}).addTo(gisMapObj);
-      gisTileTheme = wantTheme;
+      gisTileTheme = wantBase;
     }
     gisLayers.forEach(function(l){ try{ gisMapObj.removeLayer(l); }catch(e){} });
     gisLayers = [];
+    gisPlotBounds = {};
     var bounds = [];
     function trackBounds(ll){
       ll.forEach(function(ring){ ring.forEach(function(c){ bounds.push(c); }); });
@@ -727,17 +805,24 @@
       var ll = ringFlip([pl.rings]);
       if(!ll.length) return;
       var holder = usedBy[pl.code] || null;
-      var hb = holder ? computeHealth(holder.id) : {value:null};
-      var pg = L.polygon(ll, {color: holder ? TONE_HEX[tone(hb.value)] : '#8E9BB3',
-        weight:2, fillOpacity: holder ? 0.20 : 0.06, dashArray: holder ? null : '4 4'}).addTo(gisMapObj);
+      var g = holder ? holderGates(holder.id) : {total:0, approved:0, submitted:0, wip:0, furthest:-1};
+      var overdue = holder ? holderOverdue(holder.id) : 0;
+      var open = holder ? holderOpenIssues(holder.id) : 0;
+      var sty = plotModeStyle(pl, holder, g, overdue, open);
+      var pg = L.polygon(ll, {color:sty.color, weight:2, fillOpacity:sty.fill, dashArray:sty.dash}).addTo(gisMapObj);
+      pg.bindTooltip(sty.tag, {permanent:true, direction:'center', className:'plot-label'});
       var kpi = pl.kpi || {};
+      var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
       pg.bindPopup('<strong>'+escapeHtml(pl.code+' — '+pl.name)+'</strong><br>'+
         escapeHtml(pl.cluster||'')+'<br>'+
         'Site: \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+' · Units: '+numFmt(kpi.units)+
         ' · Pop: '+numFmt(kpi.population)+' · Bldgs: '+numFmt(kpi.buildings)+'<br>'+
+        'Review: '+plotBucket(holder, g, overdue)+' · Stage: '+escapeHtml(stageName)+
+        ' · Open issues: '+open+'<br>'+
         (holder ? 'Assigned: '+escapeHtml(holder.name) : 'Unassigned'));
       if(holder) pg.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(holder.id));
       gisLayers.push(pg);
+      gisPlotBounds[pl.code] = pg.getBounds();
       trackBounds(ll);
     });
     state.projects.forEach(function(p){
@@ -746,6 +831,7 @@
       if(!ll.length) return;
       var hb2 = computeHealth(p.id);
       var pg2 = L.polygon(ll, {color:TONE_HEX[tone(hb2.value)], weight:2, fillOpacity:0.18}).addTo(gisMapObj);
+      pg2.bindTooltip(p.code||p.name, {permanent:true, direction:'center', className:'plot-label'});
       pg2.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>Custom boundary<br>'+
         'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates)));
       pg2.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(p.id));
@@ -758,24 +844,92 @@
       else gisMapObj.setView([27.807, 31.205], 13);
     }, 50);
     var ap = activeProject();
-    regHost.innerHTML = '<div class="card" style="margin-bottom:12px;"><div class="card-head"><h3>Plot register</h3>'+
-      '<span class="hint">'+plots.length+' plots</span></div>'+
-      '<p style="font-size:.78rem;color:var(--muted);margin-bottom:0;">'+(ap ? 'Assigning to active project: <strong>'+escapeHtml(ap.name)+'</strong>' : 'Select a project to enable assigning.')+'</p></div>' +
-      plots.map(function(pl){
+    var modesHost = document.getElementById('gis-modes');
+    if(modesHost){
+      modesHost.innerHTML = GIS_MODES.map(function(m){
+        return '<button class="seg-btn'+(gisMode===m.id?' active':'')+'" onclick="OHub.gisSetMode(\''+m.id+'\')">'+m.label+'</button>';
+      }).join('');
+    }
+    var basesHost = document.getElementById('gis-bases');
+    if(basesHost){
+      basesHost.innerHTML = [{id:'dark',label:'Dark'},{id:'streets',label:'Streets'},{id:'aerial',label:'Aerial'}].map(function(b){
+        var active = (gisBase==='auto' && ((b.id==='dark')===(hubTheme()==='dark'))) || gisBase===b.id;
+        return '<button class="seg-btn'+(active?' active':'')+'" onclick="OHub.gisSetBase(\''+b.id+'\')">'+b.label+'</button>';
+      }).join('');
+    }
+    var capHost = document.getElementById('gis-caption');
+    if(capHost){
+      capHost.textContent = {
+        package:'Zones wear their Design Package color.',
+        review:'Red = holder has overdue deliverables · otherwise the holder project health color · gray = unassigned.',
+        stage:'Zone color = furthest approved gate stage across the holding project (gray = nothing approved yet).',
+        overall:'Zones wear the holding project health color (gray = unassigned).',
+        issues:'Green = no open issues · amber = 1–2 · red = 3+ (holding project).'
+      }[gisMode] || '';
+    }
+    var q = (gisQuery||'').toLowerCase();
+    var shown = plots.filter(function(pl){
+      return !q || pl.code.toLowerCase().indexOf(q)>-1 || (pl.name||'').toLowerCase().indexOf(q)>-1;
+    });
+    var buckets = {'Approved':0,'Submitted':0,'In Progress':0,'Delayed':0,'Not Started':0};
+    plots.forEach(function(pl){
+      var holder = usedBy[pl.code] || null;
+      var g = holder ? holderGates(holder.id) : {total:0, approved:0, submitted:0, wip:0, furthest:-1};
+      buckets[plotBucket(holder, g, holder ? holderOverdue(holder.id) : 0)]++;
+    });
+    function sumCard(label, n, toneCls){
+      return '<div class="card" style="padding:10px 12px;text-align:center;">'+
+        '<div style="font-size:1.3rem;font-weight:800;color:var(--'+toneCls+');">'+n+'</div>'+
+        '<div style="font-size:.66rem;letter-spacing:.1em;color:var(--muted);font-weight:700;">'+label+'<br>'+(plots.length?Math.round(n/plots.length*100):0)+'%</div></div>';
+    }
+    regHost.innerHTML =
+      '<div class="grid" style="grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">'+
+        sumCard('APPROVED', buckets['Approved'], 'ok2')+
+        sumCard('SUBMITTED', buckets['Submitted'], 'info')+
+        sumCard('IN PROGRESS', buckets['In Progress'], 'warn')+
+        sumCard('DELAYED', buckets['Delayed'], 'fail2')+
+        sumCard('NOT STARTED', buckets['Not Started'], 'muted')+
+      '</div>'+
+      '<div class="card" style="margin-bottom:12px;"><div class="card-head"><h3>Plot register</h3>'+
+      '<span class="hint">'+shown.length+'/'+plots.length+' plots</span></div>'+
+      '<input id="gis-q" type="text" placeholder="Search package…" value="'+escapeHtml(gisQuery)+'" oninput="OHub.gisSearch(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.8rem;background:var(--white);color:var(--text);margin-bottom:4px;">'+
+      '<p style="font-size:.78rem;color:var(--muted);margin:6px 0 0;">'+(ap ? 'Assigning to active project: <strong>'+escapeHtml(ap.name)+'</strong>' : 'Select a project to enable assigning.')+'</p></div>' +
+      shown.map(function(pl){
         var holder = usedBy[pl.code] || null;
         var kpi = pl.kpi || {};
-        return '<div class="card" style="margin-bottom:10px;">'+
-          '<div class="card-head"><h3>'+escapeHtml(pl.code)+'</h3><span class="hint">'+escapeHtml(pl.name)+'</span></div>'+
-          '<div style="font-size:.78rem;color:var(--muted);margin-bottom:8px;">'+escapeHtml(pl.cluster||'')+' · \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+'</div>'+
-          '<div style="display:flex;gap:12px;font-size:.78rem;margin-bottom:10px;">'+
-            '<span><strong>'+numFmt(kpi.units)+'</strong> units</span>'+
-            '<span><strong>'+numFmt(kpi.population)+'</strong> pop</span>'+
-            '<span><strong>'+numFmt(kpi.buildings)+'</strong> bldgs</span></div>'+
+        var g = holder ? holderGates(holder.id) : {total:0, approved:0, submitted:0, wip:0, furthest:-1};
+        var overdue = holder ? holderOverdue(holder.id) : 0;
+        var bucket = plotBucket(holder, g, overdue);
+        var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
+        var prog = g.total ? Math.round(g.approved/g.total*100) : 0;
+        var dot = gisMode==='package' ? (DP_COLORS[pl.code]||'#8E9BB3') : plotModeStyle(pl, holder, g, overdue, holder?holderOpenIssues(holder.id):0).color;
+        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="OHub.gisFocusPlot(\''+escapeHtml(pl.code)+'\')">'+
+          '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">'+
+            '<span style="width:12px;height:12px;border-radius:3px;background:'+dot+';flex-shrink:0;"></span>'+
+            '<h3 style="font-size:.92rem;margin:0;">'+escapeHtml(pl.code)+'</h3>'+
+            '<span class="hint">'+escapeHtml(pl.name)+'</span></div>'+
+          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:6px;">'+escapeHtml(pl.cluster||'')+' · \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+'</div>'+
+          '<div style="display:flex;gap:10px;align-items:center;font-size:.76rem;margin-bottom:6px;flex-wrap:wrap;">'+
+            bucketBadge(bucket)+'<span>'+escapeHtml(stageName)+'</span>'+
+            '<span style="flex:1;min-width:60px;height:5px;background:var(--light);border-radius:3px;overflow:hidden;">'+
+              '<span style="display:block;height:100%;width:'+prog+'%;background:var(--b2);"></span></span>'+
+            '<span style="color:var(--muted);">'+prog+'%</span></div>'+
+          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units · <strong>'+numFmt(kpi.population)+'</strong> pop · <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+
           (holder
-            ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
-            : '<button class="btn btn-outline btn-sm" onclick="OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>')+
+            ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');event.stopPropagation();return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
+            : '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>')+
         '</div>';
       }).join('');
+    if(gisSearchFocus){
+      var nq = document.getElementById('gis-q');
+      if(nq){ nq.focus(); try{ nq.setSelectionRange(nq.value.length, nq.value.length); }catch(e){} }
+    }
+  }
+  function gisSetMode(id){ gisMode = id; gisSearchFocus = false; renderGis(); }
+  function gisSetBase(id){ gisBase = id; gisSearchFocus = false; renderGis(); }
+  function gisSearch(v){ gisQuery = v||''; gisSearchFocus = true; renderGis(); }
+  function gisFocusPlot(code){
+    if(gisMapObj && gisPlotBounds[code]){ try{ gisMapObj.fitBounds(gisPlotBounds[code], {padding:[40,40]}); }catch(e){} }
   }
 
   /* ---------------- Project modal ---------------- */
@@ -3317,6 +3471,10 @@
     boundaryClear: boundaryClear,
     plotAssign: plotAssign,
     gisAssignPlot: gisAssignPlot,
+    gisSetMode: gisSetMode,
+    gisSetBase: gisSetBase,
+    gisSearch: gisSearch,
+    gisFocusPlot: gisFocusPlot,
     openModelModal: openModelModal,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,

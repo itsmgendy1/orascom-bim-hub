@@ -22,7 +22,8 @@
     history:'ohub_history',
     tour:'ohub_tour_done',
     sync:'ohub_sync',
-    rollups:'ohub_rollups'
+    rollups:'ohub_rollups',
+    gates:'ohub_gates'
   };
 
   var MODULES = [
@@ -89,7 +90,8 @@
     reports: readLS(LS.reports, []),
     history: readLS(LS.history, {}),
     sync: readLS(LS.sync, {url:'http://localhost:8787', model:'', auto:false}),
-    rollups: readLS(LS.rollups, {})
+    rollups: readLS(LS.rollups, {}),
+    gates: readLS(LS.gates, {})
   };
   // migrate older saves that predate a module/threshold being added
   MODULES.forEach(function(m){ if(state.weights[m.weightKey]==null) state.weights[m.weightKey] = DEFAULT_WEIGHTS[m.weightKey]||0; });
@@ -112,6 +114,7 @@
     if(part==='history') writeLS(LS.history, state.history);
     if(part==='sync') writeLS(LS.sync, state.sync);
     if(part==='rollups') writeLS(LS.rollups, state.rollups);
+    if(part==='gates') writeLS(LS.gates, state.gates);
   }
   function toggleDark(){
     state.dark = !state.dark;
@@ -214,6 +217,7 @@
       'quality-center':['BIM Quality Center','Governance'],
       reports:['Reporting Center','Governance'],
       delivery:['Delivery Overview','Governance'],
+      stages:['Stage Gates','Governance'],
       settings:['Settings','System']
     };
     var t = titles[viewId] || ['Orascom BIM Hub',''];
@@ -230,6 +234,7 @@
     if(viewId==='quality-center') renderQualityCenter();
     if(viewId==='reports') renderReports();
     if(viewId==='delivery') renderDeliverables();
+    if(viewId==='stages') renderStages();
     if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); }
     if(!opts.silent) closeSearch();
   }
@@ -375,7 +380,8 @@
     {view:'quality-center', el:'#qc-content', title:'5 · Quality Center', text:'Per-area scores plus the issue log. Validator findings arrive here automatically; manual entries stay separate.'},
     {view:'reports', el:'#reports-content', title:'6 · Reports', text:'One-click executive Excel and PDF across all areas. Each module keeps its own native exports too.'},
     {view:'delivery', el:'#deliverables-content', title:'7 · Delivery overview', text:'Planned deliverables on a timeline with schedule health. Dates you track here feed the dashboard.'},
-    {view:'settings', el:'#settings-weights', title:'8 · Weighting', text:'Decide how much each module counts toward overall health. Thresholds for Good / Attention / Critical live here too.'}
+    {view:'stages', el:'#stages-content', title:'8 · Stage gates', text:'Design-stage sign-offs per package — click a cell to advance it. Hand-recorded, never inferred.'},
+    {view:'settings', el:'#settings-weights', title:'9 · Weighting', text:'Decide how much each module counts toward overall health. Thresholds for Good / Attention / Critical live here too.'}
   ];
   var TOUR_CURRENT = -1;
   function startTour(){
@@ -459,6 +465,7 @@
 
   var projectsViewMode = 'grid';
   var mapObj = null, mapMarkers = [];
+  var boundaryDirty = false; // project modal: true once the boundary field/file/clear was touched
 
   function setProjectsView(mode){
     projectsViewMode = mode;
@@ -559,7 +566,8 @@
     }
     mapMarkers.forEach(function(m){ mapObj.removeLayer(m); });
     mapMarkers = [];
-    if(located.length===0){
+    var hasPoly = state.projects.some(function(p){ return p.boundary && p.boundary.coordinates; });
+    if(located.length===0 && !hasPoly){
       // no markers to show; keep default wide view
       setTimeout(function(){ mapObj.invalidateSize(); }, 50);
       return;
@@ -583,6 +591,27 @@
       mapMarkers.push(mk);
       bounds.push([p.lat, p.lng]);
     });
+    // Site boundaries (GeoJSON [lng,lat] flipped to Leaflet [lat,lng]), toned by health
+    state.projects.forEach(function(p){
+      if(!p.boundary || !p.boundary.coordinates) return;
+      var rings = [];
+      p.boundary.coordinates.forEach(function(poly){
+        (poly||[]).forEach(function(ring){
+          var ll = (ring||[]).map(function(c){ return [c[1], c[0]]; });
+          if(ll.length>=3) rings.push(ll);
+        });
+      });
+      if(!rings.length) return;
+      var hb = computeHealth(p.id);
+      var pg = L.polygon(rings, {color:TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.10}).addTo(mapObj);
+      pg.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>Site boundary');
+      pg.on('click', function(){ setActiveProject(p.id); });
+      mapMarkers.push(pg);
+      try{
+        var pb = pg.getBounds();
+        bounds.push([pb.getSouth(), pb.getWest()], [pb.getNorth(), pb.getEast()]);
+      }catch(e){}
+    });
     setTimeout(function(){
       mapObj.invalidateSize();
       if(bounds.length===1){ mapObj.setView(bounds[0], 10); }
@@ -601,6 +630,16 @@
     document.getElementById('pm-stage').value = editing? editing.stage:'Design';
     document.getElementById('pm-lat').value = (editing && typeof editing.lat==='number') ? editing.lat : '';
     document.getElementById('pm-lng').value = (editing && typeof editing.lng==='number') ? editing.lng : '';
+    boundaryDirty = false;
+    var bndTa = document.getElementById('pm-boundary');
+    if(editing && editing.boundary && editing.boundary.coordinates){
+      var bn = countBoundaryPoints(editing.boundary.coordinates);
+      bndTa.value = 'Saved: MultiPolygon, '+bn+' points — paste new GeoJSON here to replace, or Clear.';
+      boundaryStatus('\u2713 Boundary set ('+bn+' points).');
+    } else {
+      bndTa.value = '';
+      boundaryStatus('');
+    }
     document.getElementById('pm-form').setAttribute('data-edit-id', editId||'');
     document.getElementById('project-modal').classList.add('show');
   }
@@ -615,6 +654,18 @@
     var lat = latRaw==='' ? null : parseFloat(latRaw);
     var lng = lngRaw==='' ? null : parseFloat(lngRaw);
     if((lat!=null && isNaN(lat)) || (lng!=null && isNaN(lng))){ toast('Latitude/longitude must be numbers'); return; }
+    var prevBnd = editId ? (function(){ var ex = state.projects.find(function(pr){return pr.id===editId;}); return ex ? ex.boundary||null : null; })() : null;
+    var newBnd = prevBnd;
+    if(boundaryDirty){
+      var bt = document.getElementById('pm-boundary').value.trim();
+      if(bt===''){ newBnd = null; }
+      else if(bt.charAt(0)!=='{' && bt.charAt(0)!=='['){ toast('Site boundary is not GeoJSON — Clear it or paste a GeoJSON object'); return; }
+      else {
+        var br = parseBoundaryGeometry(bt);
+        if(br.error){ toast('Site boundary: '+br.error); return; }
+        newBnd = br.geometry;
+      }
+    }
     var payload = {
       name: name,
       code: document.getElementById('pm-code').value.trim(),
@@ -622,7 +673,8 @@
       accUrl: document.getElementById('pm-accurl').value.trim(),
       stage: document.getElementById('pm-stage').value,
       lat: (lat!=null && lng!=null) ? lat : null,
-      lng: (lat!=null && lng!=null) ? lng : null
+      lng: (lat!=null && lng!=null) ? lng : null,
+      boundary: newBnd
     };
     if(editId){
       var p = state.projects.find(function(pr){return pr.id===editId;});
@@ -638,6 +690,76 @@
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
     closeProjectModal();
   }
+  /* ---------------- Site boundaries (GeoJSON) ---------------- */
+  // Accepts a Geometry, Feature or FeatureCollection; normalizes to MultiPolygon.
+  // Never invented: invalid input is reported, never silently fixed.
+  function countBoundaryPoints(coords){
+    var n = 0;
+    (coords||[]).forEach(function(poly){ (poly||[]).forEach(function(ring){ n += (ring||[]).length; }); });
+    return n;
+  }
+  function parseBoundaryGeometry(text){
+    var MAXPTS = 5000, MAXLEN = 200000;
+    if(text.length > MAXLEN) return {error:'Boundary is '+Math.round(text.length/1024)+'KB — simplify under ~200KB first (e.g. mapshaper.org)'};
+    var obj;
+    try{ obj = JSON.parse(text); }catch(e){ return {error:'Not valid JSON — paste a GeoJSON object'}; }
+    var geom = null;
+    if(obj && obj.type==='FeatureCollection' && Array.isArray(obj.features)){
+      for(var i=0;i<obj.features.length;i++){
+        var g = obj.features[i] && obj.features[i].geometry;
+        if(g && (g.type==='Polygon'||g.type==='MultiPolygon')){ geom = g; break; }
+      }
+      if(!geom) return {error:'FeatureCollection has no Polygon/MultiPolygon feature'};
+    } else if(obj && obj.type==='Feature'){ geom = obj.geometry; }
+    else if(obj && (obj.type==='Polygon'||obj.type==='MultiPolygon')){ geom = obj; }
+    if(!geom || (geom.type!=='Polygon' && geom.type!=='MultiPolygon'))
+      return {error:'Need a GeoJSON Polygon, MultiPolygon, Feature or FeatureCollection'};
+    var polys = geom.type==='Polygon' ? [geom.coordinates] : geom.coordinates;
+    if(!Array.isArray(polys)) return {error:'Malformed coordinates'};
+    var pts = 0, bad = false;
+    polys.forEach(function(poly){
+      (poly||[]).forEach(function(ring){
+        pts += (ring||[]).length;
+        (ring||[]).forEach(function(c){
+          if(!Array.isArray(c) || !isFinite(c[0]) || !isFinite(c[1]) ||
+             c[0]<-180 || c[0]>180 || c[1]<-90 || c[1]>90) bad = true;
+        });
+      });
+    });
+    if(bad) return {error:'Coordinates must be [longitude, latitude] numbers in range'};
+    if(pts===0) return {error:'Empty geometry'};
+    if(pts > MAXPTS) return {error:pts+' points exceeds the '+MAXPTS+' cap — simplify the shape'};
+    return {geometry:{type:'MultiPolygon', coordinates:polys}, points:pts};
+  }
+  function boundaryStatus(msg, ok){
+    var el = document.getElementById('pm-boundary-status');
+    if(el) el.textContent = msg || '';
+  }
+  function boundaryPreview(){
+    boundaryDirty = true;
+    var t = document.getElementById('pm-boundary').value.trim();
+    if(!t){ boundaryStatus('No boundary — project shows as a point (or unmapped).'); return; }
+    if(t.charAt(0)!=='{' && t.charAt(0)!=='['){ boundaryStatus('\u2715 Not GeoJSON — paste a GeoJSON object or press Clear.'); return; }
+    var r = parseBoundaryGeometry(t);
+    boundaryStatus(r.error ? '\u2715 '+r.error : '\u2713 MultiPolygon, '+r.points+' points — saved on Save.');
+  }
+  function boundaryPickFile(){ document.getElementById('pm-boundary-file').click(); }
+  function boundaryFile(input){
+    var f = input.files && input.files[0];
+    if(!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      document.getElementById('pm-boundary').value = String(rd.result||'');
+      boundaryPreview();
+    };
+    rd.readAsText(f);
+    input.value = '';
+  }
+  function boundaryClear(){
+    document.getElementById('pm-boundary').value = '';
+    boundaryDirty = true;
+    boundaryStatus('Boundary removed — saved on Save.');
+  }
   function deleteActiveProjectPrompt(pid){
     var p = state.projects.find(function(pr){return pr.id===pid;});
     if(!p) return;
@@ -648,6 +770,59 @@
     if(state.active===pid) state.active = state.projects[0] ? state.projects[0].id : null;
     persist('projects'); persist('scores'); persist('active'); persist('deliverables');
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
+  }
+
+  /* ---------------- Stage gates ---------------- */
+  // Design-stage sign-off matrix per package. Statuses are recorded by hand
+  // (click a cell to advance it) — never inferred, never faked.
+  var GATE_STAGES = ['Concept','Schematic','Detailed Design','IFC Issue','As-built'];
+  var GATE_ORDER = ['', 'In Progress', 'Submitted', 'Approved'];
+  function gateKey(pid, pkg, stage){ return pid+'|'+pkg+'|'+stage; }
+  function gateBadge(st){
+    if(st==='Approved') return '<span class="badge badge-ok">Approved</span>';
+    if(st==='Submitted') return '<span class="badge badge-info">Submitted</span>';
+    if(st==='In Progress') return '<span class="badge badge-warn">In Progress</span>';
+    return '<span class="badge badge-muted">—</span>';
+  }
+  function cycleGate(pid, pkgEnc, stageEnc){
+    var pkg = decodeURIComponent(pkgEnc), stage = decodeURIComponent(stageEnc);
+    var k = gateKey(pid, pkg, stage);
+    var cur = state.gates[k] || '';
+    state.gates[k] = GATE_ORDER[(GATE_ORDER.indexOf(cur)+1) % GATE_ORDER.length];
+    if(!state.gates[k]) delete state.gates[k];
+    persist('gates');
+    renderStages();
+  }
+  function renderStages(){
+    var p = activeProject();
+    var host = document.getElementById('stages-content');
+    if(!host) return;
+    if(!p){
+      host.innerHTML = emptyState('\uD83D\uDEA6','No project selected',
+        'Select a project to track its design-stage sign-offs.',
+        '<button class="btn btn-primary" onclick="OHub.openProjectModal()">+ Add project</button>');
+      return;
+    }
+    var pkgs = Array.from(new Set(projectModels(p.id).map(function(m){ return ((m.package||'').trim()||'General'); }))).sort();
+    if(!pkgs.length) pkgs = ['General'];
+    var total = 0, approved = 0;
+    var rows = pkgs.map(function(pkg){
+      var cells = GATE_STAGES.map(function(st){
+        var s = state.gates[gateKey(p.id, pkg, st)] || '';
+        total++; if(s==='Approved') approved++;
+        return '<td style="text-align:center;cursor:pointer;" onclick="OHub.cycleGate(\''+p.id+'\',\''+encodeURIComponent(pkg)+'\',\''+encodeURIComponent(st)+'\')" title="Click to advance">'+gateBadge(s)+'</td>';
+      }).join('');
+      var pkgAppr = GATE_STAGES.filter(function(st){ return state.gates[gateKey(p.id, pkg, st)]==='Approved'; }).length;
+      return '<tr><td><strong>'+escapeHtml(pkg)+'</strong><br><span style="font-size:.74rem;color:var(--muted);">'+pkgAppr+'/'+GATE_STAGES.length+' approved</span></td>'+cells+'</tr>';
+    }).join('');
+    var pct = total ? Math.round(approved/total*100) : 0;
+    host.innerHTML =
+      '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>Stage gates — '+escapeHtml(p.name)+'</h3>'+
+      '<span class="hint">'+approved+'/'+total+' approved ('+pct+'%)</span></div>'+
+      '<p style="font-size:.82rem;color:var(--muted);margin-bottom:10px;">Click any cell to advance its gate: — → In Progress → Submitted → Approved. Recorded by hand per package; nothing here is inferred from scores.</p>'+
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Package</th>'+
+      GATE_STAGES.map(function(s){ return '<th style="text-align:center;">'+s+'</th>'; }).join('')+
+      '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   }
 
   /* ---------------- Models registry ---------------- */
@@ -2745,6 +2920,7 @@
       var data = {project:p, models:projectModels(p.id), scores:projectScores(p.id),
         issues:state.issues.filter(function(i){return i.project===p.id;}),
         deliverables:state.deliverables.filter(function(d){return d.project===p.id;}),
+        gates:Object.keys(state.gates||{}).filter(function(k){return k.indexOf(p.id+'|')===0;}).reduce(function(o,k){o[k]=state.gates[k];return o;},{}),
         weights:state.weights, exported:new Date().toISOString()};
       var blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
       var a = document.createElement('a');
@@ -2943,6 +3119,11 @@
     openProjectModal: openProjectModal,
     closeProjectModal: closeProjectModal,
     deleteActiveProjectPrompt: deleteActiveProjectPrompt,
+    cycleGate: cycleGate,
+    boundaryPreview: boundaryPreview,
+    boundaryPickFile: boundaryPickFile,
+    boundaryFile: boundaryFile,
+    boundaryClear: boundaryClear,
     openModelModal: openModelModal,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,

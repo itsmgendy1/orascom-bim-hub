@@ -62,12 +62,18 @@ verified by audit):
   collision with module keys such as `occ_naming_rules`, `bim_*`, `param_*`,
   `wv-dark`).
 - Modules keep their own imports/exports/tabs/filters — nothing removed.
-- Deep links: `hub.html#/naming`, `#/midp`, `#/qaqc`, `#/workset`, `#/parameters`,
-  `#/clash`, `#/models`, `#/dashboard`, `#/quality-center`, `#/reports`, `#/delivery`.
+ - Deep links: `hub.html#/naming`, `#/midp`, `#/qaqc`, `#/workset`, `#/parameters`,
+   `#/clash`, `#/models`, `#/dashboard`, `#/quality-center`, `#/reports`, `#/delivery`, `#/stages`.
 
 ## Beyond the five validators (ported from OC Hub)
 
-- **Models registry** — per-project model list (code, discipline, revision,
+ - **Site boundaries** — paste GeoJSON (or load a `.geojson` file) on the project
+   form; the Projects → Map view draws it as a health-toned shaded polygon
+   (points capped, validated, stored on the project record and its JSON export).
+ - **Stage Gates** (`hub.html#/stages`) — design-stage sign-off matrix per
+   package (Concept → As-built); click a cell to advance it. Hand-recorded,
+   never inferred; included in the project JSON export.
+ - **Models registry** — per-project model list (code, discipline, revision,
   status, owner); issues can reference a model; demo SA39 seeds 3 models
   (project + models only, never scores).
 - **Validator → issue auto-push** — each score report carries up to ~20 concrete

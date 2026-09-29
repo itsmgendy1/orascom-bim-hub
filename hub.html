@@ -48,6 +48,7 @@
       <div class="nav-item" data-view="quality-center"><span class="ic">✅</span> BIM Quality Center</div>
       <div class="nav-item" data-view="reports"><span class="ic">📊</span> Reports</div>
       <div class="nav-item" data-view="delivery"><span class="ic">📅</span> Delivery Overview</div>
+      <div class="nav-item" data-view="stages"><span class="ic">🚦</span> Stage Gates</div>
 
       <div class="nav-group-label">System</div>
       <div class="nav-item" data-view="settings"><span class="ic">⚙</span> Settings</div>
@@ -235,6 +236,11 @@
         <div class="card" id="deliverables-content"></div>
       </section>
 
+      <!-- ---------- Stage Gates ---------- -->
+      <section class="view" id="view-stages">
+        <div id="stages-content"></div>
+      </section>
+
       <!-- ---------- Settings ---------- -->
       <section class="view" id="view-settings">
         <div class="grid grid-2">
@@ -346,6 +352,15 @@
           <div style="flex:1;"><label>Longitude <span style="font-weight:400;color:var(--muted);">(optional)</span></label><input type="text" id="pm-lng" placeholder="e.g. 33.7899"></div>
         </div>
         <p style="font-size:.74rem;color:var(--muted);margin-top:-6px;">Add coordinates to place this project on the Projects &rarr; Map view.</p>
+        <div class="field"><label>Site boundary <span style="font-weight:400;color:var(--muted);">(optional — paste GeoJSON or load a .geojson file; drawn as a shaded polygon on the Map view)</span></label>
+          <textarea id="pm-boundary" rows="2" placeholder='Paste a GeoJSON Polygon / MultiPolygon / Feature here…' oninput="OHub.boundaryPreview()" style="width:100%;font-family:monospace;font-size:.72rem;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:var(--white);color:var(--text);resize:vertical;"></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="OHub.boundaryPickFile()">Load .geojson file</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="OHub.boundaryClear()">Clear</button>
+            <span id="pm-boundary-status" style="font-size:.74rem;color:var(--muted);"></span>
+          </div>
+          <input id="pm-boundary-file" type="file" accept=".geojson,.json,application/geo+json" style="display:none" onchange="OHub.boundaryFile(this)">
+        </div>
       </div>
       <div class="modal-foot">
         <button type="button" class="btn btn-ghost" onclick="OHub.closeProjectModal()">Cancel</button>

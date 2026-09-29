@@ -101,8 +101,15 @@
   // import fix carry swapped coordinates. Re-derive them from the library.
   (function migratePlotBounds(){
     var lib = window.SITE_PLOTS || [], changed = false;
+    function inLib(code){ var f = false; lib.forEach(function(pl){ if(pl.code===code) f = true; }); return f; }
     state.projects.forEach(function(p){
-      if(!p.plotCode || p.plotRev===2) return;
+      if(!p.plotCode) return;
+      if(!inLib(p.plotCode)){
+        // plot retired from the library: keep the shape as an ordinary
+        // custom boundary rather than dropping the user's data silently.
+        p.plotCode = null; p.plotRev = null; changed = true; return;
+      }
+      if(p.plotRev===2) return;
       var found = null;
       lib.forEach(function(pl){ if(pl.code===p.plotCode) found = pl; });
       if(found && found.rings){
@@ -693,8 +700,7 @@
   var gisMapObj = null, gisLayers = [], gisTileTheme = '', gisTileLayer = null;
   var gisMode = 'package', gisBase = 'auto', gisQuery = '', gisSearchFocus = false;
   var gisPlotBounds = {};
-  var DP_COLORS = {DP01:'#14b8a6',DP02:'#22c55e',DP03:'#f59e0b',DP04:'#ec4899',DP05:'#8b5cf6',DP06:'#ef4444',DP07:'#3b82f6',DP08:'#84cc16'};
-  var ORASCOM_PLOTS = ['DP01','DP05']; // plots in Orascom scope — the rest render grey, never assignable
+  var DP_COLORS = {DP01:'#14b8a6',DP05:'#8b5cf6'};
   var GIS_MODES = [
     {id:'package', label:'Design Package'},
     {id:'review', label:'Review Status'},
@@ -751,10 +757,7 @@
     return '<span class="badge badge-muted">Not Started</span>';
   }
   function plotModeStyle(pl, holder, g, overdue, open){
-    if(gisMode==='package'){
-      if(ORASCOM_PLOTS.indexOf(pl.code)>-1) return {color:DP_COLORS[pl.code]||'#8E9BB3', fill:0.30, dash:null, tag:pl.code};
-      return {color:'#8E9BB3', fill:0.08, dash:'4 4', tag:pl.code};
-    }
+    if(gisMode==='package') return {color:DP_COLORS[pl.code]||'#8E9BB3', fill:0.30, dash:null, tag:pl.code};
     if(!holder) return {color:'#8E9BB3', fill:0.06, dash:'4 4', tag:pl.code+'<br>Unassigned'};
     var h = computeHealth(holder.id);
     if(gisMode==='review'){
@@ -952,14 +955,7 @@
         var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
         var prog = g.total ? Math.round(g.approved/g.total*100) : 0;
         var dot = gisMode==='package' ? (DP_COLORS[pl.code]||'#8E9BB3') : plotModeStyle(pl, holder, g, overdue, holder?holderOpenIssues(holder.id):0).color;
-        var inScope = ORASCOM_PLOTS.indexOf(pl.code)>-1;
-        var assignCell = '';
-        if(holder){
-          assignCell = '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>';
-        } else if(inScope){
-          assignCell = '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>';
-        }
-        return '<div class="card" style="margin-bottom:10px;cursor:pointer;'+(inScope?'':'opacity:.6;')+'" onclick="OHub.gisFocusPlot(\''+escapeHtml(pl.code)+'\')">'+
+        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="OHub.gisFocusPlot(\''+escapeHtml(pl.code)+'\')">'+
           '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">'+
             '<span style="width:12px;height:12px;border-radius:3px;background:'+dot+';flex-shrink:0;"></span>'+
             '<h3 style="font-size:.92rem;margin:0;">'+escapeHtml(pl.code)+'</h3>'+
@@ -971,7 +967,9 @@
               '<span style="display:block;height:100%;width:'+prog+'%;background:var(--b2);"></span></span>'+
             '<span style="color:var(--muted);">'+prog+'%</span></div>'+
           '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units · <strong>'+numFmt(kpi.population)+'</strong> pop · <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+
-          assignCell+
+          (holder
+            ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
+            : '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>')+
         '</div>';
       }).join('');
     if(gisSearchFocus){
@@ -1114,9 +1112,7 @@
     var sel = document.getElementById('pm-plot');
     if(!sel) return;
     var cur = sel.value || '';
-    var html = '<option value="">— No plot —</option>' + sitePlots().filter(function(pl){
-      return ORASCOM_PLOTS.indexOf(pl.code)>-1;
-    }).map(function(pl){
+    var html = '<option value="">— No plot —</option>' + sitePlots().map(function(pl){
       return '<option value="'+escapeHtml(pl.code)+'"'+(pl.code===cur?' selected':'')+'>'+
         escapeHtml(pl.code+' — '+pl.name+(pl.cluster?' · '+pl.cluster:''))+'</option>';
     }).join('');
@@ -1126,7 +1122,6 @@
     var sel = document.getElementById('pm-plot');
     var code = sel ? sel.value : '';
     if(!code) return;
-    if(ORASCOM_PLOTS.indexOf(code)<0){ toast('Only DP01 and DP05 are in Orascom scope'); return; }
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
     if(!found || !found.rings){ toast('Plot not found in library'); return; }

@@ -67,7 +67,7 @@ verified by audit):
 
 ## Beyond the five validators (ported from OC Hub)
 
- - **GIS tab** (`hub.html#/gis`) — MODON-style plots board: all eight DP
+ - **GIS tab** (`hub.html#/gis`) — plots board: the Orascom plots (DP01 + DP05)
    boundaries on one theme-aware map (assigned plots in health colors,
    unassigned as dashed outlines) plus a register with area/units/population
    and one-click assign to the active project. KPIs are reference figures;

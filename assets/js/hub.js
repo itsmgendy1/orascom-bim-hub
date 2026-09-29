@@ -967,6 +967,19 @@
       '<span class="hint">'+shown.length+'/'+dataPlots.length+' plots</span></div>'+
       '<input id="gis-q" type="text" placeholder="Search package…" value="'+escapeHtml(gisQuery)+'" oninput="OHub.gisSearch(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.8rem;background:var(--white);color:var(--text);margin-bottom:4px;">'+
       '<p style="font-size:.78rem;color:var(--muted);margin:6px 0 0;">'+(ap ? 'Assigning to active project: <strong>'+escapeHtml(ap.name)+'</strong>' : 'Select a project to enable assigning.')+'</p></div>' +
+      (function(){
+        var customs = state.projects.filter(function(p){ return p.boundary && p.boundary.coordinates && !p.plotCode; });
+        if(!customs.length) return '';
+        return '<div class="card" style="margin-bottom:12px;"><div class="card-head"><h3>My zones</h3>'+
+          '<span class="hint">'+customs.length+'</span></div>'+
+          customs.map(function(p){
+            var col = customColor(p)||TONE_HEX[tone(computeHealth(p.id).value)];
+            return '<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--light);cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')">'+
+              '<span style="width:12px;height:12px;border-radius:3px;background:'+col+';flex-shrink:0;"></span>'+
+              '<span style="flex:1;"><strong>'+escapeHtml(p.code ? (p.code+' — '+p.name) : p.name)+'</strong><br>'+
+              '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+'</span></span></div>';
+          }).join('')+'</div>';
+      })() +
       shown.map(function(pl){
         var holder = usedBy[pl.code] || null;
         var kpi = pl.kpi || {};
@@ -990,7 +1003,9 @@
           '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units · <strong>'+numFmt(kpi.population)+'</strong> pop · <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+
           (holder
             ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
-            : '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>')+
+            : '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+              '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>'+
+              '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();OHub.gisNewProjectFromPlot(\''+escapeHtml(pl.code)+'\')">＋ New project</button></div>')+
         '</div>';
       }).join('');
     if(gisSearchFocus){
@@ -1003,6 +1018,32 @@
   function gisSearch(v){ gisQuery = v||''; gisSearchFocus = true; renderGis(); }
   function gisFocusPlot(code){
     if(gisMapObj && gisPlotBounds[code]){ try{ gisMapObj.fitBounds(gisPlotBounds[code], {padding:[40,40]}); }catch(e){} }
+  }
+  function gisFocusProject(pid){
+    var p = null;
+    state.projects.forEach(function(x){ if(x.id===pid) p = x; });
+    if(!p) return;
+    setActiveProject(pid);
+    if(currentView==='gis') renderGis();
+    if(p.boundary && p.boundary.coordinates && gisMapObj){
+      try{ gisMapObj.fitBounds(ringFlip(p.boundary.coordinates), {padding:[40,40]}); }catch(e){}
+    }
+  }
+  function gisNewProjectFromPlot(code){
+    var found = null;
+    sitePlots().forEach(function(pl){ if(pl.code===code && pl.kpi) found = pl; });
+    if(!found){ toast('No data for '+code+' — Orascom holds DP01 and DP05'); return; }
+    var id = uid('proj');
+    var p = {id:id, name:code+' — '+found.name, code:code, client:'', accUrl:'', stage:'Design',
+      lat:null, lng:null, boundary:{type:'MultiPolygon', coordinates:[found.rings]},
+      plotCode:code, plotRev:2, color:null};
+    state.projects.push(p);
+    state.active = id;
+    persist('projects'); persist('active');
+    logActivity('Added project '+p.name+' from plot '+code);
+    refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
+    if(currentView==='gis') renderGis();
+    toast(code+' added as a project and selected');
   }
   /* ----- hand-drawn zones: click to trace, finish to create a project ----- */
   var gisDrawing = false, gisDrawPts = [], gisDrawLayers = [], gisDrawLine = null;
@@ -3627,6 +3668,8 @@
     gisSetBase: gisSetBase,
     gisSearch: gisSearch,
     gisFocusPlot: gisFocusPlot,
+    gisFocusProject: gisFocusProject,
+    gisNewProjectFromPlot: gisNewProjectFromPlot,
     gisStartDraw: gisStartDraw,
     gisFinishDraw: gisFinishDraw,
     gisCancelDraw: gisCancelDraw,

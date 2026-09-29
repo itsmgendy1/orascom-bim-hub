@@ -1,17 +1,17 @@
 /* ==========================================================================
-   Orascom BIM Digital Delivery Hub — Design System
+   Orascom BIM Digital Delivery Hub â€” Design System
    Tokens matched to MIDP.html / QA-QC.html / workset & parameter validators
    so the Hub and its four integrated modules read as one product.
    ========================================================================== */
 
 :root{
-  /* Navy scale — shared with all four validator tools */
+  /* Navy scale â€” shared with all four validator tools */
   --b1:#0A1E40;
   --b2:#163F80;
   --b3:#1B4F9B;
   --b4:#2563B8;
 
-  /* Gold accent — shared with all four validator tools */
+  /* Gold accent â€” shared with all four validator tools */
   --g1:#F5A623;
   --g2:#FFB830;
   --g3:#FFD280;
@@ -23,6 +23,7 @@
   --border:#D0DAE8;
   --muted:#5D7494;
   --text:#111726;
+  --ink:#0A1E40;
 
   /* Semantic */
   --ok:#27AE60;   --ok2:#1E8A4A;
@@ -52,7 +53,7 @@ h1,h2,h3,h4,.display{
   font-weight:700;
   letter-spacing:.2px;
   margin:0;
-  color:var(--b1);
+  color:var(--ink);
 }
 a{color:var(--b4);}
 button{font-family:inherit;}
@@ -127,7 +128,7 @@ button{font-family:inherit;}
   display:flex;align-items:center;gap:16px;
   padding:0 22px;position:sticky;top:0;z-index:30;
 }
-.topbar .page-title{font-size:1.32rem;color:var(--b1);white-space:nowrap;}
+.topbar .page-title{font-size:1.32rem;color:var(--ink);white-space:nowrap;}
 .topbar .crumb{font-size:.74rem;color:var(--muted);font-weight:600;letter-spacing:.3px;}
 
 .project-picker{
@@ -136,7 +137,7 @@ button{font-family:inherit;}
 .project-picker select{
   appearance:none;background:var(--light) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%235D7494"/></svg>') no-repeat right 10px center;
   border:1px solid var(--border);border-radius:var(--radius-sm);
-  padding:8px 30px 8px 12px;font-size:.84rem;color:var(--b1);font-weight:600;
+  padding:8px 30px 8px 12px;font-size:.84rem;color:var(--ink);font-weight:600;
   min-width:200px;cursor:pointer;
 }
 .icon-btn{
@@ -144,7 +145,7 @@ button{font-family:inherit;}
   background:var(--white);color:var(--muted);display:flex;align-items:center;justify-content:center;
   cursor:pointer;font-size:1rem;
 }
-.icon-btn:hover{background:var(--light);color:var(--b2);}
+.icon-btn:hover{background:var(--light);color:var(--ink);}
 
 .search-wrap{position:relative;}
 .search-wrap input{
@@ -165,7 +166,7 @@ button{font-family:inherit;}
 }
 .search-hit:last-child{border-bottom:none;}
 .search-hit:hover{background:var(--light);}
-.search-hit .sh-title{font-weight:600;font-size:.86rem;color:var(--b1);}
+.search-hit .sh-title{font-weight:600;font-size:.86rem;color:var(--ink);}
 .search-hit .sh-sub{font-size:.72rem;color:var(--muted);}
 
 .view-host{flex:1;padding:24px 26px 40px;}
@@ -188,12 +189,12 @@ button{font-family:inherit;}
   padding:18px 20px;box-shadow:var(--shadow);
 }
 .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
-.card-head h3{font-size:1.05rem;color:var(--b1);}
+.card-head h3{font-size:1.05rem;color:var(--ink);}
 .card-head .hint{font-size:.72rem;color:var(--muted);font-weight:600;}
 
 .kpi-card{position:relative;overflow:hidden;}
 .kpi-card .kpi-label{font-size:.72rem;letter-spacing:.8px;color:var(--muted);font-weight:700;text-transform:uppercase;}
-.kpi-card .kpi-value{font-family:'Barlow Condensed',sans-serif;font-size:2.5rem;font-weight:800;color:var(--b1);line-height:1.05;margin-top:4px;}
+.kpi-card .kpi-value{font-family:'Barlow Condensed',sans-serif;font-size:2.5rem;font-weight:800;color:var(--ink);line-height:1.05;margin-top:4px;}
 .kpi-card .kpi-sub{font-size:.76rem;color:var(--muted);margin-top:4px;}
 .kpi-card .kpi-bar{height:6px;border-radius:4px;background:var(--light);margin-top:12px;overflow:hidden;}
 .kpi-card .kpi-bar > span{display:block;height:100%;border-radius:4px;}
@@ -232,10 +233,10 @@ button{font-family:inherit;}
 .btn-primary:hover{background:var(--b1);}
 .btn-gold{background:linear-gradient(90deg,var(--g1),var(--g2));color:#3B2A00;}
 .btn-gold:hover{filter:brightness(1.04);}
-.btn-outline{background:var(--white);border-color:var(--border);color:var(--b2);}
+.btn-outline{background:var(--white);border-color:var(--border);color:var(--ink);}
 .btn-outline:hover{background:var(--light);}
 .btn-ghost{background:transparent;color:var(--muted);}
-.btn-ghost:hover{color:var(--b2);}
+.btn-ghost:hover{color:var(--ink);}
 .btn-sm{padding:6px 11px;font-size:.76rem;}
 .btn-danger{background:var(--white);border-color:var(--fail);color:var(--fail2);}
 
@@ -256,7 +257,7 @@ table.tbl tr:hover td{background:var(--light);}
   text-align:center;padding:46px 20px;color:var(--muted);
 }
 .empty-state .es-ic{font-size:2rem;margin-bottom:10px;color:var(--b3);}
-.empty-state h4{color:var(--b1);font-size:1.05rem;margin-bottom:4px;}
+.empty-state h4{color:var(--ink);font-size:1.05rem;margin-bottom:4px;}
 .empty-state p{font-size:.85rem;max-width:360px;margin:0 auto;}
 .empty-state .btn{margin-top:14px;}
 
@@ -268,7 +269,7 @@ table.tbl tr:hover td{background:var(--light);}
 .project-card:hover{border-color:var(--b4);box-shadow:var(--shadow);}
 .project-card.active{border-color:var(--g1);box-shadow:0 0 0 2px rgba(245,166,35,.25);}
 .project-card .pc-code{font-size:.68rem;color:var(--muted);font-weight:700;letter-spacing:.6px;}
-.project-card .pc-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.15rem;color:var(--b1);margin-top:2px;}
+.project-card .pc-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.15rem;color:var(--ink);margin-top:2px;}
 .project-card .pc-meta{font-size:.78rem;color:var(--muted);margin-top:6px;}
 .project-card .pc-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;}
 
@@ -316,19 +317,19 @@ body.dark .leaflet-tooltip.plot-label{background:rgba(10,18,36,.85);}
   width:26px;height:26px;border-radius:50%;background:var(--b2);color:#fff;
   display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;margin-bottom:8px;
 }
-.pipeline-step h4{font-size:.9rem;color:var(--b1);}
+.pipeline-step h4{font-size:.9rem;color:var(--ink);}
 .pipeline-step p{font-size:.75rem;color:var(--muted);margin-top:4px;}
 
 /* ---------- Settings ---------- */
 .weight-row{display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--light);}
-.weight-row label{flex:0 0 160px;font-size:.85rem;font-weight:600;color:var(--b1);}
+.weight-row label{flex:0 0 160px;font-size:.85rem;font-weight:600;color:var(--ink);}
 .weight-row input[type=range]{flex:1;}
-.weight-row .wv{width:48px;text-align:right;font-weight:700;color:var(--b2);font-size:.9rem;}
+.weight-row .wv{width:48px;text-align:right;font-weight:700;color:var(--ink);font-size:.9rem;}
 .weight-total{margin-top:12px;font-size:.82rem;color:var(--muted);}
 .weight-total.bad{color:var(--fail2);font-weight:700;}
 
 .field{margin-bottom:14px;}
-.field label{display:block;font-size:.78rem;font-weight:700;color:var(--b1);margin-bottom:5px;}
+.field label{display:block;font-size:.78rem;font-weight:700;color:var(--ink);margin-bottom:5px;}
 .field input[type=text],.field select,.field input[type=number]{
   width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);
   font-size:.86rem;font-family:inherit;background:var(--white);
@@ -375,7 +376,7 @@ body.dark .leaflet-tooltip.plot-label{background:rgba(10,18,36,.85);}
 .g-axis span:first-child{transform:none;}
 .g-axis span:last-child{transform:translateX(-100%);}
 .g-lane{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:.78rem;}
-.g-lane .g-name{flex:0 0 182px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--b1);text-align:right;}
+.g-lane .g-name{flex:0 0 182px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);text-align:right;}
 body.dark .g-lane .g-name{color:#F2F6FC;}
 .g-track{position:relative;flex:1;height:14px;background:var(--light);border-radius:7px;}
 .g-dot{position:absolute;top:50%;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);}
@@ -411,6 +412,7 @@ body.dark{
   --border:#233252;
   --muted:#8AA0C4;
   --text:#E7EDF7;
+  --ink:#F2F6FC;
   --shadow:0 2px 10px rgba(0,0,0,.35);
   --shadow-lift:0 8px 24px rgba(0,0,0,.5);
 }

@@ -1,17 +1,17 @@
 /* ==========================================================================
-   Orascom BIM Digital Delivery Hub â€” Design System
+   Orascom BIM Digital Delivery Hub \u2014 Design System
    Tokens matched to MIDP.html / QA-QC.html / workset & parameter validators
    so the Hub and its four integrated modules read as one product.
    ========================================================================== */
 
 :root{
-  /* Navy scale â€” shared with all four validator tools */
+  /* Navy scale \u2014 shared with all four validator tools */
   --b1:#0A1E40;
   --b2:#163F80;
   --b3:#1B4F9B;
   --b4:#2563B8;
 
-  /* Gold accent â€” shared with all four validator tools */
+  /* Gold accent \u2014 shared with all four validator tools */
   --g1:#F5A623;
   --g2:#FFB830;
   --g3:#FFD280;

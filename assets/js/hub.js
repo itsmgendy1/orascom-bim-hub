@@ -1,8 +1,8 @@
 /* ==========================================================================
-   Orascom BIM Digital Delivery Hub â€” Application Logic
+   Orascom BIM Digital Delivery Hub \u2014 Application Logic
    No external framework. Vanilla JS, namespaced under window.OHub.
    All persistence is localStorage-based (this is a static, offline-first
-   shell â€” see IMPLEMENTATION_REPORT.md for the data-architecture notes).
+   shell \u2014 see IMPLEMENTATION_REPORT.md for the data-architecture notes).
    ========================================================================== */
 (function(){
   "use strict";
@@ -97,7 +97,7 @@
   MODULES.forEach(function(m){ if(state.weights[m.weightKey]==null) state.weights[m.weightKey] = DEFAULT_WEIGHTS[m.weightKey]||0; });
   if(state.thresholds.ok==null) state.thresholds.ok = DEFAULT_THRESHOLDS.ok;
   if(state.thresholds.warn==null) state.thresholds.warn = DEFAULT_THRESHOLDS.warn;
-  // One-time repair: plot boundaries saved before the [lat,lng]â†’GeoJSON
+  // One-time repair: plot boundaries saved before the [lat,lng]\u2192GeoJSON
   // import fix carry swapped coordinates. Re-derive them from the library.
   (function migratePlotBounds(){
     var lib = window.SITE_PLOTS || [], changed = false;
@@ -128,7 +128,7 @@
       var exists = false;
       state.projects.forEach(function(p){ if(p.plotCode===pl.code) exists = true; });
       if(exists) return;
-      state.projects.push({id:uid('proj'), name:pl.code+' â€” '+pl.name, code:pl.code,
+      state.projects.push({id:uid('proj'), name:pl.code+' \u2014 '+pl.name, code:pl.code,
         client:'', accUrl:'', stage:'Design', lat:null, lng:null,
         boundary:{type:'MultiPolygon', coordinates:[pl.rings]},
         plotCode:pl.code, plotRev:2, color:null, kpi:null});
@@ -420,15 +420,15 @@
 
   /* ---------------- guided tour (first run + topbar button) ---------------- */
   var TOUR_STEPS = [
-    {el:'.sidebar', title:'1 Â· Navigation', text:'Modules live left, content right. Validation modules embed the full tools â€” nothing was simplified.'},
-    {el:'#project-picker-select', title:'2 Â· Active project', text:'Everything â€” scores, issues, deliverables, models â€” is tracked per project. Modules are told which project is active.'},
-    {view:'datacenter', el:'#dc-drop', title:'3 Â· Data Center', text:'Import shared files once here, then push them to any validator. No more dropping the same file in two places.'},
-    {view:'dashboard', el:'#dash-content', title:'4 Â· Health dashboard', text:'BIM Delivery Health blends every recorded module score. Missing modules are excluded â€” never scored as zero.'},
-    {view:'quality-center', el:'#qc-content', title:'5 Â· Quality Center', text:'Per-area scores plus the issue log. Validator findings arrive here automatically; manual entries stay separate.'},
-    {view:'reports', el:'#reports-content', title:'6 Â· Reports', text:'One-click executive Excel and PDF across all areas. Each module keeps its own native exports too.'},
-    {view:'delivery', el:'#deliverables-content', title:'7 Â· Delivery overview', text:'Planned deliverables on a timeline with schedule health. Dates you track here feed the dashboard.'},
-    {view:'stages', el:'#stages-content', title:'8 Â· Stage gates', text:'Design-stage sign-offs per package â€” click a cell to advance it. Hand-recorded, never inferred.'},
-    {view:'settings', el:'#settings-weights', title:'9 Â· Weighting', text:'Decide how much each module counts toward overall health. Thresholds for Good / Attention / Critical live here too.'}
+    {el:'.sidebar', title:'1 \u00b7 Navigation', text:'Modules live left, content right. Validation modules embed the full tools \u2014 nothing was simplified.'},
+    {el:'#project-picker-select', title:'2 \u00b7 Active project', text:'Everything \u2014 scores, issues, deliverables, models \u2014 is tracked per project. Modules are told which project is active.'},
+    {view:'datacenter', el:'#dc-drop', title:'3 \u00b7 Data Center', text:'Import shared files once here, then push them to any validator. No more dropping the same file in two places.'},
+    {view:'dashboard', el:'#dash-content', title:'4 \u00b7 Health dashboard', text:'BIM Delivery Health blends every recorded module score. Missing modules are excluded \u2014 never scored as zero.'},
+    {view:'quality-center', el:'#qc-content', title:'5 \u00b7 Quality Center', text:'Per-area scores plus the issue log. Validator findings arrive here automatically; manual entries stay separate.'},
+    {view:'reports', el:'#reports-content', title:'6 \u00b7 Reports', text:'One-click executive Excel and PDF across all areas. Each module keeps its own native exports too.'},
+    {view:'delivery', el:'#deliverables-content', title:'7 \u00b7 Delivery overview', text:'Planned deliverables on a timeline with schedule health. Dates you track here feed the dashboard.'},
+    {view:'stages', el:'#stages-content', title:'8 \u00b7 Stage gates', text:'Design-stage sign-offs per package \u2014 click a cell to advance it. Hand-recorded, never inferred.'},
+    {view:'settings', el:'#settings-weights', title:'9 \u00b7 Weighting', text:'Decide how much each module counts toward overall health. Thresholds for Good / Attention / Critical live here too.'}
   ];
   var TOUR_CURRENT = -1;
   function startTour(){
@@ -852,7 +852,7 @@
     if(kpi.gsa!=null) parts.push('GSA '+numFmt(kpi.gsa));
     if(kpi.gfa!=null) parts.push('GFA '+numFmt(kpi.gfa));
     if(kpi.gla!=null) parts.push('GLA '+numFmt(kpi.gla));
-    return parts.join(' Â· ');
+    return parts.join(' \u00b7 ');
   }
   function gisAssignPlot(code){
     var p = activeProject();
@@ -860,7 +860,7 @@
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
     if(!found){ toast('Plot not found in library'); return; }
-    if(!found.kpi){ toast('No data for '+code+' â€” Orascom holds DP01 and DP05'); return; }
+    if(!found.kpi){ toast('No data for '+code+' \u2014 Orascom holds DP01 and DP05'); return; }
     p.boundary = {type:'MultiPolygon', coordinates:[found.rings]};
     p.plotCode = code; p.plotRev = 2;
     persist('projects');
@@ -913,12 +913,12 @@
       var pg = L.polygon(ll, {color:zoneColor(holder, sty.color), weight:2, fillOpacity:sty.fill, dashArray:sty.dash}).addTo(gisMapObj);
       pg.bindTooltip(sty.tag, {permanent:true, direction:'center', className:'plot-label'});
       var kpi = pl.kpi || null;
-      var kpiLine = kpi ? '<br>Units: '+numFmt(kpi.units)+' Â· Pop: '+numFmt(kpi.population)+' Â· Bldgs: '+numFmt(kpi.buildings) : '';
-      pg.bindPopup('<strong>'+escapeHtml(pl.code+' â€” '+pl.name)+'</strong><br>'+
+      var kpiLine = kpi ? '<br>Units: '+numFmt(kpi.units)+' \u00b7 Pop: '+numFmt(kpi.population)+' \u00b7 Bldgs: '+numFmt(kpi.buildings) : '';
+      pg.bindPopup('<strong>'+escapeHtml(pl.code+' \u2014 '+pl.name)+'</strong><br>'+
         escapeHtml(pl.cluster||'')+'<br>'+
         'Site: \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+kpiLine+'<br>'+
-        'Review: '+plotBucket(holder, g, overdue)+' Â· Stage: '+escapeHtml(stageName)+
-        ' Â· Open issues: '+open+'<br>'+
+        'Review: '+plotBucket(holder, g, overdue)+' \u00b7 Stage: '+escapeHtml(stageName)+
+        ' \u00b7 Open issues: '+open+'<br>'+
         (holder ? 'Assigned: '+escapeHtml(holder.name) : 'Unassigned'));
       if(holder) pg.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(holder.id));
       gisLayers.push(pg);
@@ -1014,7 +1014,7 @@
       '</div>'+
       '<div class="card" style="margin-bottom:12px;"><div class="card-head"><h3>Plot register</h3>'+
       '<span class="hint">'+shown.length+'/'+dataPlots.length+' plots</span></div>'+
-      '<input id="gis-q" type="text" placeholder="Search packageâ€¦" value="'+escapeHtml(gisQuery)+'" oninput="OHub.gisSearch(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.8rem;background:var(--white);color:var(--text);margin-bottom:4px;">'+
+      '<input id="gis-q" type="text" placeholder="Search package\u2026" value="'+escapeHtml(gisQuery)+'" oninput="OHub.gisSearch(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.8rem;background:var(--white);color:var(--text);margin-bottom:4px;">'+
       '<p style="font-size:.78rem;color:var(--muted);margin:6px 0 0;">'+(ap ? 'Assigning to active project: <strong>'+escapeHtml(ap.name)+'</strong>' : 'Select a project to enable assigning.')+'</p></div>' +
       (function(){
         var customs = state.projects.filter(function(p){ return p.boundary && p.boundary.coordinates && !p.plotCode; });
@@ -1026,7 +1026,7 @@
             var zk = fmtKpiLine(p.kpi);
             return '<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--light);">'+
               '<input type="color" value="'+col+'" title="Edit zone color" onchange="OHub.zoneColorSet(\''+p.id+'\',this.value)" style="width:26px;height:20px;padding:0;border:1px solid var(--border);border-radius:4px;background:var(--white);cursor:pointer;flex-shrink:0;">'+
-              '<span style="flex:1;cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')"><strong>'+escapeHtml(p.code ? (p.code+' â€” '+p.name) : p.name)+'</strong><br>'+
+              '<span style="flex:1;cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')"><strong>'+escapeHtml(p.code ? (p.code+' \u2014 '+p.name) : p.name)+'</strong><br>'+
               '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+(zk ? '<br>'+zk : '')+'</span></span></div>';
           }).join('')+'</div>';
       })() +
@@ -1044,18 +1044,18 @@
             '<span style="width:12px;height:12px;border-radius:3px;background:'+dot+';flex-shrink:0;"></span>'+
             '<h3 style="font-size:.92rem;margin:0;">'+escapeHtml(pl.code)+'</h3>'+
             '<span class="hint">'+escapeHtml(pl.name)+'</span></div>'+
-          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:6px;">'+escapeHtml(pl.cluster||'')+' Â· \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+'</div>'+
+          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:6px;">'+escapeHtml(pl.cluster||'')+' \u00b7 \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+'</div>'+
           '<div style="display:flex;gap:10px;align-items:center;font-size:.76rem;margin-bottom:6px;flex-wrap:wrap;">'+
             bucketBadge(bucket)+'<span>'+escapeHtml(stageName)+'</span>'+
             '<span style="flex:1;min-width:60px;height:5px;background:var(--light);border-radius:3px;overflow:hidden;">'+
               '<span style="display:block;height:100%;width:'+prog+'%;background:var(--b2);"></span></span>'+
             '<span style="color:var(--muted);">'+prog+'%</span></div>'+
-          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units Â· <strong>'+numFmt(kpi.population)+'</strong> pop Â· <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+
+          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units \u00b7 <strong>'+numFmt(kpi.population)+'</strong> pop \u00b7 <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+
           (holder
             ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
             : '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
               '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>'+
-              '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();OHub.gisNewProjectFromPlot(\''+escapeHtml(pl.code)+'\')">ï¼‹ New project</button></div>')+
+              '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();OHub.gisNewProjectFromPlot(\''+escapeHtml(pl.code)+'\')">\uff0b New project</button></div>')+
         '</div>';
       }).join('');
     if(gisSearchFocus){
@@ -1082,9 +1082,9 @@
   function gisNewProjectFromPlot(code){
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code && pl.kpi) found = pl; });
-    if(!found){ toast('No data for '+code+' â€” Orascom holds DP01 and DP05'); return; }
+    if(!found){ toast('No data for '+code+' \u2014 Orascom holds DP01 and DP05'); return; }
     var id = uid('proj');
-    var p = {id:id, name:code+' â€” '+found.name, code:code, client:'', accUrl:'', stage:'Design',
+    var p = {id:id, name:code+' \u2014 '+found.name, code:code, client:'', accUrl:'', stage:'Design',
       lat:null, lng:null, boundary:{type:'MultiPolygon', coordinates:[found.rings]},
       plotCode:code, plotRev:2, color:null};
     state.projects.push(p);
@@ -1119,7 +1119,7 @@
     var mc = document.getElementById('gis-map');
     if(mc && mc.style) mc.style.cursor = 'crosshair';
     paintGisDrawSeg();
-    toast('Click the map to trace the zone â€” Finish when done (min 3 points)');
+    toast('Click the map to trace the zone \u2014 Finish when done (min 3 points)');
   }
   function gisDrawClick(ev){
     if(!gisDrawing || !ev || !ev.latlng) return;
@@ -1191,7 +1191,7 @@
     var bndTa = document.getElementById('pm-boundary');
     if(editing && editing.boundary && editing.boundary.coordinates){
       var bn = countBoundaryPoints(editing.boundary.coordinates);
-      bndTa.value = 'Saved: MultiPolygon, '+bn+' points â€” paste new GeoJSON here to replace, or Clear.';
+      bndTa.value = 'Saved: MultiPolygon, '+bn+' points \u2014 paste new GeoJSON here to replace, or Clear.';
       boundaryStatus('\u2713 Boundary set ('+bn+' points).');
     } else {
       bndTa.value = '';
@@ -1233,7 +1233,7 @@
     if(boundaryDirty){
       var bt = document.getElementById('pm-boundary').value.trim();
       if(bt===''){ newBnd = null; }
-      else if(bt.charAt(0)!=='{' && bt.charAt(0)!=='['){ toast('Site boundary is not GeoJSON â€” Clear it or paste a GeoJSON object'); return; }
+      else if(bt.charAt(0)!=='{' && bt.charAt(0)!=='['){ toast('Site boundary is not GeoJSON \u2014 Clear it or paste a GeoJSON object'); return; }
       else {
         var br = parseBoundaryGeometry(bt);
         if(br.error){ toast('Site boundary: '+br.error); return; }
@@ -1272,7 +1272,7 @@
     if(currentView==='stages') renderStages();
     if(currentView==='gis') renderGis();
     closeProjectModal();
-    try{ gisCancelDraw(true); }catch(e){} // drop any trace preview â€” the shape is saved now
+    try{ gisCancelDraw(true); }catch(e){} // drop any trace preview \u2014 the shape is saved now
   }
   /* ---------------- Site boundaries (GeoJSON) ---------------- */
   // Accepts a Geometry, Feature or FeatureCollection; normalizes to MultiPolygon.
@@ -1284,9 +1284,9 @@
   }
   function parseBoundaryGeometry(text){
     var MAXPTS = 5000, MAXLEN = 200000;
-    if(text.length > MAXLEN) return {error:'Boundary is '+Math.round(text.length/1024)+'KB â€” simplify under ~200KB first (e.g. mapshaper.org)'};
+    if(text.length > MAXLEN) return {error:'Boundary is '+Math.round(text.length/1024)+'KB \u2014 simplify under ~200KB first (e.g. mapshaper.org)'};
     var obj;
-    try{ obj = JSON.parse(text); }catch(e){ return {error:'Not valid JSON â€” paste a GeoJSON object'}; }
+    try{ obj = JSON.parse(text); }catch(e){ return {error:'Not valid JSON \u2014 paste a GeoJSON object'}; }
     var geom = null;
     if(obj && obj.type==='FeatureCollection' && Array.isArray(obj.features)){
       for(var i=0;i<obj.features.length;i++){
@@ -1312,7 +1312,7 @@
     });
     if(bad) return {error:'Coordinates must be [longitude, latitude] numbers in range'};
     if(pts===0) return {error:'Empty geometry'};
-    if(pts > MAXPTS) return {error:pts+' points exceeds the '+MAXPTS+' cap â€” simplify the shape'};
+    if(pts > MAXPTS) return {error:pts+' points exceeds the '+MAXPTS+' cap \u2014 simplify the shape'};
     return {geometry:{type:'MultiPolygon', coordinates:polys}, points:pts};
   }
   function boundaryStatus(msg, ok){
@@ -1324,9 +1324,9 @@
     var sel = document.getElementById('pm-plot');
     if(!sel) return;
     var cur = sel.value || '';
-    var html = '<option value="">â€” No plot â€”</option>' + sitePlots().filter(function(pl){ return !!pl.kpi; }).map(function(pl){
+    var html = '<option value="">\u2014 No plot \u2014</option>' + sitePlots().filter(function(pl){ return !!pl.kpi; }).map(function(pl){
       return '<option value="'+escapeHtml(pl.code)+'"'+(pl.code===cur?' selected':'')+'>'+
-        escapeHtml(pl.code+' â€” '+pl.name+(pl.cluster?' Â· '+pl.cluster:''))+'</option>';
+        escapeHtml(pl.code+' \u2014 '+pl.name+(pl.cluster?' \u00b7 '+pl.cluster:''))+'</option>';
     }).join('');
     sel.innerHTML = html;
   }
@@ -1337,9 +1337,9 @@
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
     if(!found || !found.rings){ toast('Plot not found in library'); return; }
-    if(!found.kpi){ toast('No data for '+code+' â€” Orascom holds DP01 and DP05'); return; }
+    if(!found.kpi){ toast('No data for '+code+' \u2014 Orascom holds DP01 and DP05'); return; }
     // Stage the library shape as ordinary GeoJSON in the textarea so the
-    // normal validate â†’ save path handles it (no special-casing downstream).
+    // normal validate \u2192 save path handles it (no special-casing downstream).
     plotJsonStaged = JSON.stringify({type:'MultiPolygon', coordinates:[found.rings]});
     document.getElementById('pm-boundary').value = plotJsonStaged;
     plotCodeStaged = code; plotRevStaged = 2;
@@ -1349,10 +1349,10 @@
     boundaryDirty = true;
     var t = document.getElementById('pm-boundary').value.trim();
     if(t!==plotJsonStaged){ plotCodeStaged = null; plotRevStaged = null; } // hand edit/file load breaks the library link
-    if(!t){ boundaryStatus('No boundary â€” project shows as a point (or unmapped).'); return; }
-    if(t.charAt(0)!=='{' && t.charAt(0)!=='['){ boundaryStatus('\u2715 Not GeoJSON â€” paste a GeoJSON object or press Clear.'); return; }
+    if(!t){ boundaryStatus('No boundary \u2014 project shows as a point (or unmapped).'); return; }
+    if(t.charAt(0)!=='{' && t.charAt(0)!=='['){ boundaryStatus('\u2715 Not GeoJSON \u2014 paste a GeoJSON object or press Clear.'); return; }
     var r = parseBoundaryGeometry(t);
-    boundaryStatus(r.error ? '\u2715 '+r.error : '\u2713 MultiPolygon, '+r.points+' points â€” saved on Save.');
+    boundaryStatus(r.error ? '\u2715 '+r.error : '\u2713 MultiPolygon, '+r.points+' points \u2014 saved on Save.');
   }
   function boundaryPickFile(){ document.getElementById('pm-boundary-file').click(); }
   function boundaryFile(input){
@@ -1370,7 +1370,7 @@
     document.getElementById('pm-boundary').value = '';
     boundaryDirty = true;
     plotCodeStaged = null; plotJsonStaged = ''; plotRevStaged = null;
-    boundaryStatus('Boundary removed â€” saved on Save.');
+    boundaryStatus('Boundary removed \u2014 saved on Save.');
   }
   function deleteActiveProjectPrompt(pid){
     var p = state.projects.find(function(pr){return pr.id===pid;});
@@ -1395,7 +1395,7 @@
 
   /* ---------------- Stage gates ---------------- */
   // Design-stage sign-off matrix per package. Statuses are recorded by hand
-  // (click a cell to advance it) â€” never inferred, never faked.
+  // (click a cell to advance it) \u2014 never inferred, never faked.
   var GATE_STAGES = ['Concept','Schematic','Detailed Design','IFC Issue','As-built'];
   var GATE_ORDER = ['', 'In Progress', 'Submitted', 'Approved'];
   function gateKey(pid, pkg, stage){ return pid+'|'+pkg+'|'+stage; }
@@ -1403,7 +1403,7 @@
     if(st==='Approved') return '<span class="badge badge-ok">Approved</span>';
     if(st==='Submitted') return '<span class="badge badge-info">Submitted</span>';
     if(st==='In Progress') return '<span class="badge badge-warn">In Progress</span>';
-    return '<span class="badge badge-muted">â€”</span>';
+    return '<span class="badge badge-muted">\u2014</span>';
   }
   function cycleGate(pid, pkgEnc, stageEnc){
     var pkg = decodeURIComponent(pkgEnc), stage = decodeURIComponent(stageEnc);
@@ -1438,9 +1438,9 @@
     }).join('');
     var pct = total ? Math.round(approved/total*100) : 0;
     host.innerHTML =
-      '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>Stage gates â€” '+escapeHtml(p.name)+'</h3>'+
+      '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>Stage gates \u2014 '+escapeHtml(p.name)+'</h3>'+
       '<span class="hint">'+approved+'/'+total+' approved ('+pct+'%)</span></div>'+
-      '<p style="font-size:.82rem;color:var(--muted);margin-bottom:10px;">Click any cell to advance its gate: â€” â†’ In Progress â†’ Submitted â†’ Approved. Recorded by hand per package; nothing here is inferred from scores.</p>'+
+      '<p style="font-size:.82rem;color:var(--muted);margin-bottom:10px;">Click any cell to advance its gate: \u2014 \u2192 In Progress \u2192 Submitted \u2192 Approved. Recorded by hand per package; nothing here is inferred from scores.</p>'+
       '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Package</th>'+
       GATE_STAGES.map(function(s){ return '<th style="text-align:center;">'+s+'</th>'; }).join('')+
       '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
@@ -1585,7 +1585,7 @@
         '<button class="btn btn-outline btn-sm" onclick="OHub.modelSelAll(true)">All</button>'+
         '<button class="btn btn-ghost btn-sm" onclick="OHub.modelSelAll(false)">None</button>'+
         '<button class="btn btn-outline btn-sm" onclick="OHub.modelDownloadSelection()">Download selection</button>'+
-        '<button class="btn btn-outline btn-sm" onclick="OHub.runCheckSelection()" title="Push the selection to the local runner and verify every path resolves â€” no Revit involved">Check selection</button>'+
+        '<button class="btn btn-outline btn-sm" onclick="OHub.runCheckSelection()" title="Push the selection to the local runner and verify every path resolves \u2014 no Revit involved">Check selection</button>'+
         '<button class="btn btn-primary btn-sm" onclick="OHub.runValidationNow()" title="Push the selection and launch run_rbp_nightly.bat on this machine">\u25B6 Run validation now</button>'+
         '<span class="hint">'+ (n ? n+' model'+((n===1)?'':'s')+' ready for validation' : 'no models selected yet') +'</span>'+
       '</div>'+
@@ -1905,7 +1905,7 @@
             '<button class="btn btn-outline" onclick="OHub.switchView(\'clash\')">Review clashes</button>'+
             '<button class="btn btn-outline" onclick="OHub.switchView(\'reports\')">Generate report</button>'+
             '<button class="btn btn-gold" onclick="OHub.switchView(\'quality-center\')">View open issues ('+openIssues.length+')</button>'+
-            '<button class="btn btn-outline" onclick="OHub.openAcc()">Open ACC â†—</button>'+
+            '<button class="btn btn-outline" onclick="OHub.openAcc()">Open ACC \u2197</button>'+
           '</div>'+
         '</div>'+
         '<div class="card">'+
@@ -2080,7 +2080,7 @@
     renderQualityCenter(); renderDashboard();
   }
 
-  /* ---------------- Deliverables (Hub-native â€” see IMPLEMENTATION_REPORT.md) ---------------- */
+  /* ---------------- Deliverables (Hub-native \u2014 see IMPLEMENTATION_REPORT.md) ---------------- */
   function delivBadgeTone(status){
     if(status==='Submitted') return 'ok';
     if(status==='In Progress') return 'info';
@@ -2241,7 +2241,7 @@
   /* ---------------- Data Center (import once, push to modules) ---------------- */
   // Files are staged in this tab's memory only (never uploaded anywhere) and
   // handed to module iframes via postMessage (File survives structured clone).
-  // Each module queues them in its NATIVE import flow â€” nothing auto-runs.
+  // Each module queues them in its NATIVE import flow \u2014 nothing auto-runs.
   var dcFiles = []; // {id, file, name, size, key, kind, options:[[value,label]], sent:{}}
   var DC_TARGETS = {
     html: [['naming','Naming Convention'],['qaqc','Model Quality']],
@@ -2418,7 +2418,7 @@
       }
       return step();
     }
-    toast('Scanning synced folderâ€¦');
+    toast('Scanning synced folder\u2026');
     walk(handle, prefix).then(function(){
       out.sort(function(a,b){ return a.rel < b.rel ? -1 : 1; });
       if(out.length > 2000) toast('Large tree: showing first 2000 models');
@@ -2492,7 +2492,7 @@
     var cnt = document.getElementById('acc-count');
     function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
     if(!accEntries.length){
-      host.innerHTML = '<p style="font-size:.82rem;color:var(--muted);">Nothing browsed yet. Choose the synced project folder above â€” e.g. the <span style="font-family:monospace;">Project Files</span> tree with one folder per building.</p>';
+      host.innerHTML = '<p style="font-size:.82rem;color:var(--muted);">Nothing browsed yet. Choose the synced project folder above \u2014 e.g. the <span style="font-family:monospace;">Project Files</span> tree with one folder per building.</p>';
       if(cnt) cnt.textContent = '';
       return;
     }
@@ -2944,7 +2944,7 @@
   // its module(s) through the same channel as the Data Center. Modules that are
   // open receive instantly; the rest get theirs from the outbox on open.
   // Mapping modules still queue at their mapping screen; Naming/Model Quality
-  // auto-run. Nothing is uploaded anywhere â€” this only READS your server.
+  // auto-run. Nothing is uploaded anywhere \u2014 this only READS your server.
   var SYNC_MAP = [
     {type:'workset',         mod:'workset',    role:''},
     {type:'parameters',      mod:'parameters', role:''},
@@ -2990,7 +2990,7 @@
     var cfg = syncConfig();
     var st = document.getElementById('sync-status');
     if(!cfg.url){ toast('Set the export server URL first'); return; }
-    if(st){ st.setAttribute('data-lock','1'); st.textContent = 'Contacting serverâ€¦'; }
+    if(st){ st.setAttribute('data-lock','1'); st.textContent = 'Contacting server\u2026'; }
     fetch(cfg.url+'/models').then(function(res){
       if(!res.ok) throw new Error('HTTP '+res.status);
       return res.json();

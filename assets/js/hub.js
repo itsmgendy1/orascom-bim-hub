@@ -119,6 +119,26 @@
     });
     if(changed) persist('projects');
   })();
+  // Seed library plots as real projects so they appear in the project
+  // picker with zero clicks. Idempotent: skips codes already held.
+  (function seedLibraryProjects(){
+    var lib = window.SITE_PLOTS || [], changed = false;
+    lib.forEach(function(pl){
+      if(!pl.kpi) return;
+      var exists = false;
+      state.projects.forEach(function(p){ if(p.plotCode===pl.code) exists = true; });
+      if(exists) return;
+      state.projects.push({id:uid('proj'), name:pl.code+' — '+pl.name, code:pl.code,
+        client:'', accUrl:'', stage:'Design', lat:null, lng:null,
+        boundary:{type:'MultiPolygon', coordinates:[pl.rings]},
+        plotCode:pl.code, plotRev:2, color:null, kpi:null});
+      changed = true;
+    });
+    if(changed){
+      if(!state.active && state.projects.length) state.active = state.projects[0].id;
+      persist('projects'); persist('active');
+    }
+  })();
   if(state.dark){ try{ document.body.classList.add('dark'); }catch(e){} }
 
   function persist(part){
@@ -595,6 +615,17 @@
     var c = p && p.color;
     return (typeof c==='string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : null;
   }
+  function zoneColorSet(pid, val){
+    if(!/^#[0-9a-fA-F]{6}$/.test(val||'')){ toast('Invalid color'); return; }
+    var p = null;
+    state.projects.forEach(function(x){ if(x.id===pid) p = x; });
+    if(!p) return;
+    p.color = val;
+    persist('projects');
+    renderProjects();
+    if(currentView==='gis') renderGis();
+    toast('Zone color updated');
+  }
   function zoneColor(p, fallback){
     if((gisMode==='package'||gisMode==='overall') && customColor(p)) return customColor(p);
     return fallback;
@@ -988,9 +1019,9 @@
           customs.map(function(p){
             var col = customColor(p)||TONE_HEX[tone(computeHealth(p.id).value)];
             var zk = fmtKpiLine(p.kpi);
-            return '<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--light);cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')">'+
-              '<span style="width:12px;height:12px;border-radius:3px;background:'+col+';flex-shrink:0;"></span>'+
-              '<span style="flex:1;"><strong>'+escapeHtml(p.code ? (p.code+' — '+p.name) : p.name)+'</strong><br>'+
+            return '<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--light);">'+
+              '<input type="color" value="'+col+'" title="Edit zone color" onchange="OHub.zoneColorSet(\''+p.id+'\',this.value)" style="width:26px;height:20px;padding:0;border:1px solid var(--border);border-radius:4px;background:var(--white);cursor:pointer;flex-shrink:0;">'+
+              '<span style="flex:1;cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')"><strong>'+escapeHtml(p.code ? (p.code+' — '+p.name) : p.name)+'</strong><br>'+
               '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+(zk ? '<br>'+zk : '')+'</span></span></div>';
           }).join('')+'</div>';
       })() +
@@ -3699,6 +3730,7 @@
     gisSearch: gisSearch,
     gisFocusPlot: gisFocusPlot,
     gisFocusProject: gisFocusProject,
+    zoneColorSet: zoneColorSet,
     gisNewProjectFromPlot: gisNewProjectFromPlot,
     gisStartDraw: gisStartDraw,
     gisFinishDraw: gisFinishDraw,

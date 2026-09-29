@@ -757,7 +757,10 @@
     return '<span class="badge badge-muted">Not Started</span>';
   }
   function plotModeStyle(pl, holder, g, overdue, open){
-    if(gisMode==='package') return {color:DP_COLORS[pl.code]||'#8E9BB3', fill:0.30, dash:null, tag:pl.code};
+    if(gisMode==='package'){
+      if(DP_COLORS[pl.code]) return {color:DP_COLORS[pl.code], fill:0.30, dash:null, tag:pl.code};
+      return {color:'#8E9BB3', fill:0.10, dash:null, tag:pl.code}; // neighbours: grey context, no data
+    }
     if(!holder) return {color:'#8E9BB3', fill:0.06, dash:'4 4', tag:pl.code+'<br>Unassigned'};
     var h = computeHealth(holder.id);
     if(gisMode==='review'){
@@ -794,6 +797,7 @@
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
     if(!found){ toast('Plot not found in library'); return; }
+    if(!found.kpi){ toast('No data for '+code+' — Orascom holds DP01 and DP05'); return; }
     p.boundary = {type:'MultiPolygon', coordinates:[found.rings]};
     p.plotCode = code; p.plotRev = 2;
     persist('projects');
@@ -833,6 +837,7 @@
     }
     var usedBy = {};
     state.projects.forEach(function(p){ if(p.plotCode) usedBy[p.plotCode] = p; });
+    var dataPlots = plots.filter(function(pl){ return !!pl.kpi; }); // neighbours stay map-only
     plots.forEach(function(pl){
       var ll = ringFlip([pl.rings]);
       if(!ll.length) return;
@@ -843,12 +848,11 @@
       var sty = plotModeStyle(pl, holder, g, overdue, open);
       var pg = L.polygon(ll, {color:sty.color, weight:2, fillOpacity:sty.fill, dashArray:sty.dash}).addTo(gisMapObj);
       pg.bindTooltip(sty.tag, {permanent:true, direction:'center', className:'plot-label'});
-      var kpi = pl.kpi || {};
-      var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
+      var kpi = pl.kpi || null;
+      var kpiLine = kpi ? '<br>Units: '+numFmt(kpi.units)+' · Pop: '+numFmt(kpi.population)+' · Bldgs: '+numFmt(kpi.buildings) : '';
       pg.bindPopup('<strong>'+escapeHtml(pl.code+' — '+pl.name)+'</strong><br>'+
         escapeHtml(pl.cluster||'')+'<br>'+
-        'Site: \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+' · Units: '+numFmt(kpi.units)+
-        ' · Pop: '+numFmt(kpi.population)+' · Bldgs: '+numFmt(kpi.buildings)+'<br>'+
+        'Site: \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+kpiLine+'<br>'+
         'Review: '+plotBucket(holder, g, overdue)+' · Stage: '+escapeHtml(stageName)+
         ' · Open issues: '+open+'<br>'+
         (holder ? 'Assigned: '+escapeHtml(holder.name) : 'Unassigned'));
@@ -903,7 +907,7 @@
         '<th style="text-align:right;">GFA (m\u00b2)</th><th style="text-align:right;">FAR</th>'+
         '<th style="text-align:right;">GLA (m\u00b2)</th><th style="text-align:right;">Units</th>'+
         '<th style="text-align:right;">Population</th><th style="text-align:right;">Buildings</th></tr></thead><tbody>'+
-        plots.map(function(pl){
+        dataPlots.map(function(pl){
           var holder = usedBy[pl.code] || null;
           var g = holder ? holderGates(holder.id) : {total:0, approved:0, submitted:0, wip:0, furthest:-1};
           var overdue = holder ? holderOverdue(holder.id) : 0;
@@ -920,11 +924,11 @@
         }).join('')+'</tbody></table>';
     }
     var q = (gisQuery||'').toLowerCase();
-    var shown = plots.filter(function(pl){
+    var shown = dataPlots.filter(function(pl){
       return !q || pl.code.toLowerCase().indexOf(q)>-1 || (pl.name||'').toLowerCase().indexOf(q)>-1;
     });
     var buckets = {'Approved':0,'Submitted':0,'In Progress':0,'Delayed':0,'Not Started':0};
-    plots.forEach(function(pl){
+    dataPlots.forEach(function(pl){
       var holder = usedBy[pl.code] || null;
       var g = holder ? holderGates(holder.id) : {total:0, approved:0, submitted:0, wip:0, furthest:-1};
       buckets[plotBucket(holder, g, holder ? holderOverdue(holder.id) : 0)]++;
@@ -932,7 +936,7 @@
     function sumCard(label, n, toneCls){
       return '<div class="card" style="padding:10px 12px;text-align:center;">'+
         '<div style="font-size:1.3rem;font-weight:800;color:var(--'+toneCls+');">'+n+'</div>'+
-        '<div style="font-size:.66rem;letter-spacing:.1em;color:var(--muted);font-weight:700;">'+label+'<br>'+(plots.length?Math.round(n/plots.length*100):0)+'%</div></div>';
+        '<div style="font-size:.66rem;letter-spacing:.1em;color:var(--muted);font-weight:700;">'+label+'<br>'+(dataPlots.length?Math.round(n/dataPlots.length*100):0)+'%</div></div>';
     }
     regHost.innerHTML =
       '<div class="grid" style="grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">'+
@@ -943,7 +947,7 @@
         sumCard('NOT STARTED', buckets['Not Started'], 'muted')+
       '</div>'+
       '<div class="card" style="margin-bottom:12px;"><div class="card-head"><h3>Plot register</h3>'+
-      '<span class="hint">'+shown.length+'/'+plots.length+' plots</span></div>'+
+      '<span class="hint">'+shown.length+'/'+dataPlots.length+' plots</span></div>'+
       '<input id="gis-q" type="text" placeholder="Search package…" value="'+escapeHtml(gisQuery)+'" oninput="OHub.gisSearch(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.8rem;background:var(--white);color:var(--text);margin-bottom:4px;">'+
       '<p style="font-size:.78rem;color:var(--muted);margin:6px 0 0;">'+(ap ? 'Assigning to active project: <strong>'+escapeHtml(ap.name)+'</strong>' : 'Select a project to enable assigning.')+'</p></div>' +
       shown.map(function(pl){
@@ -1112,7 +1116,7 @@
     var sel = document.getElementById('pm-plot');
     if(!sel) return;
     var cur = sel.value || '';
-    var html = '<option value="">— No plot —</option>' + sitePlots().map(function(pl){
+    var html = '<option value="">— No plot —</option>' + sitePlots().filter(function(pl){ return !!pl.kpi; }).map(function(pl){
       return '<option value="'+escapeHtml(pl.code)+'"'+(pl.code===cur?' selected':'')+'>'+
         escapeHtml(pl.code+' — '+pl.name+(pl.cluster?' · '+pl.cluster:''))+'</option>';
     }).join('');
@@ -1125,6 +1129,7 @@
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
     if(!found || !found.rings){ toast('Plot not found in library'); return; }
+    if(!found.kpi){ toast('No data for '+code+' — Orascom holds DP01 and DP05'); return; }
     // Stage the library shape as ordinary GeoJSON in the textarea so the
     // normal validate → save path handles it (no special-casing downstream).
     plotJsonStaged = JSON.stringify({type:'MultiPolygon', coordinates:[found.rings]});

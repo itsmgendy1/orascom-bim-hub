@@ -263,6 +263,7 @@
     if(viewId==='stages') renderStages();
     if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); }
     if(!opts.silent) closeSearch();
+    if(viewId!=='gis'){ try{ gisCancelDraw(true); }catch(e){} }
   }
 
   function lazyLoadModule(mod){
@@ -881,6 +882,7 @@
       else gisMapObj.setView([31.10, 27.81], 13);
     }, 50);
     var ap = activeProject();
+    paintGisDrawSeg();
     var modesHost = document.getElementById('gis-modes');
     if(modesHost){
       modesHost.innerHTML = GIS_MODES.map(function(m){
@@ -988,6 +990,72 @@
   function gisFocusPlot(code){
     if(gisMapObj && gisPlotBounds[code]){ try{ gisMapObj.fitBounds(gisPlotBounds[code], {padding:[40,40]}); }catch(e){} }
   }
+  /* ----- hand-drawn zones: click to trace, finish to create a project ----- */
+  var gisDrawing = false, gisDrawPts = [], gisDrawLayers = [], gisDrawLine = null;
+  function paintGisDrawSeg(){
+    var host = document.getElementById('gis-draw');
+    if(!host) return;
+    host.innerHTML = gisDrawing
+      ? '<button class="seg-btn" onclick="OHub.gisFinishDraw()">Finish ('+gisDrawPts.length+')</button>'+
+        '<button class="seg-btn" onclick="OHub.gisCancelDraw()">Cancel</button>'
+      : '<button class="seg-btn" onclick="OHub.gisStartDraw()">Draw new zone</button>';
+  }
+  function gisStartDraw(){
+    if(!gisMapObj || typeof L==='undefined'){ toast('Open the GIS tab first'); return; }
+    gisCancelDraw(true);
+    gisDrawing = true;
+    gisDrawPts = [];
+    try{ gisMapObj.doubleClickZoom.disable(); }catch(e){}
+    try{ gisMapObj.on('click', gisDrawClick); }catch(e){}
+    var mc = document.getElementById('gis-map');
+    if(mc && mc.style) mc.style.cursor = 'crosshair';
+    paintGisDrawSeg();
+    toast('Click the map to trace the zone — Finish when done (min 3 points)');
+  }
+  function gisDrawClick(ev){
+    if(!gisDrawing || !ev || !ev.latlng) return;
+    var ll = ev.latlng;
+    if(typeof ll.lat!=='number' || typeof ll.lng!=='number') return;
+    gisDrawPts.push([ll.lat, ll.lng]);
+    try{
+      gisDrawLayers.push(L.circleMarker([ll.lat, ll.lng], {radius:4, color:'#fff', weight:2, fillColor:'#38c6ff', fillOpacity:1}).addTo(gisMapObj));
+      if(gisDrawPts.length>1){
+        if(gisDrawLine){ try{ gisMapObj.removeLayer(gisDrawLine); }catch(e){} }
+        gisDrawLine = L.polyline(gisDrawPts, {color:'#38c6ff', weight:2, dashArray:'5 5'}).addTo(gisMapObj);
+      }
+    }catch(e){}
+    paintGisDrawSeg();
+  }
+  function drawGeoJson(pts){
+    // Leaflet [lat,lng] clicks -> closed GeoJSON Polygon ([lng,lat]).
+    var ring = pts.map(function(p){ return [p[1], p[0]]; });
+    ring.push(ring[0].slice());
+    return {type:'Polygon', coordinates:[ring]};
+  }
+  function gisFinishDraw(){
+    if(!gisDrawing) return;
+    if(gisDrawPts.length<3){ toast('Trace at least 3 points first'); return; }
+    var geo = drawGeoJson(gisDrawPts);
+    gisCancelDraw(true);
+    openProjectModal(null);
+    document.getElementById('pm-name').value = '';
+    document.getElementById('pm-boundary').value = JSON.stringify(geo);
+    boundaryPreview();
+    try{ document.getElementById('pm-name').focus(); }catch(e){}
+    toast('Name the project (e.g. Sales Resort Portaluna) and Save');
+  }
+  function gisCancelDraw(silent){
+    gisDrawing = false;
+    gisDrawPts = [];
+    try{ if(gisMapObj){ gisMapObj.off('click', gisDrawClick); gisMapObj.doubleClickZoom.enable(); } }catch(e){}
+    gisDrawLayers.forEach(function(l){ try{ gisMapObj.removeLayer(l); }catch(e){} });
+    gisDrawLayers = [];
+    if(gisDrawLine){ try{ gisMapObj.removeLayer(gisDrawLine); }catch(e){} gisDrawLine = null; }
+    var mc = document.getElementById('gis-map');
+    if(mc && mc.style) mc.style.cursor = '';
+    paintGisDrawSeg();
+    if(!silent) toast('Drawing discarded');
+  }
 
   /* ---------------- Project modal ---------------- */
   function openProjectModal(editId){
@@ -1066,6 +1134,7 @@
     persist('projects'); persist('active');
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
     closeProjectModal();
+    try{ gisCancelDraw(true); }catch(e){} // drop any trace preview — the shape is saved now
   }
   /* ---------------- Site boundaries (GeoJSON) ---------------- */
   // Accepts a Geometry, Feature or FeatureCollection; normalizes to MultiPolygon.
@@ -3535,6 +3604,9 @@
     gisSetBase: gisSetBase,
     gisSearch: gisSearch,
     gisFocusPlot: gisFocusPlot,
+    gisStartDraw: gisStartDraw,
+    gisFinishDraw: gisFinishDraw,
+    gisCancelDraw: gisCancelDraw,
     openModelModal: openModelModal,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,

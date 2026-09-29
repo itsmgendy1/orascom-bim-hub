@@ -589,6 +589,16 @@
     if(spec.urls) return L.layerGroup(spec.urls.map(function(u){ return L.tileLayer(u, {maxZoom:18, attribution:spec.attr}); }));
     return L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr});
   }
+  // Per-project zone color override (project form). Wins in package/overall
+  // modes; review/stage/issues modes keep their honest status colors.
+  function customColor(p){
+    var c = p && p.color;
+    return (typeof c==='string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : null;
+  }
+  function zoneColor(p, fallback){
+    if((gisMode==='package'||gisMode==='overall') && customColor(p)) return customColor(p);
+    return fallback;
+  }
   var mapTileTheme = '', mapTileLayer = null;
   // Honest derived metric: equirectangular shoelace on [lng,lat] rings (holes subtract).
   function boundaryAreaKm2(coords){
@@ -675,7 +685,7 @@
       });
       if(!rings.length) return;
       var hb = computeHealth(p.id);
-      var pg = L.polygon(rings, {color:TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.18}).addTo(mapObj);
+      var pg = L.polygon(rings, {color:customColor(p)||TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.18}).addTo(mapObj);
       pg.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>'+
         escapeHtml(p.code||'')+'<br>'+
         'Health: '+(hb.value==null?'no data':hb.value+'%')+'<br>'+
@@ -783,6 +793,10 @@
   }
   function ringFlip(multi){
     var out = [];
+    // Tolerate Polygon-level nesting too (defensive: validated saves are
+    // always MultiPolygon, but never let a shape vanish silently).
+    if(multi && multi.length && typeof multi[0][0]==='number') multi = [[multi]];
+    else if(multi && multi.length && multi[0].length && typeof multi[0][0][0]==='number') multi = [multi];
     (multi||[]).forEach(function(poly){
       (poly||[]).forEach(function(ring){
         var ll = (ring||[]).map(function(c){ return [c[1], c[0]]; });
@@ -848,7 +862,7 @@
       var open = holder ? holderOpenIssues(holder.id) : 0;
       var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
       var sty = plotModeStyle(pl, holder, g, overdue, open);
-      var pg = L.polygon(ll, {color:sty.color, weight:2, fillOpacity:sty.fill, dashArray:sty.dash}).addTo(gisMapObj);
+      var pg = L.polygon(ll, {color:zoneColor(holder, sty.color), weight:2, fillOpacity:sty.fill, dashArray:sty.dash}).addTo(gisMapObj);
       pg.bindTooltip(sty.tag, {permanent:true, direction:'center', className:'plot-label'});
       var kpi = pl.kpi || null;
       var kpiLine = kpi ? '<br>Units: '+numFmt(kpi.units)+' · Pop: '+numFmt(kpi.population)+' · Bldgs: '+numFmt(kpi.buildings) : '';
@@ -868,7 +882,7 @@
       var ll = ringFlip(p.boundary.coordinates);
       if(!ll.length) return;
       var hb2 = computeHealth(p.id);
-      var pg2 = L.polygon(ll, {color:TONE_HEX[tone(hb2.value)], weight:2, fillOpacity:0.18}).addTo(gisMapObj);
+      var pg2 = L.polygon(ll, {color:zoneColor(p, TONE_HEX[tone(hb2.value)]), weight:2, fillOpacity:0.18}).addTo(gisMapObj);
       pg2.bindTooltip(p.code||p.name, {permanent:true, direction:'center', className:'plot-label'});
       pg2.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>Custom boundary<br>'+
         'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates)));
@@ -918,7 +932,7 @@
           var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
           var r = function(v){ return '<td style="text-align:right;">'+numFmt(v)+'</td>'; };
           return '<tr style="cursor:pointer;" onclick="OHub.gisFocusPlot(\''+escapeHtml(pl.code)+'\')">'+
-            '<td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+(DP_COLORS[pl.code]||'#8E9BB3')+';margin-right:7px;"></span><strong>'+escapeHtml(pl.code)+'</strong> <span style="color:var(--muted);font-size:.76rem;">'+escapeHtml(pl.name)+'</span></td>'+
+            '<td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+zoneColor(holder,(DP_COLORS[pl.code]||'#8E9BB3'))+';margin-right:7px;"></span><strong>'+escapeHtml(pl.code)+'</strong> <span style="color:var(--muted);font-size:.76rem;">'+escapeHtml(pl.name)+'</span></td>'+
             '<td>'+bucketBadge(plotBucket(holder, g, overdue))+'</td>'+
             '<td>'+escapeHtml(stageName)+'</td>'+
             r(kpi.plots)+r(kpi.gsa)+r(kpi.gfa)+
@@ -961,7 +975,7 @@
         var bucket = plotBucket(holder, g, overdue);
         var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
         var prog = g.total ? Math.round(g.approved/g.total*100) : 0;
-        var dot = gisMode==='package' ? (DP_COLORS[pl.code]||'#8E9BB3') : plotModeStyle(pl, holder, g, overdue, holder?holderOpenIssues(holder.id):0).color;
+        var dot = gisMode==='package' ? zoneColor(holder, (DP_COLORS[pl.code]||'#8E9BB3')) : plotModeStyle(pl, holder, g, overdue, holder?holderOpenIssues(holder.id):0).color;
         return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="OHub.gisFocusPlot(\''+escapeHtml(pl.code)+'\')">'+
           '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">'+
             '<span style="width:12px;height:12px;border-radius:3px;background:'+dot+';flex-shrink:0;"></span>'+
@@ -1027,10 +1041,11 @@
     paintGisDrawSeg();
   }
   function drawGeoJson(pts){
-    // Leaflet [lat,lng] clicks -> closed GeoJSON Polygon ([lng,lat]).
+    // Leaflet [lat,lng] clicks -> closed MultiPolygon ([lng,lat]), the
+    // storage format, so the shape survives even paths that skip validation.
     var ring = pts.map(function(p){ return [p[1], p[0]]; });
     ring.push(ring[0].slice());
-    return {type:'Polygon', coordinates:[ring]};
+    return {type:'MultiPolygon', coordinates:[[ring]]};
   }
   function gisFinishDraw(){
     if(!gisDrawing) return;
@@ -1068,6 +1083,10 @@
     document.getElementById('pm-stage').value = editing? editing.stage:'Design';
     document.getElementById('pm-lat').value = (editing && typeof editing.lat==='number') ? editing.lat : '';
     document.getElementById('pm-lng').value = (editing && typeof editing.lng==='number') ? editing.lng : '';
+    var colorAuto = !(editing && /^#[0-9a-fA-F]{6}$/.test(editing.color||''));
+    document.getElementById('pm-color-auto').checked = colorAuto;
+    document.getElementById('pm-color').value = (editing && editing.color) || '#38c6ff';
+    document.getElementById('pm-color').disabled = colorAuto;
     boundaryDirty = false;
     var bndTa = document.getElementById('pm-boundary');
     if(editing && editing.boundary && editing.boundary.coordinates){
@@ -1097,6 +1116,8 @@
     var lat = latRaw==='' ? null : parseFloat(latRaw);
     var lng = lngRaw==='' ? null : parseFloat(lngRaw);
     if((lat!=null && isNaN(lat)) || (lng!=null && isNaN(lng))){ toast('Latitude/longitude must be numbers'); return; }
+    var colorAutoSave = document.getElementById('pm-color-auto').checked;
+    var colorRaw = document.getElementById('pm-color').value;
     var prevBnd = editId ? (function(){ var ex = state.projects.find(function(pr){return pr.id===editId;}); return ex ? ex.boundary||null : null; })() : null;
     var newBnd = prevBnd;
     if(boundaryDirty){
@@ -1119,7 +1140,8 @@
       lng: (lat!=null && lng!=null) ? lng : null,
       boundary: newBnd,
       plotCode: plotCodeStaged,
-      plotRev: plotRevStaged
+      plotRev: plotRevStaged,
+      color: (!colorAutoSave && /^#[0-9a-fA-F]{6}$/.test(colorRaw)) ? colorRaw : null
     };
     if(editId){
       var p = state.projects.find(function(pr){return pr.id===editId;});
@@ -1133,6 +1155,7 @@
     }
     persist('projects'); persist('active');
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
+    if(currentView==='gis'){ try{ renderGis(); }catch(e){} }
     closeProjectModal();
     try{ gisCancelDraw(true); }catch(e){} // drop any trace preview — the shape is saved now
   }

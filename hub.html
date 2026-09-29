@@ -376,6 +376,12 @@
           <div style="flex:1;"><label>Longitude <span style="font-weight:400;color:var(--muted);">(optional)</span></label><input type="text" id="pm-lng" placeholder="e.g. 33.7899"></div>
         </div>
         <p style="font-size:.74rem;color:var(--muted);margin-top:-6px;">Add coordinates to place this project on the Projects &rarr; Map view.</p>
+        <div class="field"><label>Zone color <span style="font-weight:400;color:var(--muted);">(optional — overrides the health tone on maps)</span></label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input type="color" id="pm-color" value="#38c6ff" style="width:46px;height:32px;padding:2px;border:1px solid var(--border);border-radius:6px;background:var(--white);">
+            <label style="display:flex;gap:6px;align-items:center;font-size:.8rem;color:var(--muted);font-weight:400;"><input type="checkbox" id="pm-color-auto" checked onchange="document.getElementById('pm-color').disabled=this.checked" style="width:auto;"> Auto (health tone)</label>
+          </div>
+        </div>
         <div class="field"><label>Assign plot <span style="font-weight:400;color:var(--muted);">(optional — built-in DP library; fills the boundary below)</span></label>
           <select id="pm-plot" onchange="OHub.plotAssign()" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);width:100%;"><option value="">— No plot —</option></select>
         </div>
@@ -474,6 +480,6 @@
 
 <script src="assets/js/forma.js?v=9bf97e59"></script>
 <script src="assets/js/site-plots.js?v=64235b04"></script>
-<script src="assets/js/hub.js?v=4852c1ed"></script>
+<script src="assets/js/hub.js?v=2f2942b8"></script>
 </body>
 </html>

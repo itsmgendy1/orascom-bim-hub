@@ -180,16 +180,21 @@
         <div id="dc-registry"></div>
       </section>
 
-      <!-- ---------- GIS ---------- -->
       <section class="view" id="view-gis">
         <div class="grid" id="gis-layout">
-          <div class="card" style="padding:14px;">
-            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;margin-bottom:10px;">
-              <div><div class="seg-cap">COLOR BY</div><div class="seg" id="gis-modes"></div></div>
-              <div><div class="seg-cap">BASE MAP</div><div class="seg" id="gis-bases"></div></div>
+          <div>
+            <div class="card" style="padding:14px;">
+              <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;margin-bottom:10px;">
+                <div><div class="seg-cap">COLOR BY</div><div class="seg" id="gis-modes"></div></div>
+                <div><div class="seg-cap">BASE MAP</div><div class="seg" id="gis-bases"></div></div>
+              </div>
+              <div id="gis-map" style="width:100%;height:520px;border-radius:10px;overflow:hidden;"></div>
+              <div id="gis-legend" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 2px 0;font-size:.76rem;color:var(--muted);"></div>
             </div>
-            <div id="gis-map" style="width:100%;height:520px;border-radius:10px;overflow:hidden;"></div>
-            <p class="hint" id="gis-caption" style="margin:8px 2px 0;"></p>
+            <div class="card" style="margin-top:14px;">
+              <div class="card-head"><h3>Design Package Information</h3><span class="hint">Source: built-in plot library</span></div>
+              <div class="tbl-wrap" id="gis-table"></div>
+            </div>
           </div>
           <div id="gis-register"></div>
         </div>

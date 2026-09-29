@@ -569,10 +569,17 @@
   }
 
   function mapTileFor(theme){
-    if(theme==='dark') return {url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      attr:'\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> \u00a9 <a href="https://carto.com/attributions">CARTO</a>'};
+    // CARTO basemaps now require an API key, so dark mode uses Esri's
+    // keyless dark-gray canvas (base + reference overlay for labels).
+    if(theme==='dark') return {urls:['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'],
+      attr:'Tiles \u00a9 Esri \u2014 Esri, DeLorme, NAVTEQ'};
     return {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       attr:'\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'};
+  }
+  function makeBaseLayer(spec){
+    if(spec.urls) return L.layerGroup(spec.urls.map(function(u){ return L.tileLayer(u, {maxZoom:18, attribution:spec.attr}); }));
+    return L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr});
   }
   var mapTileTheme = '', mapTileLayer = null;
   // Honest derived metric: equirectangular shoelace on [lng,lat] rings (holes subtract).
@@ -618,7 +625,7 @@
     if(mapTileTheme!==wantTheme){
       if(mapTileLayer){ try{ mapObj.removeLayer(mapTileLayer); }catch(e){} mapTileLayer = null; }
       var spec = mapTileFor(wantTheme);
-      mapTileLayer = L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr}).addTo(mapObj);
+      mapTileLayer = makeBaseLayer(spec).addTo(mapObj);
       mapTileTheme = wantTheme;
     }
     mapMarkers.forEach(function(m){ mapObj.removeLayer(m); });
@@ -807,7 +814,7 @@
     if(gisTileTheme!==wantBase){
       if(gisTileLayer){ try{ gisMapObj.removeLayer(gisTileLayer); }catch(e){} gisTileLayer = null; }
       var spec = gisTileSpec(wantBase);
-      gisTileLayer = L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr}).addTo(gisMapObj);
+      gisTileLayer = makeBaseLayer(spec).addTo(gisMapObj);
       gisTileTheme = wantBase;
     }
     gisLayers.forEach(function(l){ try{ gisMapObj.removeLayer(l); }catch(e){} });

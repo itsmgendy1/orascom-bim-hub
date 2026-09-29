@@ -399,22 +399,7 @@ function crane(x,z,h,s=1){
 }
 const cranes=[crane(-9,-12,13),crane(4,-13,15,1.15),crane(12,-10,11,0.9)];
 
-/* ---------- central digital hub ---------- */
-const hub = new THREE.Group(); hub.position.set(0,2.6,0); scene.add(hub);
-const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05,1),
-  new THREE.MeshStandardMaterial({color:0x0a2c4e, emissive:0x1899e0, emissiveIntensity:1.4,
-    wireframe:true, transparent:true, opacity:0.95}));
-hub.add(core);
-const coreSolid = new THREE.Mesh(new THREE.IcosahedronGeometry(0.72,2),
-  new THREE.MeshStandardMaterial({color:0x0b3a63, emissive:0x0a4a75, emissiveIntensity:0.7,
-    roughness:0.25, metalness:0.8, transparent:true, opacity:0.92}));
-hub.add(coreSolid);
-const rings=[];
-[[2.2,0x35c2ff,0.9,0],[2.9,0x1a7fbf,0.55,1],[3.7,0x9fe8ff,0.28,2]].forEach(([r,c,op,tilt])=>{
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(r,0.015,8,140),
-    new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:op}));
-  ring.rotation.x = Math.PI/2 + tilt*0.35; hub.add(ring); rings.push(ring);
-});
+/* ---------- central hub retired (ball + rings removed by design) ---------- */
 
 /* ---------- data particles: model → hub → delivery ---------- */
 function makeParticles(n, color, size){
@@ -509,11 +494,7 @@ function animate(){
   camera.position.set(pos.x + mouseX*0.7, pos.y - mouseY*0.5, pos.z);
   camera.lookAt(lookTarget.x + mouseX*0.4, lookTarget.y - mouseY*0.3, lookTarget.z);
 
-  // hub motion (loop-safe: use sin of loop phase + shimmer)
-  core.rotation.y = t*Math.PI*4; core.rotation.x = Math.sin(t*Math.PI*2)*0.4;
-  coreSolid.rotation.y = -t*Math.PI*3;
-  rings[0].rotation.z = t*Math.PI*4; rings[1].rotation.z = -t*Math.PI*3; rings[2].rotation.z = t*Math.PI*2;
-  hub.position.y = 2.6 + Math.sin(t*Math.PI*2)*0.15;
+  // hub light shimmer (fixture stays, ball is gone)
   hubLight.intensity = 70 + Math.sin(t*Math.PI*4)*18;
 
   // hologram breathing + parallax

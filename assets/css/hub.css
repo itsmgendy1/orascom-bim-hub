@@ -178,7 +178,8 @@ button{font-family:inherit;}
 .grid-3{grid-template-columns:repeat(3,1fr);}
 .grid-2{grid-template-columns:repeat(2,1fr);}
 .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));}
-#gis-layout{grid-template-columns:1fr 340px;align-items:start;}
+#gis-layout{grid-template-columns:minmax(0,1fr) 340px;align-items:start;}
+#gis-layout>div{min-width:0;}
 @media(max-width:1100px){#gis-layout{grid-template-columns:1fr;}}
 @media(max-width:1200px){.grid-4{grid-template-columns:repeat(2,1fr);} .grid-3{grid-template-columns:repeat(2,1fr);}}
 
@@ -248,7 +249,7 @@ table.tbl th{
 }
 table.tbl td{padding:11px 12px;border-bottom:1px solid var(--light);vertical-align:middle;}
 table.tbl tr:hover td{background:var(--light);}
-.tbl-wrap{overflow-x:auto;}
+.tbl-wrap{overflow-x:auto;max-width:100%;}
 
 /* ---------- Empty states ---------- */
 .empty-state{

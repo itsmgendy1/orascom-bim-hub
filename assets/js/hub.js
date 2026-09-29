@@ -969,7 +969,7 @@
         '<div style="font-size:.66rem;letter-spacing:.1em;color:var(--muted);font-weight:700;">'+label+'<br>'+(dataPlots.length?Math.round(n/dataPlots.length*100):0)+'%</div></div>';
     }
     regHost.innerHTML =
-      '<div class="grid" style="grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">'+
+      '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin-bottom:12px;">'+
         sumCard('APPROVED', buckets['Approved'], 'ok2')+
         sumCard('SUBMITTED', buckets['Submitted'], 'info')+
         sumCard('IN PROGRESS', buckets['In Progress'], 'warn')+

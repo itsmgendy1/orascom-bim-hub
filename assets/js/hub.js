@@ -157,6 +157,7 @@
     if(part==='sync') writeLS(LS.sync, state.sync);
     if(part==='rollups') writeLS(LS.rollups, state.rollups);
     if(part==='gates') writeLS(LS.gates, state.gates);
+    try{ refreshNavBadges(); }catch(e){}
   }
   function toggleDark(){
     state.dark = !state.dark;
@@ -284,6 +285,7 @@
     if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); }
     if(!opts.silent) closeSearch();
     if(viewId!=='gis'){ try{ gisCancelDraw(true); }catch(e){} }
+    try{ refreshNavBadges(); }catch(e){}
   }
 
   function lazyLoadModule(mod){
@@ -720,13 +722,13 @@
       });
       if(!rings.length) return;
       var hb = computeHealth(p.id);
-      var pg = L.polygon(rings, {color:customColor(p)||TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.18}).addTo(mapObj);
+      var pg = L.polygon(rings, {color:customColor(p)||TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.18, className:zoneAlert(p.id)?'zone-alert':''}).addTo(mapObj);
       pg.bindTooltip(p.code||p.name, {permanent:true, direction:'center', className:'plot-label'});
       pg.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>'+
         escapeHtml(p.code||'')+'<br>'+
         'Health: '+(hb.value==null?'no data':hb.value+'%')+'<br>'+
-        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+
-        (fmtKpiLine(p.kpi) ? '<br>'+fmtKpiLine(p.kpi) : ''));
+        'Site: \\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+
+        (fmtKpiLine(p.kpi) ? '<br>'+fmtKpiLine(p.kpi) : '')+alertLine(p.id));
       pg.on('click', function(){ setActiveProject(p.id); });
       mapMarkers.push(pg);
       try{
@@ -788,6 +790,39 @@
   }
   function holderOpenIssues(pid){
     return state.issues.filter(function(i){ return i.project===pid && (i.status==='Open'||i.status==='In Progress'); }).length;
+  }
+  // MODON-style alert: a zone flashes and its texts go red while its holder
+  // has open issues or overdue deliverables. One predicate drives map flash,
+  // register rows, popups and nav badges so they can never disagree.
+  function zoneAlert(pid){
+    return holderOpenIssues(pid)>0 || holderOverdue(pid)>0;
+  }
+  function alertLine(pid){
+    var open = holderOpenIssues(pid), od = holderOverdue(pid);
+    if(!open && !od) return '';
+    return '<span style="display:block;font-size:.76rem;color:var(--fail2);font-weight:700;">'+
+      (od>0 ? ('\u26a0 '+od+' overdue'+(open>0 ? ' \\u00b7 ' : '')) : '')+
+      (open>0 ? (open+' open issue'+(open>1?'s':'')) : '')+'</span>';
+  }
+  function setNavBadge(view, n){
+    var item = document.querySelector('.nav-item[data-view="'+view+'"]');
+    if(!item) return;
+    var b = item.querySelector('.nav-badge');
+    if(n>0){
+      if(!b){ b = document.createElement('span'); b.className = 'nav-badge'; item.appendChild(b); }
+      b.textContent = n>99 ? '99+' : String(n);
+      b.style.display = '';
+    } else if(b){ b.style.display = 'none'; }
+  }
+  function refreshNavBadges(){
+    var p = activeProject();
+    setNavBadge('quality-center', p ? holderOpenIssues(p.id) : 0);
+    setNavBadge('delivery', p ? holderOverdue(p.id) : 0);
+    var alerts = 0, seen = {};
+    state.projects.forEach(function(x){
+      if((x.boundary && x.boundary.coordinates) && !seen[x.id] && zoneAlert(x.id)){ seen[x.id]=1; alerts++; }
+    });
+    setNavBadge('gis', alerts);
   }
   function plotBucket(holder, g, overdue){
     if(!holder) return 'Not Started';
@@ -910,15 +945,20 @@
       var open = holder ? holderOpenIssues(holder.id) : 0;
       var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
       var sty = plotModeStyle(pl, holder, g, overdue, open);
-      var pg = L.polygon(ll, {color:zoneColor(holder, sty.color), weight:2, fillOpacity:sty.fill, dashArray:sty.dash}).addTo(gisMapObj);
-      pg.bindTooltip(sty.tag, {permanent:true, direction:'center', className:'plot-label'});
+      var al = !!(holder && (open>0 || overdue>0));
+      var atag = sty.tag + (al ? '<br><span style="color:#ff7b7b;">\u26a0 '+
+        (overdue>0 ? (overdue+' overdue'+(open>0 ? ' \u00b7 ' : '')) : '')+
+        (open>0 ? (open+' open') : '')+'</span>' : '');
+      var pg = L.polygon(ll, {color:zoneColor(holder, sty.color), weight:2, fillOpacity:sty.fill, dashArray:sty.dash, className: al?'zone-alert':''}).addTo(gisMapObj);
+      pg.bindTooltip(atag, {permanent:true, direction:'center', className:'plot-label'});
       var kpi = pl.kpi || null;
       var kpiLine = kpi ? '<br>Units: '+numFmt(kpi.units)+' \u00b7 Pop: '+numFmt(kpi.population)+' \u00b7 Bldgs: '+numFmt(kpi.buildings) : '';
       pg.bindPopup('<strong>'+escapeHtml(pl.code+' \u2014 '+pl.name)+'</strong><br>'+
         escapeHtml(pl.cluster||'')+'<br>'+
         'Site: \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+kpiLine+'<br>'+
-        'Review: '+plotBucket(holder, g, overdue)+' \u00b7 Stage: '+escapeHtml(stageName)+
-        ' \u00b7 Open issues: '+open+'<br>'+
+        'Review: '+plotBucket(holder, g, overdue)+' \\u00b7 Stage: '+escapeHtml(stageName)+
+        ' \\u00b7 Open issues: '+(open>0 ? '<span style="color:var(--fail2);font-weight:700;">'+open+'</span>' : '0')+
+        (overdue>0 ? ' \\u00b7 <span style="color:var(--fail2);font-weight:700;">'+overdue+' overdue</span>' : '')+'<br>'+
         (holder ? 'Assigned: '+escapeHtml(holder.name) : 'Unassigned'));
       if(holder) pg.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(holder.id));
       gisLayers.push(pg);
@@ -930,11 +970,11 @@
       var ll = ringFlip(p.boundary.coordinates);
       if(!ll.length) return;
       var hb2 = computeHealth(p.id);
-      var pg2 = L.polygon(ll, {color:zoneColor(p, TONE_HEX[tone(hb2.value)]), weight:2, fillOpacity:0.18}).addTo(gisMapObj);
+      var pg2 = L.polygon(ll, {color:zoneColor(p, TONE_HEX[tone(hb2.value)]), weight:2, fillOpacity:0.18, className:zoneAlert(p.id)?'zone-alert':''}).addTo(gisMapObj);
       pg2.bindTooltip(p.code||p.name, {permanent:true, direction:'center', className:'plot-label'});
       pg2.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>Custom boundary<br>'+
-        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+
-        (fmtKpiLine(p.kpi) ? '<br>'+fmtKpiLine(p.kpi) : ''));
+        'Site: \\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+
+        (fmtKpiLine(p.kpi) ? '<br>'+fmtKpiLine(p.kpi) : '')+alertLine(p.id));
       pg2.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(p.id));
       gisLayers.push(pg2);
       trackBounds(ll);
@@ -1027,7 +1067,7 @@
             return '<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--light);">'+
               '<input type="color" value="'+col+'" title="Edit zone color" onchange="OHub.zoneColorSet(\''+p.id+'\',this.value)" style="width:26px;height:20px;padding:0;border:1px solid var(--border);border-radius:4px;background:var(--white);cursor:pointer;flex-shrink:0;">'+
               '<span style="flex:1;cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')"><strong>'+escapeHtml(p.code ? (p.code+' \u2014 '+p.name) : p.name)+'</strong><br>'+
-              '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+(zk ? '<br>'+zk : '')+'</span></span></div>';
+              '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+(zk ? '<br>'+zk : '')+alertLine(p.id)+'</span></span></div>';
           }).join('')+'</div>';
       })() +
       shown.map(function(pl){
@@ -1050,7 +1090,7 @@
             '<span style="flex:1;min-width:60px;height:5px;background:var(--light);border-radius:3px;overflow:hidden;">'+
               '<span style="display:block;height:100%;width:'+prog+'%;background:var(--b2);"></span></span>'+
             '<span style="color:var(--muted);">'+prog+'%</span></div>'+
-          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units \u00b7 <strong>'+numFmt(kpi.population)+'</strong> pop \u00b7 <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+
+          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units \u00b7 <strong>'+numFmt(kpi.population)+'</strong> pop \u00b7 <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+alertLine(holder?holder.id:null)+
           (holder
             ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
             : '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+

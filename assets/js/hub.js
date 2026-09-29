@@ -121,6 +121,7 @@
     persist('dark');
     try{ document.body.classList.toggle('dark', state.dark); }catch(e){}
     broadcastTheme();
+    if(currentView==='projects' && projectsViewMode==='map'){ try{ renderProjectsMap(); }catch(e){} }
   }
   function hubTheme(){ return state.dark ? 'dark' : 'light'; }
   function broadcastTheme(){
@@ -548,6 +549,39 @@
     }
   }
 
+  function mapTileFor(theme){
+    if(theme==='dark') return {url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      attr:'\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> \u00a9 <a href="https://carto.com/attributions">CARTO</a>'};
+    return {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attr:'\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'};
+  }
+  var mapTileTheme = '', mapTileLayer = null;
+  // Honest derived metric: equirectangular shoelace on [lng,lat] rings (holes subtract).
+  function boundaryAreaKm2(coords){
+    var total = 0;
+    (coords||[]).forEach(function(poly){
+      (poly||[]).forEach(function(ring, ri){
+        if(!ring || ring.length<3) return;
+        var a = 0, mLat = 0, i, c1, c2;
+        for(i=0;i<ring.length;i++){
+          c1 = ring[i]; c2 = ring[(i+1)%ring.length];
+          a += (c1[0]*c2[1] - c2[0]*c1[1]);
+          mLat += c1[1];
+        }
+        mLat = mLat/ring.length;
+        var kx = 111.32*Math.cos(mLat*Math.PI/180), ky = 110.57;
+        var km = Math.abs(a)/2*kx*ky;
+        total += (ri===0 ? km : -km);
+      });
+    });
+    return Math.max(0, total);
+  }
+  function fmtArea(km2){
+    if(km2>=10) return Math.round(km2)+' km\u00b2';
+    if(km2>=1) return (Math.round(km2*10)/10)+' km\u00b2';
+    if(km2>=0.01) return (Math.round(km2*100)/100)+' km\u00b2';
+    return Math.round(km2*1000000)+' m\u00b2';
+  }
   function renderProjectsMap(){
     var container = document.getElementById('projects-map');
     if(typeof L==='undefined'){
@@ -558,11 +592,15 @@
     if(!mapObj){
       container.innerHTML = '<div id="leaflet-el" style="width:100%;height:100%;"></div>';
       mapObj = L.map('leaflet-el', {scrollWheelZoom:true});
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        attribution: '\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(mapObj);
+      mapTileTheme = ''; mapTileLayer = null;
       mapObj.setView([26.8206, 30.8025], 5); // default: Egypt-wide view
+    }
+    var wantTheme = hubTheme();
+    if(mapTileTheme!==wantTheme){
+      if(mapTileLayer){ try{ mapObj.removeLayer(mapTileLayer); }catch(e){} mapTileLayer = null; }
+      var spec = mapTileFor(wantTheme);
+      mapTileLayer = L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr}).addTo(mapObj);
+      mapTileTheme = wantTheme;
     }
     mapMarkers.forEach(function(m){ mapObj.removeLayer(m); });
     mapMarkers = [];
@@ -603,8 +641,11 @@
       });
       if(!rings.length) return;
       var hb = computeHealth(p.id);
-      var pg = L.polygon(rings, {color:TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.10}).addTo(mapObj);
-      pg.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>Site boundary');
+      var pg = L.polygon(rings, {color:TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.18}).addTo(mapObj);
+      pg.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>'+
+        escapeHtml(p.code||'')+'<br>'+
+        'Health: '+(hb.value==null?'no data':hb.value+'%')+'<br>'+
+        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates)));
       pg.on('click', function(){ setActiveProject(p.id); });
       mapMarkers.push(pg);
       try{

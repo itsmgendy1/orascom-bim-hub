@@ -682,6 +682,8 @@
       boundaryStatus('');
     }
     document.getElementById('pm-form').setAttribute('data-edit-id', editId||'');
+    refreshPlotOptions();
+    document.getElementById('pm-plot').value = '';
     document.getElementById('project-modal').classList.add('show');
   }
   function closeProjectModal(){ document.getElementById('project-modal').classList.remove('show'); }
@@ -775,6 +777,30 @@
   function boundaryStatus(msg, ok){
     var el = document.getElementById('pm-boundary-status');
     if(el) el.textContent = msg || '';
+  }
+  function sitePlots(){ return (window.SITE_PLOTS && window.SITE_PLOTS.slice()) || []; }
+  function refreshPlotOptions(){
+    var sel = document.getElementById('pm-plot');
+    if(!sel) return;
+    var cur = sel.value || '';
+    var html = '<option value="">— No plot —</option>' + sitePlots().map(function(pl){
+      return '<option value="'+escapeHtml(pl.code)+'"'+(pl.code===cur?' selected':'')+'>'+
+        escapeHtml(pl.code+' — '+pl.name+(pl.cluster?' · '+pl.cluster:''))+'</option>';
+    }).join('');
+    sel.innerHTML = html;
+  }
+  function plotAssign(){
+    var sel = document.getElementById('pm-plot');
+    var code = sel ? sel.value : '';
+    if(!code) return;
+    var found = null;
+    sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
+    if(!found || !found.rings){ toast('Plot not found in library'); return; }
+    // Stage the library shape as ordinary GeoJSON in the textarea so the
+    // normal validate → save path handles it (no special-casing downstream).
+    document.getElementById('pm-boundary').value =
+      JSON.stringify({type:'MultiPolygon', coordinates:[found.rings]});
+    boundaryPreview();
   }
   function boundaryPreview(){
     boundaryDirty = true;
@@ -3165,6 +3191,7 @@
     boundaryPickFile: boundaryPickFile,
     boundaryFile: boundaryFile,
     boundaryClear: boundaryClear,
+    plotAssign: plotAssign,
     openModelModal: openModelModal,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,

@@ -354,6 +354,9 @@
           <div style="flex:1;"><label>Longitude <span style="font-weight:400;color:var(--muted);">(optional)</span></label><input type="text" id="pm-lng" placeholder="e.g. 33.7899"></div>
         </div>
         <p style="font-size:.74rem;color:var(--muted);margin-top:-6px;">Add coordinates to place this project on the Projects &rarr; Map view.</p>
+        <div class="field"><label>Assign plot <span style="font-weight:400;color:var(--muted);">(optional — built-in DP library; fills the boundary below)</span></label>
+          <select id="pm-plot" onchange="OHub.plotAssign()" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);width:100%;"><option value="">— No plot —</option></select>
+        </div>
         <div class="field"><label>Site boundary <span style="font-weight:400;color:var(--muted);">(optional — paste GeoJSON or load a .geojson file; drawn as a shaded polygon on the Map view)</span></label>
           <textarea id="pm-boundary" rows="2" placeholder='Paste a GeoJSON Polygon / MultiPolygon / Feature here…' oninput="OHub.boundaryPreview()" style="width:100%;font-family:monospace;font-size:.72rem;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:var(--white);color:var(--text);resize:vertical;"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center;">
@@ -448,6 +451,7 @@
 <div class="tour-overlay" id="tour-overlay" style="display:none"></div>
 
 <script src="assets/js/forma.js"></script>
+<script src="assets/js/site-plots.js"></script>
 <script src="assets/js/hub.js"></script>
 </body>
 </html>

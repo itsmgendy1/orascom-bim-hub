@@ -845,6 +845,7 @@
       var g = holder ? holderGates(holder.id) : {total:0, approved:0, submitted:0, wip:0, furthest:-1};
       var overdue = holder ? holderOverdue(holder.id) : 0;
       var open = holder ? holderOpenIssues(holder.id) : 0;
+      var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
       var sty = plotModeStyle(pl, holder, g, overdue, open);
       var pg = L.polygon(ll, {color:sty.color, weight:2, fillOpacity:sty.fill, dashArray:sty.dash}).addTo(gisMapObj);
       pg.bindTooltip(sty.tag, {permanent:true, direction:'center', className:'plot-label'});

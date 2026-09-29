@@ -97,6 +97,21 @@
   MODULES.forEach(function(m){ if(state.weights[m.weightKey]==null) state.weights[m.weightKey] = DEFAULT_WEIGHTS[m.weightKey]||0; });
   if(state.thresholds.ok==null) state.thresholds.ok = DEFAULT_THRESHOLDS.ok;
   if(state.thresholds.warn==null) state.thresholds.warn = DEFAULT_THRESHOLDS.warn;
+  // One-time repair: plot boundaries saved before the [lat,lng]→GeoJSON
+  // import fix carry swapped coordinates. Re-derive them from the library.
+  (function migratePlotBounds(){
+    var lib = window.SITE_PLOTS || [], changed = false;
+    state.projects.forEach(function(p){
+      if(!p.plotCode || p.plotRev===2) return;
+      var found = null;
+      lib.forEach(function(pl){ if(pl.code===p.plotCode) found = pl; });
+      if(found && found.rings){
+        p.boundary = {type:'MultiPolygon', coordinates:[found.rings]};
+        p.plotRev = 2; changed = true;
+      }
+    });
+    if(changed) persist('projects');
+  })();
   if(state.dark){ try{ document.body.classList.add('dark'); }catch(e){} }
 
   function persist(part){
@@ -470,7 +485,7 @@
   var projectsViewMode = 'grid';
   var mapObj = null, mapMarkers = [];
   var boundaryDirty = false; // project modal: true once the boundary field/file/clear was touched
-  var plotCodeStaged = null, plotJsonStaged = ''; // library plot staged from the Assign-plot dropdown
+  var plotCodeStaged = null, plotJsonStaged = '', plotRevStaged = null; // library plot staged from the Assign-plot dropdown
 
   function setProjectsView(mode){
     projectsViewMode = mode;
@@ -766,7 +781,7 @@
     sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
     if(!found){ toast('Plot not found in library'); return; }
     p.boundary = {type:'MultiPolygon', coordinates:[found.rings]};
-    p.plotCode = code;
+    p.plotCode = code; p.plotRev = 2;
     persist('projects');
     logActivity('Assigned plot '+code+' to '+p.name);
     gisSearchFocus = false;
@@ -786,7 +801,7 @@
     }
     if(!gisMapObj){
       gisMapObj = L.map('gis-map', {scrollWheelZoom:true});
-      gisMapObj.setView([27.807, 31.205], 13);
+      gisMapObj.setView([31.10, 27.81], 13); // Wadi Yemm plots cluster (coast)
     }
     var wantBase = gisBase==='auto' ? (hubTheme()==='dark' ? 'dark' : 'streets') : gisBase;
     if(gisTileTheme!==wantBase){
@@ -844,7 +859,7 @@
     setTimeout(function(){
       gisMapObj.invalidateSize();
       if(bounds.length) gisMapObj.fitBounds(bounds, {padding:[30,30]});
-      else gisMapObj.setView([27.807, 31.205], 13);
+      else gisMapObj.setView([31.10, 27.81], 13);
     }, 50);
     var ap = activeProject();
     var modesHost = document.getElementById('gis-modes');
@@ -979,6 +994,7 @@
     document.getElementById('pm-form').setAttribute('data-edit-id', editId||'');
     refreshPlotOptions();
     plotCodeStaged = editing ? (editing.plotCode||null) : null;
+    plotRevStaged = editing ? (editing.plotRev||null) : null;
     plotJsonStaged = '';
     document.getElementById('pm-plot').value = plotCodeStaged||'';
     document.getElementById('project-modal').classList.add('show');
@@ -1015,7 +1031,8 @@
       lat: (lat!=null && lng!=null) ? lat : null,
       lng: (lat!=null && lng!=null) ? lng : null,
       boundary: newBnd,
-      plotCode: plotCodeStaged
+      plotCode: plotCodeStaged,
+      plotRev: plotRevStaged
     };
     if(editId){
       var p = state.projects.find(function(pr){return pr.id===editId;});
@@ -1098,13 +1115,13 @@
     // normal validate → save path handles it (no special-casing downstream).
     plotJsonStaged = JSON.stringify({type:'MultiPolygon', coordinates:[found.rings]});
     document.getElementById('pm-boundary').value = plotJsonStaged;
-    plotCodeStaged = code;
+    plotCodeStaged = code; plotRevStaged = 2;
     boundaryPreview();
   }
   function boundaryPreview(){
     boundaryDirty = true;
     var t = document.getElementById('pm-boundary').value.trim();
-    if(t!==plotJsonStaged) plotCodeStaged = null; // hand edit/file load breaks the library link
+    if(t!==plotJsonStaged){ plotCodeStaged = null; plotRevStaged = null; } // hand edit/file load breaks the library link
     if(!t){ boundaryStatus('No boundary — project shows as a point (or unmapped).'); return; }
     if(t.charAt(0)!=='{' && t.charAt(0)!=='['){ boundaryStatus('\u2715 Not GeoJSON — paste a GeoJSON object or press Clear.'); return; }
     var r = parseBoundaryGeometry(t);
@@ -1125,7 +1142,7 @@
   function boundaryClear(){
     document.getElementById('pm-boundary').value = '';
     boundaryDirty = true;
-    plotCodeStaged = null; plotJsonStaged = '';
+    plotCodeStaged = null; plotJsonStaged = ''; plotRevStaged = null;
     boundaryStatus('Boundary removed — saved on Save.');
   }
   function deleteActiveProjectPrompt(pid){

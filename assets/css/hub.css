@@ -335,7 +335,7 @@ body.dark .leaflet-tooltip.plot-label{background:rgba(10,18,36,.85);}
 
 /* ---------- Modal ---------- */
 .modal-backdrop{
-  position:fixed;inset:0;background:rgba(10,20,40,.5);display:none;align-items:center;justify-content:center;z-index:100;
+  position:fixed;inset:0;background:rgba(10,20,40,.5);display:none;align-items:center;justify-content:center;z-index:2000;
 }
 .modal-backdrop.show{display:flex;}
 .modal{
@@ -349,7 +349,7 @@ body.dark .leaflet-tooltip.plot-label{background:rgba(10,18,36,.85);}
 .close-x{cursor:pointer;color:var(--muted);font-size:1.1rem;border:none;background:none;}
 
 /* ---------- Toast ---------- */
-#toast-host{position:fixed;bottom:22px;right:22px;z-index:200;display:flex;flex-direction:column;gap:8px;}
+  #toast-host{position:fixed;bottom:22px;right:22px;z-index:3000;display:flex;flex-direction:column;gap:8px;}
 .toast{
   background:var(--b1);color:#fff;padding:11px 16px;border-radius:var(--radius-sm);font-size:.83rem;
   box-shadow:var(--shadow-lift);border-left:3px solid var(--g1);min-width:220px;
@@ -388,10 +388,10 @@ body.dark .g-lane .g-name{color:#F2F6FC;}
 .dc-drop:hover{border-color:var(--g1);background:var(--light);}
 
 /* ---------- Guided tour ---------- */
-.tour-overlay{position:fixed;inset:0;background:rgba(4,10,24,.55);z-index:900;pointer-events:none;}
-.tour-highlight{position:fixed;z-index:901;border:2px solid var(--g1);border-radius:10px;
+.tour-overlay{position:fixed;inset:0;background:rgba(4,10,24,.55);z-index:2500;pointer-events:none;}
+.tour-highlight{position:fixed;z-index:2501;border:2px solid var(--g1);border-radius:10px;
   box-shadow:0 0 0 4000px rgba(4,10,24,.0),0 0 24px rgba(245,166,35,.55);pointer-events:none;}
-.tour-card{position:fixed;z-index:902;width:340px;max-width:calc(100vw - 20px);background:var(--white);
+.tour-card{position:fixed;z-index:2502;width:340px;max-width:calc(100vw - 20px);background:var(--white);
   border:1px solid var(--border);border-left:4px solid var(--g1);border-radius:10px;padding:16px 18px;
   box-shadow:var(--shadow-lift);}
 .tour-card h3{font-size:1rem;margin-bottom:6px;}

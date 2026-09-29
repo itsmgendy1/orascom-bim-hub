@@ -717,6 +717,7 @@
       if(!rings.length) return;
       var hb = computeHealth(p.id);
       var pg = L.polygon(rings, {color:customColor(p)||TONE_HEX[tone(hb.value)], weight:2, fillOpacity:0.18}).addTo(mapObj);
+      pg.bindTooltip(p.code||p.name, {permanent:true, direction:'center', className:'plot-label'});
       pg.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>'+
         escapeHtml(p.code||'')+'<br>'+
         'Health: '+(hb.value==null?'no data':hb.value+'%')+'<br>'+

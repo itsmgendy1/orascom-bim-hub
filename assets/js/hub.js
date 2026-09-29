@@ -508,6 +508,10 @@
     MODULES.forEach(function(m){ if(loadedModules[m.id]) pushContextToModule(m.id); });
     renderDashboard(); renderProjects(); renderQualityCenter();
     if(currentView==='delivery') renderDeliverables();
+    if(currentView==='gis') renderGis();
+    if(currentView==='models') renderModels();
+    if(currentView==='stages') renderStages();
+    if(currentView==='reports') renderReports();
   }
 
   var projectsViewMode = 'grid';
@@ -1088,6 +1092,10 @@
     persist('projects'); persist('active');
     logActivity('Added project '+p.name+' from plot '+code);
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
+    if(currentView==='models') renderModels();
+    if(currentView==='reports') renderReports();
+    if(currentView==='delivery') renderDeliverables();
+    if(currentView==='stages') renderStages(); renderQualityCenter();
     if(currentView==='gis') renderGis();
     toast(code+' added as a project and selected');
   }
@@ -1258,7 +1266,11 @@
     }
     persist('projects'); persist('active');
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
-    if(currentView==='gis'){ try{ renderGis(); }catch(e){} }
+    if(currentView==='models') renderModels();
+    if(currentView==='reports') renderReports();
+    if(currentView==='delivery') renderDeliverables();
+    if(currentView==='stages') renderStages();
+    if(currentView==='gis') renderGis();
     closeProjectModal();
     try{ gisCancelDraw(true); }catch(e){} // drop any trace preview — the shape is saved now
   }
@@ -1367,9 +1379,18 @@
     state.projects = state.projects.filter(function(pr){return pr.id!==pid;});
     delete state.scores[pid];
     state.deliverables = state.deliverables.filter(function(d){return d.project!==pid;});
+    state.issues = state.issues.filter(function(i){return i.project!==pid;});
+    state.models = state.models.filter(function(m){return m.project!==pid;});
+    Object.keys(state.gates||{}).forEach(function(k){ if(k.indexOf(pid+'|')===0) delete state.gates[k]; });
     if(state.active===pid) state.active = state.projects[0] ? state.projects[0].id : null;
     persist('projects'); persist('scores'); persist('active'); persist('deliverables');
+    persist('issues'); persist('models'); persist('gates');
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
+    if(currentView==='models') renderModels();
+    if(currentView==='reports') renderReports();
+    if(currentView==='delivery') renderDeliverables();
+    if(currentView==='stages') renderStages();
+    if(currentView==='gis') renderGis();
   }
 
   /* ---------------- Stage gates ---------------- */
@@ -2011,7 +2032,7 @@
     if(!i) return;
     i.status = status;
     persist('issues');
-    renderDashboard();
+    renderDashboard(); renderQualityCenter();
   }
   function deleteIssue(id){
     state.issues = state.issues.filter(function(i){return i.id!==id;});

@@ -394,6 +394,16 @@
           </div>
           <input id="pm-boundary-file" type="file" accept=".geojson,.json,application/geo+json" style="display:none" onchange="OHub.boundaryFile(this)">
         </div>
+        <div class="field"><label>Zone data <span style="font-weight:400;color:var(--muted);">(optional — headline figures shown on the map, register and popups)</span></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div><label style="font-size:.72rem;color:var(--muted);">Units</label><input type="number" id="pm-kpi-units" min="0" step="1" placeholder="e.g. 2933"></div>
+            <div><label style="font-size:.72rem;color:var(--muted);">Population</label><input type="number" id="pm-kpi-population" min="0" step="1" placeholder="e.g. 12025"></div>
+            <div><label style="font-size:.72rem;color:var(--muted);">Buildings</label><input type="number" id="pm-kpi-buildings" min="0" step="1" placeholder="e.g. 69"></div>
+            <div><label style="font-size:.72rem;color:var(--muted);">GSA (m²)</label><input type="number" id="pm-kpi-gsa" min="0" step="1" placeholder="e.g. 738216"></div>
+            <div><label style="font-size:.72rem;color:var(--muted);">GFA (m²)</label><input type="number" id="pm-kpi-gfa" min="0" step="1" placeholder="e.g. 914102"></div>
+            <div><label style="font-size:.72rem;color:var(--muted);">GLA (m²)</label><input type="number" id="pm-kpi-gla" min="0" step="1" placeholder="e.g. 40851"></div>
+          </div>
+        </div>
       </div>
       <div class="modal-foot">
         <button type="button" class="btn btn-ghost" onclick="OHub.closeProjectModal()">Cancel</button>
@@ -480,6 +490,6 @@
 
 <script src="assets/js/forma.js?v=9bf97e59"></script>
 <script src="assets/js/site-plots.js?v=64235b04"></script>
-<script src="assets/js/hub.js?v=2e027b60"></script>
+<script src="assets/js/hub.js?v=626b9833"></script>
 </body>
 </html>

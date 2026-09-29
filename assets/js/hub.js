@@ -689,7 +689,8 @@
       pg.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>'+
         escapeHtml(p.code||'')+'<br>'+
         'Health: '+(hb.value==null?'no data':hb.value+'%')+'<br>'+
-        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates)));
+        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+
+        (fmtKpiLine(p.kpi) ? '<br>'+fmtKpiLine(p.kpi) : ''));
       pg.on('click', function(){ setActiveProject(p.id); });
       mapMarkers.push(pg);
       try{
@@ -806,6 +807,17 @@
     return out;
   }
   function numFmt(n){ return Number(n||0).toLocaleString('en-US'); }
+  function fmtKpiLine(kpi){
+    if(!kpi) return '';
+    var parts = [];
+    if(kpi.units!=null) parts.push('<strong>'+numFmt(kpi.units)+'</strong> units');
+    if(kpi.population!=null) parts.push('<strong>'+numFmt(kpi.population)+'</strong> pop');
+    if(kpi.buildings!=null) parts.push('<strong>'+numFmt(kpi.buildings)+'</strong> bldgs');
+    if(kpi.gsa!=null) parts.push('GSA '+numFmt(kpi.gsa));
+    if(kpi.gfa!=null) parts.push('GFA '+numFmt(kpi.gfa));
+    if(kpi.gla!=null) parts.push('GLA '+numFmt(kpi.gla));
+    return parts.join(' · ');
+  }
   function gisAssignPlot(code){
     var p = activeProject();
     if(!p){ toast('Select a project first, then assign the plot to it'); switchView('projects'); return; }
@@ -885,7 +897,8 @@
       var pg2 = L.polygon(ll, {color:zoneColor(p, TONE_HEX[tone(hb2.value)]), weight:2, fillOpacity:0.18}).addTo(gisMapObj);
       pg2.bindTooltip(p.code||p.name, {permanent:true, direction:'center', className:'plot-label'});
       pg2.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>Custom boundary<br>'+
-        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates)));
+        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+
+        (fmtKpiLine(p.kpi) ? '<br>'+fmtKpiLine(p.kpi) : ''));
       pg2.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(p.id));
       gisLayers.push(pg2);
       trackBounds(ll);
@@ -974,10 +987,11 @@
           '<span class="hint">'+customs.length+'</span></div>'+
           customs.map(function(p){
             var col = customColor(p)||TONE_HEX[tone(computeHealth(p.id).value)];
+            var zk = fmtKpiLine(p.kpi);
             return '<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--light);cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')">'+
               '<span style="width:12px;height:12px;border-radius:3px;background:'+col+';flex-shrink:0;"></span>'+
               '<span style="flex:1;"><strong>'+escapeHtml(p.code ? (p.code+' — '+p.name) : p.name)+'</strong><br>'+
-              '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+'</span></span></div>';
+              '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+(zk ? '<br>'+zk : '')+'</span></span></div>';
           }).join('')+'</div>';
       })() +
       shown.map(function(pl){
@@ -1128,6 +1142,11 @@
     document.getElementById('pm-color-auto').checked = colorAuto;
     document.getElementById('pm-color').value = (editing && editing.color) || '#38c6ff';
     document.getElementById('pm-color').disabled = colorAuto;
+    var kpiEd = (editing && editing.kpi) || {};
+    ['units','population','buildings','gsa','gfa','gla'].forEach(function(k){
+      var el = document.getElementById('pm-kpi-'+k);
+      if(el) el.value = (kpiEd[k]!=null && kpiEd[k]!=='') ? kpiEd[k] : '';
+    });
     boundaryDirty = false;
     var bndTa = document.getElementById('pm-boundary');
     if(editing && editing.boundary && editing.boundary.coordinates){
@@ -1159,6 +1178,16 @@
     if((lat!=null && isNaN(lat)) || (lng!=null && isNaN(lng))){ toast('Latitude/longitude must be numbers'); return; }
     var colorAutoSave = document.getElementById('pm-color-auto').checked;
     var colorRaw = document.getElementById('pm-color').value;
+    var kpiPayload = {}, anyKpi = false;
+    ['units','population','buildings','gsa','gfa','gla'].forEach(function(k){
+      var raw = document.getElementById('pm-kpi-'+k).value.trim();
+      if(raw==='') return;
+      var n = Number(raw);
+      if(isFinite(n) && n>=0){ kpiPayload[k] = n; anyKpi = true; }
+    });
+    if(!anyKpi && ['units','population','buildings','gsa','gfa','gla'].some(function(k){ return document.getElementById('pm-kpi-'+k).value.trim()!==''; })){
+      toast('Zone data must be numbers zero or above'); return;
+    }
     var prevBnd = editId ? (function(){ var ex = state.projects.find(function(pr){return pr.id===editId;}); return ex ? ex.boundary||null : null; })() : null;
     var newBnd = prevBnd;
     if(boundaryDirty){
@@ -1182,7 +1211,8 @@
       boundary: newBnd,
       plotCode: plotCodeStaged,
       plotRev: plotRevStaged,
-      color: (!colorAutoSave && /^#[0-9a-fA-F]{6}$/.test(colorRaw)) ? colorRaw : null
+      color: (!colorAutoSave && /^#[0-9a-fA-F]{6}$/.test(colorRaw)) ? colorRaw : null,
+      kpi: anyKpi ? kpiPayload : null
     };
     if(editId){
       var p = state.projects.find(function(pr){return pr.id===editId;});

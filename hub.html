@@ -37,6 +37,7 @@
       <div class="nav-item" data-view="projects"><span class="ic">🏢</span> Projects</div>
       <div class="nav-item" data-view="models"><span class="ic">🧩</span> Models</div>
       <div class="nav-item" data-view="datacenter"><span class="ic">📥</span> Data Center</div>
+      <div class="nav-item" data-view="gis"><span class="ic">🗺</span> GIS</div>
 
       <div class="nav-group-label">Validation modules</div>
       <div class="nav-item" data-view="midp"><span class="ic">📋</span> Delivery Verification</div>
@@ -177,6 +178,16 @@
           <p style="font-size:.74rem;color:var(--muted);margin-top:10px;">One-time: register <code id="acc-cloud-callback">http://localhost:8787/acc-callback</code> as a Callback URL on your APS app (port = your runner port), and add the app under ACC Account Admin → Custom Integrations.</p>
         </div>
         <div id="dc-registry"></div>
+      </section>
+
+      <!-- ---------- GIS ---------- -->
+      <section class="view" id="view-gis">
+        <div class="grid" id="gis-layout">
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div id="gis-map" style="width:100%;height:560px;"></div>
+          </div>
+          <div id="gis-register"></div>
+        </div>
       </section>
 
       <!-- ---------- Module: Delivery Verification ---------- -->

@@ -63,12 +63,17 @@ verified by audit):
   `wv-dark`).
 - Modules keep their own imports/exports/tabs/filters — nothing removed.
  - Deep links: `hub.html#/naming`, `#/midp`, `#/qaqc`, `#/workset`, `#/parameters`,
-   `#/clash`, `#/models`, `#/dashboard`, `#/quality-center`, `#/reports`, `#/delivery`, `#/stages`.
+   `#/clash`, `#/models`, `#/dashboard`, `#/quality-center`, `#/reports`, `#/delivery`, `#/stages`, `#/gis`.
 
 ## Beyond the five validators (ported from OC Hub)
 
- - **Site boundaries** — paste GeoJSON (or load a `.geojson` file) on the project
-   form; the Projects → Map view draws it as a health-toned shaded polygon
+ - **GIS tab** (`hub.html#/gis`) — MODON-style plots board: all eight DP
+   boundaries on one theme-aware map (assigned plots in health colors,
+   unassigned as dashed outlines) plus a register with area/units/population
+   and one-click assign to the active project. KPIs are reference figures;
+   geometry is what gets stored.
+ - **Site boundaries** — paste GeoJSON (or load a `.geojson` file, or pick a
+   built-in DP plot) on the project form; the Projects → Map view draws it as a health-toned shaded polygon
    (points capped, validated, stored on the project record and its JSON export).
  - **Stage Gates** (`hub.html#/stages`) — design-stage sign-off matrix per
    package (Concept → As-built); click a cell to advance it. Hand-recorded,

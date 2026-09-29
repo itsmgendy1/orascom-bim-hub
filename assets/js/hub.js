@@ -122,6 +122,7 @@
     try{ document.body.classList.toggle('dark', state.dark); }catch(e){}
     broadcastTheme();
     if(currentView==='projects' && projectsViewMode==='map'){ try{ renderProjectsMap(); }catch(e){} }
+    if(currentView==='gis'){ try{ renderGis(); }catch(e){} }
   }
   function hubTheme(){ return state.dark ? 'dark' : 'light'; }
   function broadcastTheme(){
@@ -209,6 +210,7 @@
       projects:['Projects','Portfolio'],
       models:['Models','Portfolio'],
       datacenter:['Data Center','Overview'],
+      gis:['GIS','Overview'],
       midp:['Delivery Verification','Modules'],
       naming:['Naming Convention','Modules'],
       qaqc:['Model Quality','Modules'],
@@ -232,6 +234,7 @@
     if(viewId==='projects') renderProjects();
     if(viewId==='models') renderModels();
     if(viewId==='datacenter'){ renderDataCenter(); renderAccTree(); accCloudRender(); accCloudRefresh(); }
+    if(viewId==='gis') renderGis();
     if(viewId==='quality-center') renderQualityCenter();
     if(viewId==='reports') renderReports();
     if(viewId==='delivery') renderDeliverables();
@@ -467,6 +470,7 @@
   var projectsViewMode = 'grid';
   var mapObj = null, mapMarkers = [];
   var boundaryDirty = false; // project modal: true once the boundary field/file/clear was touched
+  var plotCodeStaged = null, plotJsonStaged = ''; // library plot staged from the Assign-plot dropdown
 
   function setProjectsView(mode){
     projectsViewMode = mode;
@@ -660,6 +664,120 @@
     }, 50);
   }
 
+  /* ---------------- GIS tab ---------------- */
+  // MODON-style plots board: every library plot on one map with its KPIs,
+  // plus any custom project boundary. Assign actions write through the
+  // same validated boundary path as the project form.
+  var gisMapObj = null, gisLayers = [], gisTileTheme = '', gisTileLayer = null;
+  function ringFlip(multi){
+    var out = [];
+    (multi||[]).forEach(function(poly){
+      (poly||[]).forEach(function(ring){
+        var ll = (ring||[]).map(function(c){ return [c[1], c[0]]; });
+        if(ll.length>=3) out.push(ll);
+      });
+    });
+    return out;
+  }
+  function numFmt(n){ return Number(n||0).toLocaleString('en-US'); }
+  function gisAssignPlot(code){
+    var p = activeProject();
+    if(!p){ toast('Select a project first, then assign the plot to it'); switchView('projects'); return; }
+    var found = null;
+    sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
+    if(!found){ toast('Plot not found in library'); return; }
+    p.boundary = {type:'MultiPolygon', coordinates:[found.rings]};
+    p.plotCode = code;
+    persist('projects');
+    logActivity('Assigned plot '+code+' to '+p.name);
+    renderProjects(); renderDashboard();
+    if(currentView==='gis') renderGis();
+    toast(code+' assigned to '+p.name);
+  }
+  function renderGis(){
+    var mapHost = document.getElementById('gis-map');
+    var regHost = document.getElementById('gis-register');
+    if(!mapHost || !regHost) return;
+    var plots = sitePlots();
+    if(typeof L==='undefined'){
+      mapHost.innerHTML = '<div style="display:grid;place-items:center;height:100%;color:var(--muted);">Map library unavailable offline.</div>';
+      regHost.innerHTML = '';
+      return;
+    }
+    if(!gisMapObj){
+      gisMapObj = L.map('gis-map', {scrollWheelZoom:true});
+      gisMapObj.setView([27.807, 31.205], 13);
+    }
+    var wantTheme = hubTheme();
+    if(gisTileTheme!==wantTheme){
+      if(gisTileLayer){ try{ gisMapObj.removeLayer(gisTileLayer); }catch(e){} gisTileLayer = null; }
+      var spec = mapTileFor(wantTheme);
+      gisTileLayer = L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr}).addTo(gisMapObj);
+      gisTileTheme = wantTheme;
+    }
+    gisLayers.forEach(function(l){ try{ gisMapObj.removeLayer(l); }catch(e){} });
+    gisLayers = [];
+    var bounds = [];
+    function trackBounds(ll){
+      ll.forEach(function(ring){ ring.forEach(function(c){ bounds.push(c); }); });
+    }
+    var usedBy = {};
+    state.projects.forEach(function(p){ if(p.plotCode) usedBy[p.plotCode] = p; });
+    plots.forEach(function(pl){
+      var ll = ringFlip([pl.rings]);
+      if(!ll.length) return;
+      var holder = usedBy[pl.code] || null;
+      var hb = holder ? computeHealth(holder.id) : {value:null};
+      var pg = L.polygon(ll, {color: holder ? TONE_HEX[tone(hb.value)] : '#8E9BB3',
+        weight:2, fillOpacity: holder ? 0.20 : 0.06, dashArray: holder ? null : '4 4'}).addTo(gisMapObj);
+      var kpi = pl.kpi || {};
+      pg.bindPopup('<strong>'+escapeHtml(pl.code+' — '+pl.name)+'</strong><br>'+
+        escapeHtml(pl.cluster||'')+'<br>'+
+        'Site: \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+' · Units: '+numFmt(kpi.units)+
+        ' · Pop: '+numFmt(kpi.population)+' · Bldgs: '+numFmt(kpi.buildings)+'<br>'+
+        (holder ? 'Assigned: '+escapeHtml(holder.name) : 'Unassigned'));
+      if(holder) pg.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(holder.id));
+      gisLayers.push(pg);
+      trackBounds(ll);
+    });
+    state.projects.forEach(function(p){
+      if(!p.boundary || !p.boundary.coordinates || p.plotCode) return;
+      var ll = ringFlip(p.boundary.coordinates);
+      if(!ll.length) return;
+      var hb2 = computeHealth(p.id);
+      var pg2 = L.polygon(ll, {color:TONE_HEX[tone(hb2.value)], weight:2, fillOpacity:0.18}).addTo(gisMapObj);
+      pg2.bindPopup('<strong>'+escapeHtml(p.name)+'</strong><br>Custom boundary<br>'+
+        'Site: \u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates)));
+      pg2.on('click', (function(pid){ return function(){ setActiveProject(pid); }; })(p.id));
+      gisLayers.push(pg2);
+      trackBounds(ll);
+    });
+    setTimeout(function(){
+      gisMapObj.invalidateSize();
+      if(bounds.length) gisMapObj.fitBounds(bounds, {padding:[30,30]});
+      else gisMapObj.setView([27.807, 31.205], 13);
+    }, 50);
+    var ap = activeProject();
+    regHost.innerHTML = '<div class="card" style="margin-bottom:12px;"><div class="card-head"><h3>Plot register</h3>'+
+      '<span class="hint">'+plots.length+' plots</span></div>'+
+      '<p style="font-size:.78rem;color:var(--muted);margin-bottom:0;">'+(ap ? 'Assigning to active project: <strong>'+escapeHtml(ap.name)+'</strong>' : 'Select a project to enable assigning.')+'</p></div>' +
+      plots.map(function(pl){
+        var holder = usedBy[pl.code] || null;
+        var kpi = pl.kpi || {};
+        return '<div class="card" style="margin-bottom:10px;">'+
+          '<div class="card-head"><h3>'+escapeHtml(pl.code)+'</h3><span class="hint">'+escapeHtml(pl.name)+'</span></div>'+
+          '<div style="font-size:.78rem;color:var(--muted);margin-bottom:8px;">'+escapeHtml(pl.cluster||'')+' · \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+'</div>'+
+          '<div style="display:flex;gap:12px;font-size:.78rem;margin-bottom:10px;">'+
+            '<span><strong>'+numFmt(kpi.units)+'</strong> units</span>'+
+            '<span><strong>'+numFmt(kpi.population)+'</strong> pop</span>'+
+            '<span><strong>'+numFmt(kpi.buildings)+'</strong> bldgs</span></div>'+
+          (holder
+            ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
+            : '<button class="btn btn-outline btn-sm" onclick="OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>')+
+        '</div>';
+      }).join('');
+  }
+
   /* ---------------- Project modal ---------------- */
   function openProjectModal(editId){
     var editing = editId ? state.projects.find(function(p){return p.id===editId;}) : null;
@@ -683,7 +801,9 @@
     }
     document.getElementById('pm-form').setAttribute('data-edit-id', editId||'');
     refreshPlotOptions();
-    document.getElementById('pm-plot').value = '';
+    plotCodeStaged = editing ? (editing.plotCode||null) : null;
+    plotJsonStaged = '';
+    document.getElementById('pm-plot').value = plotCodeStaged||'';
     document.getElementById('project-modal').classList.add('show');
   }
   function closeProjectModal(){ document.getElementById('project-modal').classList.remove('show'); }
@@ -717,7 +837,8 @@
       stage: document.getElementById('pm-stage').value,
       lat: (lat!=null && lng!=null) ? lat : null,
       lng: (lat!=null && lng!=null) ? lng : null,
-      boundary: newBnd
+      boundary: newBnd,
+      plotCode: plotCodeStaged
     };
     if(editId){
       var p = state.projects.find(function(pr){return pr.id===editId;});
@@ -798,13 +919,15 @@
     if(!found || !found.rings){ toast('Plot not found in library'); return; }
     // Stage the library shape as ordinary GeoJSON in the textarea so the
     // normal validate → save path handles it (no special-casing downstream).
-    document.getElementById('pm-boundary').value =
-      JSON.stringify({type:'MultiPolygon', coordinates:[found.rings]});
+    plotJsonStaged = JSON.stringify({type:'MultiPolygon', coordinates:[found.rings]});
+    document.getElementById('pm-boundary').value = plotJsonStaged;
+    plotCodeStaged = code;
     boundaryPreview();
   }
   function boundaryPreview(){
     boundaryDirty = true;
     var t = document.getElementById('pm-boundary').value.trim();
+    if(t!==plotJsonStaged) plotCodeStaged = null; // hand edit/file load breaks the library link
     if(!t){ boundaryStatus('No boundary — project shows as a point (or unmapped).'); return; }
     if(t.charAt(0)!=='{' && t.charAt(0)!=='['){ boundaryStatus('\u2715 Not GeoJSON — paste a GeoJSON object or press Clear.'); return; }
     var r = parseBoundaryGeometry(t);
@@ -825,6 +948,7 @@
   function boundaryClear(){
     document.getElementById('pm-boundary').value = '';
     boundaryDirty = true;
+    plotCodeStaged = null; plotJsonStaged = '';
     boundaryStatus('Boundary removed — saved on Save.');
   }
   function deleteActiveProjectPrompt(pid){
@@ -3192,6 +3316,7 @@
     boundaryFile: boundaryFile,
     boundaryClear: boundaryClear,
     plotAssign: plotAssign,
+    gisAssignPlot: gisAssignPlot,
     openModelModal: openModelModal,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,

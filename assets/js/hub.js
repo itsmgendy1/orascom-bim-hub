@@ -3286,6 +3286,76 @@
     });
     switchView('workset');
   }
+  /* ---------------- MODON export import (deliverables only) ---------------- */
+  // Reads the F12-console modon-export.json. Auth keys (token/user/email)
+  // are never touched. MODON stages (50%CD…) have no 1:1 Hub gate, so only
+  // the deliverable baseline crosses: name keeps DP + stage for context.
+  var modonStaged = null;
+  var MODON_STATUS = {Approved:'Submitted', Submitted:'Submitted', 'In Progress':'In Progress', Delayed:'Delayed', 'Not Started':'Upcoming'};
+  function modonToDeliverable(row){
+    var name = String((row && row.deliverable) || '').trim();
+    if(!name) return null;
+    var dp = String(row.designPackage || '').trim();
+    var stage = String(row.stage || '').trim();
+    var due = null;
+    var pf = String(row.plannedFinish || '');
+    var m = /^(\d{4}-\d{2}-\d{2})/.exec(pf);
+    if(m) due = m[1];
+    return {
+      name: name + (dp || stage ? ' — ' + [dp, stage].filter(Boolean).join(' ') : ''),
+      discipline: String(row.ldc || '').trim(),
+      due: due,
+      status: MODON_STATUS[row.status] || 'Upcoming'
+    };
+  }
+  function modonStatus(msg){ var el = document.getElementById('modon-status'); if(el) el.textContent = msg||''; }
+  function dcModonPick(){ var i = document.getElementById('modon-file'); if(i){ i.value=''; i.click(); } }
+  function dcModonFile(input){
+    var f = input.files && input.files[0];
+    if(!f) return;
+    modonStatus('Reading…');
+    var rd = new FileReader();
+    rd.onload = function(){
+      try{
+        var obj = JSON.parse(String(rd.result||''));
+        var rows = obj && obj.modon_gantt_schedule_data;
+        if(!Array.isArray(rows)) throw new Error('no schedule in file');
+        modonStaged = rows;
+        var byStatus = {};
+        rows.forEach(function(r){ var s = String(r.status||'?'); byStatus[s] = (byStatus[s]||0)+1; });
+        document.getElementById('modon-preview').innerHTML =
+          'Staged <strong>'+rows.length+'</strong> deliverables '+
+          '('+Object.keys(byStatus).map(function(s){ return escapeHtml(s)+': '+byStatus[s]; }).join(' · ')+'). '+
+          'Import copies them into the active project; duplicates are skipped.';
+        modonStatus('Ready to import.');
+      }catch(e){ modonStaged = null; modonStatus('Not a MODON export file.'); }
+    };
+    rd.readAsText(f);
+    input.value = '';
+  }
+  function dcModonImport(){
+    var p = activeProject();
+    if(!p){ toast('Select a project first'); return; }
+    if(!modonStaged){ toast('Choose a modon-export.json file first'); return; }
+    var added = 0, skipped = 0;
+    modonStaged.forEach(function(row){
+      var d = modonToDeliverable(row);
+      if(!d) return;
+      var dup = state.deliverables.some(function(x){
+        return x.project===p.id && x.name===d.name && (x.due||null)===d.due;
+      });
+      if(dup){ skipped++; return; }
+      state.deliverables.push({id:uid('del'), project:p.id, name:d.name,
+        discipline:d.discipline, due:d.due, status:d.status, created:Date.now()});
+      added++;
+    });
+    persist('deliverables');
+    logActivity('MODON import: '+added+' deliverable(s) into '+p.name+(skipped?' ('+skipped+' duplicates skipped)':''));
+    if(currentView==='delivery') renderDeliverables();
+    renderDashboard();
+    modonStatus('Imported '+added+(skipped?' · '+skipped+' duplicates skipped':'')+'.');
+    toast('Imported '+added+' deliverable(s)');
+  }
   function renderDataCenter(){
     var host = document.getElementById('dc-registry');
     if(!host) return;
@@ -3880,6 +3950,9 @@
     deleteModel: deleteModel,
     seedDemo: seedDemo,
     dcPick: dcPick,
+    dcModonPick: dcModonPick,
+    dcModonFile: dcModonFile,
+    dcModonImport: dcModonImport,
     dcAddFiles: dcAddFiles,
     dcDrop: dcDrop,
     dcDragOver: dcDragOver,

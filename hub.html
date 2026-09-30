@@ -177,6 +177,17 @@
           </div>
           <p style="font-size:.74rem;color:var(--muted);margin-top:10px;">One-time: register <code id="acc-cloud-callback">http://localhost:8787/acc-callback</code> as a Callback URL on your APS app (port = your runner port), and add the app under ACC Account Admin → Custom Integrations.</p>
         </div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-head"><h3>MODON export <span class="hint">deliverables → active project</span></h3></div>
+          <p style="font-size:.83rem;color:var(--muted);margin-bottom:12px;">Drop a <code>modon-export.json</code> (F12-console export from the MODON hub) to copy its deliverable baseline into the active project. Dates, owners and review states come along; login tokens in the file are never touched. Duplicates (same name + due) are skipped.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="OHub.dcModonPick()">Choose file</button>
+            <button class="btn btn-primary btn-sm" onclick="OHub.dcModonImport()">Import deliverables</button>
+            <span id="modon-status" style="font-size:.78rem;color:var(--muted);"></span>
+          </div>
+          <input id="modon-file" type="file" accept=".json,application/json" style="display:none" onchange="OHub.dcModonFile(this)">
+          <div id="modon-preview" style="margin-top:10px;font-size:.8rem;color:var(--muted);"></div>
+        </div>
         <div id="dc-registry"></div>
       </section>
 
@@ -506,6 +517,6 @@
 
 <script src="assets/js/forma.js?v=9bf97e59"></script>
 <script src="assets/js/site-plots.js?v=64235b04"></script>
-<script src="assets/js/hub.js?v=a4f299ec"></script>
+<script src="assets/js/hub.js?v=9a1fd3d4"></script>
 </body>
 </html>

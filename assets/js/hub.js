@@ -257,6 +257,7 @@
       models:['Models','Portfolio'],
       datacenter:['Data Center','Overview'],
       gis:['GIS','Overview'],
+      program:['Program','Overview'],
       midp:['Delivery Verification','Modules'],
       naming:['Naming Convention','Modules'],
       qaqc:['Model Quality','Modules'],
@@ -281,6 +282,7 @@
     if(viewId==='models') renderModels();
     if(viewId==='datacenter'){ renderDataCenter(); renderAccTree(); accCloudRender(); accCloudRefresh(); }
     if(viewId==='gis') renderGis();
+    if(viewId==='program') renderProgram();
     if(viewId==='quality-center') renderQualityCenter();
     if(viewId==='reports') renderReports();
     if(viewId==='delivery') renderDeliverables();
@@ -514,6 +516,7 @@
     renderDashboard(); renderProjects(); renderQualityCenter();
     if(currentView==='delivery') renderDeliverables();
     if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
     if(currentView==='models') renderModels();
     if(currentView==='stages') renderStages();
     if(currentView==='reports') renderReports();
@@ -633,6 +636,7 @@
     persist('projects');
     renderProjects();
     if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
     toast('Zone color updated');
   }
   function zoneColor(p, fallback){
@@ -906,6 +910,7 @@
     gisSearchFocus = false;
     renderProjects(); renderDashboard();
     if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
     toast(code+' assigned to '+p.name);
   }
   function renderGis(){
@@ -1118,6 +1123,7 @@
     if(!p) return;
     setActiveProject(pid);
     if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
     if(p.boundary && p.boundary.coordinates && gisMapObj){
       try{ gisMapObj.fitBounds(ringFlip(p.boundary.coordinates), {padding:[40,40]}); }catch(e){}
     }
@@ -1140,6 +1146,7 @@
     if(currentView==='delivery') renderDeliverables();
     if(currentView==='stages') renderStages(); renderQualityCenter();
     if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
     toast(code+' added as a project and selected');
   }
   /* ----- hand-drawn zones: click to trace, finish to create a project ----- */
@@ -1314,6 +1321,7 @@
     if(currentView==='delivery') renderDeliverables();
     if(currentView==='stages') renderStages();
     if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
     closeProjectModal();
     try{ gisCancelDraw(true); }catch(e){} // drop any trace preview \u2014 the shape is saved now
   }
@@ -1434,6 +1442,7 @@
     if(currentView==='delivery') renderDeliverables();
     if(currentView==='stages') renderStages();
     if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
   }
 
   /* ---------------- Stage gates ---------------- */
@@ -1487,6 +1496,69 @@
       '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Package</th>'+
       GATE_STAGES.map(function(s){ return '<th style="text-align:center;">'+s+'</th>'; }).join('')+
       '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }
+
+  /* ---------------- Program overview (per-package cards) ---------------- */
+  // MODON-Overall-inspired: one card per package with models, open issues
+  // and gate progress. Click a card to open Models pre-filtered. Only
+  // recorded data is shown — packages without data show honest zeroes.
+  function programOpenPackage(pkgEnc){
+    var pkg = decodeURIComponent(pkgEnc);
+    var sel = document.getElementById('models-pkg-filter');
+    if(sel){
+      var has = false;
+      for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===pkg) has = true; }
+      if(!has && pkg){ var o = document.createElement('option'); o.value = pkg; o.textContent = pkg; sel.appendChild(o); }
+      sel.value = pkg||'';
+    }
+    switchView('models');
+  }
+  function renderProgram(){
+    var p = activeProject();
+    var host = document.getElementById('program-content');
+    if(!host) return;
+    if(!p){
+      host.innerHTML = emptyState('🗂','No project selected','Select a project to see its program overview.');
+      return;
+    }
+    var models = projectModels(p.id);
+    var pkgs = Array.from(new Set(models.map(function(m){ return ((m.package||'').trim()||'General'); }))).sort();
+    if(!pkgs.length){
+      host.innerHTML = emptyState('🗂','No packages yet',
+        'Add models with a package set (Models tab) and they will appear here as program cards.',
+        '<button class="btn btn-primary" onclick="OHub.switchView(\'models\')">Open Models</button>');
+      return;
+    }
+    var openIss = state.issues.filter(function(i){ return i.project===p.id && (i.status==='Open'||i.status==='In Progress'); });
+    var totAppr = 0, totGates = 0;
+    var cards = pkgs.map(function(pkg){
+      var pm = models.filter(function(m){ return ((m.package||'').trim()||'General')===pkg; });
+      var names = {};
+      pm.forEach(function(m){ names[m.name] = 1; });
+      var iss = openIss.filter(function(i){ return i.model && names[i.model]; }).length;
+      var ga = GATE_STAGES.filter(function(st){ return state.gates[gateKey(p.id, pkg, st)]==='Approved'; }).length;
+      totAppr += ga; totGates += GATE_STAGES.length;
+      var pct = Math.round(ga/GATE_STAGES.length*100);
+      return '<div class="card" style="cursor:pointer;" onclick="OHub.programOpenPackage(\''+encodeURIComponent(pkg)+'\')">'+
+        '<div class="card-head"><h3>'+escapeHtml(pkg)+'</h3>'+
+        (iss>0 ? '<span class="badge badge-fail">'+iss+' open</span>' : '<span class="badge badge-ok">clear</span>')+'</div>'+
+        '<div style="display:flex;gap:16px;font-size:.82rem;color:var(--muted);margin-bottom:10px;">'+
+          '<span><strong style="font-size:1.2rem;color:var(--ink);">'+pm.length+'</strong> models</span>'+
+          '<span><strong style="font-size:1.2rem;color:var(--ink);">'+ga+'/'+GATE_STAGES.length+'</strong> gates</span></div>'+
+        '<div style="height:6px;background:var(--light);border-radius:3px;overflow:hidden;">'+
+          '<span style="display:block;height:100%;width:'+pct+'%;background:var(--b2);"></span></div>'+
+        '<div style="font-size:.74rem;color:var(--muted);margin-top:6px;">'+pct+'% gates approved · click for models</div>'+
+      '</div>';
+    }).join('');
+    var totPct = totGates ? Math.round(totAppr/totGates*100) : 0;
+    host.innerHTML =
+      '<div class="grid kpi-grid" style="margin-bottom:14px;">'+
+        '<div class="card kpi-card"><div class="kpi-label">Packages</div><div class="kpi-value">'+pkgs.length+'</div></div>'+
+        '<div class="card kpi-card"><div class="kpi-label">Models</div><div class="kpi-value">'+models.length+'</div></div>'+
+        '<div class="card kpi-card"><div class="kpi-label">Open issues</div><div class="kpi-value">'+openIss.length+'</div></div>'+
+        '<div class="card kpi-card"><div class="kpi-label">Gates approved</div><div class="kpi-value">'+totPct+'%</div></div>'+
+      '</div>'+
+      '<div class="grid grid-3">'+cards+'</div>';
   }
 
   /* ---------------- Models registry ---------------- */
@@ -3946,6 +4018,7 @@
     gisFinishDraw: gisFinishDraw,
     gisCancelDraw: gisCancelDraw,
     openModelModal: openModelModal,
+    programOpenPackage: programOpenPackage,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,
     seedDemo: seedDemo,

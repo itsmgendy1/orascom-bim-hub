@@ -63,7 +63,7 @@ verified by audit):
   `wv-dark`).
 - Modules keep their own imports/exports/tabs/filters — nothing removed.
  - Deep links: `hub.html#/naming`, `#/midp`, `#/qaqc`, `#/workset`, `#/parameters`,
-   `#/clash`, `#/models`, `#/dashboard`, `#/quality-center`, `#/reports`, `#/delivery`, `#/stages`, `#/gis`.
+   `#/clash`, `#/models`, `#/dashboard`, `#/quality-center`, `#/reports`, `#/delivery`, `#/stages`, `#/gis`, `#/program`.
 
 ## Beyond the five validators (ported from OC Hub)
 

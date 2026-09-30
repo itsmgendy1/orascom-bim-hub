@@ -29,7 +29,7 @@
 
   var MODULES = [
     {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=7ed8cfd5', weightKey:'midp'},
-    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=3e45b631',      weightKey:'naming'},
+    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=f6f0906e',      weightKey:'naming'},
     {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=360cda30',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=cea15081',     weightKey:'workset'},
     {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=2385f94c',   weightKey:'parameters'},

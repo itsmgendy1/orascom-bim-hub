@@ -206,6 +206,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
 
     <div class="io-actions">
       <button class="btn-gold" id="gen-btn" style="display:none" onclick="generateDashboard()">⚡ &nbsp;GENERATE DASHBOARD</button>
+      <button class="btn-ghost" id="demo-btn" onclick="loadDemoClashes()">▶ &nbsp;LOAD DEMO CLASHES</button>
     </div>
   </div>
 </div>
@@ -428,6 +429,23 @@ function ingestCsvText(text, name){
     document.getElementById('map-panel').classList.add('show');
     document.getElementById('gen-btn').style.display = 'inline-flex';
     document.getElementById('dz-csv').classList.add('done');
+}
+// Standalone one-click path (no Hub needed): clearly-labeled synthetic demo
+// clashes in the Navisworks column shape, auto-mapped and generated.
+function loadDemoClashes(){
+  document.getElementById('project-name-input').value = 'DEMO Coordination Review';
+  var rows = [
+    {Test:'DEMO Architectural vs Structural', Clash:'CL-001', Status:'Active', Distance:'0.05', Grid:'C-4', 'Item A':'Basic Wall: Generic - 200mm', 'Item A ID':'111111', 'Item B':'Concrete-Rectangular-Column', 'Item B ID':'222222'},
+    {Test:'DEMO Architectural vs Structural', Clash:'CL-002', Status:'Active', Distance:'0.12', Grid:'D-4', 'Item A':'Basic Wall: Generic - 200mm', 'Item A ID':'111113', 'Item B':'Concrete-Rectangular-Column', 'Item B ID':'222224'},
+    {Test:'DEMO MEP vs Structural', Clash:'CL-003', Status:'Active', Distance:'0.02', Grid:'E-5', 'Item A':'Ductwork: Rectangular', 'Item A ID':'333331', 'Item B':'Concrete Beam 300x600', 'Item B ID':'222245'},
+    {Test:'DEMO MEP vs Structural', Clash:'CL-004', Status:'Reviewed', Distance:'0.00', Grid:'E-5', 'Item A':'Pipe: Copper 50mm', 'Item A ID':'333332', 'Item B':'Concrete Beam 300x600', 'Item B ID':'222245'},
+    {Test:'DEMO Electrical vs Architectural', Clash:'CL-005', Status:'Active', Distance:'0.08', Grid:'F-6', 'Item A':'Cable Tray: Ladder', 'Item A ID':'444441', 'Item B':'Door: Single Flush', 'Item B ID':'111115'},
+    {Test:'DEMO Electrical vs Architectural', Clash:'CL-006', Status:'Approved', Distance:'0.00', Grid:'F-6', 'Item A':'Cable Tray: Ladder', 'Item A ID':'444441', 'Item B':'Basic Wall: Generic - 200mm', 'Item B ID':'111116'},
+    {Test:'DEMO Plumbing vs Structural', Clash:'CL-007', Status:'Active', Distance:'0.15', Grid:'G-7', 'Item A':'Pipe: PVC 110mm', 'Item A ID':'555551', 'Item B':'Foundation Slab 400mm', 'Item B ID':'222256'},
+    {Test:'DEMO Plumbing vs Structural', Clash:'CL-008', Status:'Resolved', Distance:'0.00', Grid:'G-7', 'Item A':'Pipe: PVC 110mm', 'Item A ID':'555552', 'Item B':'Foundation Slab 400mm', 'Item B ID':'222256'}
+  ];
+  ingestCsvText(Papa.unparse(rows), 'DEMO-clashes.csv');
+  generateDashboard();
 }
 
 function guessCol(candidates){

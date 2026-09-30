@@ -385,8 +385,8 @@ mark{background:var(--g2);color:var(--b1);padding:0 2px;border-radius:3px;font-w
 
     <div class="io-actions">
       <button class="btn-gold" id="demo-btn">▶ &nbsp;LOAD DEMO DATA</button>
+      <button class="btn-gold" id="gen-all-btn" onclick="standaloneGenerate()">⚡ &nbsp;GENERATE DASHBOARD</button>
       <button class="btn-ghost" id="proc-btn" style="display:none">⚡ &nbsp;GENERATE CHECKER</button>
-      <button class="btn-ghost" id="close-io-btn" onclick="closeImportOverlay()">✕ &nbsp;CLOSE</button>
     </div>
     <div class="io-hint">
       Model Checker HTML reports auto-populate Views, View Templates, Datum &amp; Location, Arch / MEP / Structural System Families and Annotative Elements. Browser Organization and Sheets rely on CSV / JSON import (columns: Section, Category, Family, Type, Name — or Sheet Number / Sheet Name for Sheets).
@@ -1433,6 +1433,12 @@ function closeImportOverlay(){
   const hasData = Object.values(DATA.sections||{}).some(arr=>arr && arr.length);
   if(hasData){ document.getElementById('import-overlay').style.display='none'; }
   else { showToast('Please import data or load demo data first.','warn'); }
+}
+// Standalone one-click path (no Hub needed): demo data when empty, else dashboard.
+function standaloneGenerate(){
+  const hasData = Object.values(DATA.sections||{}).some(arr=>arr && arr.length);
+  if(!hasData){ loadDemoData(); return; } // loads demo + runs check + launches
+  launch();
 }
 function launch(){
   document.getElementById('import-overlay').style.display='none';

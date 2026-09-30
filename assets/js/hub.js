@@ -23,7 +23,8 @@
     tour:'ohub_tour_done',
     sync:'ohub_sync',
     rollups:'ohub_rollups',
-    gates:'ohub_gates'
+    gates:'ohub_gates',
+    cloud:'ohub_cloud'
   };
 
   var MODULES = [
@@ -91,7 +92,8 @@
     history: readLS(LS.history, {}),
     sync: readLS(LS.sync, {url:'http://localhost:8787', model:'', auto:false}),
     rollups: readLS(LS.rollups, {}),
-    gates: readLS(LS.gates, {})
+    gates: readLS(LS.gates, {}),
+    cloud: readLS(LS.cloud, {url:'https://orascom-hub-sync.mohamedyasserelgendy2015.workers.dev', token:'', workspace:'main', lastSync:0})
   };
   // migrate older saves that predate a module/threshold being added
   MODULES.forEach(function(m){ if(state.weights[m.weightKey]==null) state.weights[m.weightKey] = DEFAULT_WEIGHTS[m.weightKey]||0; });
@@ -157,6 +159,7 @@
     if(part==='sync') writeLS(LS.sync, state.sync);
     if(part==='rollups') writeLS(LS.rollups, state.rollups);
     if(part==='gates') writeLS(LS.gates, state.gates);
+    if(part==='cloud') writeLS(LS.cloud, state.cloud);
     try{ refreshNavBadges(); }catch(e){}
   }
   function toggleDark(){
@@ -282,7 +285,7 @@
     if(viewId==='reports') renderReports();
     if(viewId==='delivery') renderDeliverables();
     if(viewId==='stages') renderStages();
-    if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); }
+    if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); renderCloudSettings(); }
     if(!opts.silent) closeSearch();
     if(viewId!=='gis'){ try{ gisCancelDraw(true); }catch(e){} }
     try{ refreshNavBadges(); }catch(e){}
@@ -3593,6 +3596,81 @@
     }catch(err){ toast('Export failed'); }
   }
 
+  /* ---------------- Cloud sync (Worker + KV) ---------------- */
+  // Explicit Push/Pull of raw localStorage stores. Last write wins;
+  // pull reloads the page so every view picks up the snapshot at once.
+  var CLOUD_KEYS = ['projects','active','scores','weights','activity','issues',
+    'thresholds','deliverables','models','dark','reports','history','tour',
+    'sync','rollups','gates'];
+  function cloudCfg(){
+    return {
+      url:(state.cloud.url||'').replace(/\/+$/,''),
+      token:(state.cloud.token||''),
+      workspace:((state.cloud.workspace||'main').trim()||'main')
+    };
+  }
+  function cloudStatus(msg){ var el = document.getElementById('cloud-status'); if(el) el.textContent = msg||''; }
+  function saveCloudSettings(){
+    state.cloud.url = document.getElementById('cloud-url').value.trim();
+    state.cloud.token = document.getElementById('cloud-token').value;
+    state.cloud.workspace = document.getElementById('cloud-workspace').value.trim()||'main';
+    persist('cloud');
+    renderCloudLast();
+  }
+  function renderCloudLast(){
+    var el = document.getElementById('cloud-last');
+    if(!el) return;
+    el.textContent = state.cloud.lastSync ? ('Last sync: '+new Date(state.cloud.lastSync).toLocaleString()) : 'Never synced on this browser.';
+  }
+  function renderCloudSettings(){
+    document.getElementById('cloud-url').value = state.cloud.url||'';
+    document.getElementById('cloud-token').value = state.cloud.token||'';
+    document.getElementById('cloud-workspace').value = state.cloud.workspace||'main';
+    renderCloudLast();
+  }
+  function cloudPush(){
+    var c = cloudCfg();
+    if(!c.url){ toast('Set the server URL first'); return; }
+    if(!c.token){ toast('Paste the shared sync token first'); return; }
+    cloudStatus('Pushing…');
+    var snap = {};
+    CLOUD_KEYS.forEach(function(k){ try{ var v = localStorage.getItem(LS[k]); if(v!=null) snap[LS[k]] = v; }catch(e){} });
+    fetch(c.url+'/api/state?key='+encodeURIComponent(c.workspace), {
+      method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
+      body: JSON.stringify({snapshot:snap})
+    }).then(function(r){
+      if(r.status===401) throw new Error('token rejected (401) — check the token');
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    }).then(function(j){
+      if(!j.ok) throw new Error(j.error||'server refused');
+      state.cloud.lastSync = Date.now(); persist('cloud'); renderCloudLast();
+      cloudStatus('Pushed '+Object.keys(snap).length+' stores ('+Math.round((j.bytes||0)/1024)+' KB).');
+      logActivity('Cloud push to workspace '+c.workspace, 'ok');
+    }).catch(function(err){ cloudStatus('Push failed: '+err.message); });
+  }
+  function cloudPull(){
+    var c = cloudCfg();
+    if(!c.url){ toast('Set the server URL first'); return; }
+    if(!c.token){ toast('Paste the shared sync token first'); return; }
+    cloudStatus('Pulling…');
+    fetch(c.url+'/api/state?key='+encodeURIComponent(c.workspace), {
+      headers:{'Authorization':'Bearer '+c.token}
+    }).then(function(r){
+      if(r.status===401) throw new Error('token rejected (401) — check the token');
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    }).then(function(j){
+      if(!j.ok) throw new Error(j.error||'server refused');
+      if(!j.found){ cloudStatus('Workspace is empty — push from another browser first.'); return; }
+      if(!confirm('Replace ALL Hub data in this browser with the cloud snapshot?')){ cloudStatus('Pull cancelled.'); return; }
+      Object.keys(j.snapshot||{}).forEach(function(k){ try{ localStorage.setItem(k, j.snapshot[k]); }catch(e){} });
+      state.cloud.lastSync = Date.now();
+      try{ localStorage.setItem(LS.cloud, JSON.stringify(state.cloud)); }catch(e){}
+      location.reload();
+    }).catch(function(err){ cloudStatus('Pull failed: '+err.message); });
+  }
+
   /* ---------------- Settings ---------------- */
   function renderSettings(){
     var w = state.weights;
@@ -3833,6 +3911,9 @@
     runCheckSelection: runCheckSelection,
     runValidationNow: runValidationNow,
     saveSyncSettings: saveSyncSettings,
+    saveCloudSettings: saveCloudSettings,
+    cloudPush: cloudPush,
+    cloudPull: cloudPull,
     testSyncServer: testSyncServer,
     syncFromServer: syncFromServer,
     ingestRollups: ingestRollups,

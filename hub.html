@@ -296,6 +296,22 @@
         </div>
         <div style="height:16px;"></div>
         <div class="card">
+          <div class="card-head"><h3>Cloud sync <span class="hint">shared workspace, last-write-wins</span></h3></div>
+          <p style="font-size:.8rem;color:var(--muted);">Push this browser's Hub data (projects, models, scores, issues, deliverables, gates, settings) to the team's Cloudflare Worker, or pull it down on another machine. Pull replaces everything here — push first if unsure. Token lives in this browser only.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+            <div class="field" style="flex:2;min-width:200px;margin:0;"><label>Server URL</label><input type="text" id="cloud-url" placeholder="https://orascom-hub-sync.<account>.workers.dev" oninput="OHub.saveCloudSettings()"></div>
+            <div class="field" style="flex:2;min-width:160px;margin:0;"><label>Token</label><input type="password" id="cloud-token" placeholder="shared sync token" oninput="OHub.saveCloudSettings()"></div>
+            <div class="field" style="flex:0;min-width:110px;margin:0;"><label>Workspace</label><input type="text" id="cloud-workspace" placeholder="main" oninput="OHub.saveCloudSettings()"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="OHub.cloudPush()">Push now</button>
+            <button class="btn btn-outline btn-sm" onclick="OHub.cloudPull()">Pull now</button>
+            <span id="cloud-status" style="font-size:.78rem;color:var(--muted);"></span>
+          </div>
+          <div id="cloud-last" style="font-size:.74rem;color:var(--muted);margin-top:6px;"></div>
+        </div>
+        <div style="height:16px;"></div>
+        <div class="card">
           <div class="card-head"><h3>Autodesk Forma <span class="hint">file import · no account needed</span></h3></div>
           <p style="font-size:.8rem;color:var(--muted);">Export Area metrics / Units from Forma (CSV) and drop the file in the <a href="#" onclick="OHub.switchView('datacenter');return false;">Data Center</a> — the Hub detects it and saves the figures to the active project. Works offline, from <span style="font-family:monospace;">file://</span>, with zero accounts or tokens.</p>
           <div style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="OHub.switchView('datacenter')">Open Data Center</button></div>
@@ -490,6 +506,6 @@
 
 <script src="assets/js/forma.js?v=9bf97e59"></script>
 <script src="assets/js/site-plots.js?v=64235b04"></script>
-<script src="assets/js/hub.js?v=d743da87"></script>
+<script src="assets/js/hub.js?v=a4f299ec"></script>
 </body>
 </html>

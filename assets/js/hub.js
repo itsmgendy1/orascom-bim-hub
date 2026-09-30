@@ -1035,6 +1035,16 @@
             r(kpi.plots)+r(kpi.gsa)+r(kpi.gfa)+
             '<td style="text-align:right;">'+far(kpi)+'</td>'+
             r(kpi.gla)+r(kpi.units)+r(kpi.population)+r(kpi.buildings)+'</tr>';
+        })+ state.projects.filter(function(p){ return p.boundary && p.boundary.coordinates && !p.plotCode; }).map(function(p){
+          var h = computeHealth(p.id);
+          var k = p.kpi || {};
+          var r = function(v){ return '<td style="text-align:right;">'+(v==null?'\u2014':numFmt(v))+'</td>'; };
+          return '<tr style="cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')">'+
+            '<td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+(customColor(p)||'#8E9BB3')+';margin-right:7px;"></span><strong>'+escapeHtml((p.code?p.code+' ':'')+p.name)+'</strong></td>'+
+            '<td><span class="badge badge-'+toneBadge(tone(h.value))+'">'+statusLabel(h.value)+'</span></td>'+
+            '<td>\u2014</td>'+r(k.plots)+r(k.gsa)+r(k.gfa)+
+            '<td style="text-align:right;">'+far(k)+'</td>'+
+            r(k.gla)+r(k.units)+r(k.population)+r(k.buildings)+'</tr>';
         }).join('')+'</tbody></table>';
     }
     var q = (gisQuery||'').toLowerCase();

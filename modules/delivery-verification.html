@@ -63,6 +63,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);min-
 .io-prog{display:none;margin-top:10px;width:100%}
 .prog-bar{height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}
 .prog-fill{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));width:0%;transition:width .4s}
+.gen-btn{background:linear-gradient(135deg,#F5A623,#FFB830)!important;color:#0A1E40!important;border:none!important;padding:11px 26px!important;border-radius:8px!important;font-weight:800!important;letter-spacing:.06em!important;cursor:pointer!important;display:inline-flex!important;align-items:center!important;gap:8px!important;}
 .io-actions{display:flex;gap:10px;margin-top:24px;justify-content:center;flex-wrap:wrap}
 .btn-gold{background:linear-gradient(135deg,var(--g1),var(--g2));color:var(--b1);border:none;
   padding:11px 26px;border-radius:7px;font-family:'Barlow Condensed',sans-serif;font-weight:900;
@@ -491,9 +492,9 @@ body.dark #ax-modal-card{background:#111C33;border:1px solid #233252}
       <p style="color:rgba(255,255,255,.45);font-size:.76rem;margin-top:6px">Processing…</p></div>
 
     <div class="io-actions">
-      <button class="btn-gold" id="gen-btn" disabled onclick="runComparison()">⚡ &nbsp;GENERATE COMPARISON</button>
-      <button class="btn-gold" id="ab-gen-btn" disabled onclick="generateAsBuiltValidation()">🏗 &nbsp;AS-BUILT VALIDATION (ACC log only)</button>
-      <button class="btn-gold" id="ax-gen-btn" disabled onclick="generateAudit()">🔗 &nbsp;RUN FILE EXCHANGE AUDIT (A + B)</button>
+      <button class="gen-btn btn-gold" id="gen-btn" disabled onclick="runComparison()">⚡ &nbsp;GENERATE COMPARISON</button>
+      <button class="gen-btn btn-gold" id="ab-gen-btn" disabled onclick="generateAsBuiltValidation()">🏗 &nbsp;AS-BUILT VALIDATION (ACC log only)</button>
+      <button class="gen-btn btn-gold" id="ax-gen-btn" disabled onclick="generateAudit()">🔗 &nbsp;RUN FILE EXCHANGE AUDIT (A + B)</button>
       <button class="btn-ghost" id="demo-btn" onclick="loadDemoData()">▶ &nbsp;LOAD DEMO DATA</button>
     </div>
   </div>

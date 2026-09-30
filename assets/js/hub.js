@@ -1228,8 +1228,11 @@
   }
 
   /* ---------------- Project modal ---------------- */
-  function openProjectModal(editId){
-    var editing = editId ? state.projects.find(function(p){return p.id===editId;}) : null;
+  function editActiveProject(){
+    if(!state.active){ toast('Select a project first'); return; }
+    openProjectModal(state.active);
+  }
+  function openProjectModal(editId){    var editing = editId ? state.projects.find(function(p){return p.id===editId;}) : null;
     document.getElementById('pm-title').textContent = editing ? 'Edit project' : 'Add project';
     document.getElementById('pm-name').value = editing? editing.name:'';
     document.getElementById('pm-code').value = editing? editing.code:'';
@@ -4008,6 +4011,7 @@
     switchView: switchView,
     setActiveProject: setActiveProject,
     openProjectModal: openProjectModal,
+    editActiveProject: editActiveProject,
     closeProjectModal: closeProjectModal,
     deleteActiveProjectPrompt: deleteActiveProjectPrompt,
     cycleGate: cycleGate,

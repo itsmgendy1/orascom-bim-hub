@@ -28,12 +28,12 @@
   };
 
   var MODULES = [
-    {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html', weightKey:'midp'},
-    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html',      weightKey:'naming'},
-    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html',          weightKey:'qaqc'},
-    {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html',     weightKey:'workset'},
-    {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html',   weightKey:'parameters'},
-    {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html',                 weightKey:'clash'}
+    {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=e65e9219', weightKey:'midp'},
+    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=ce5c21b5',      weightKey:'naming'},
+    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=e7ef379c',          weightKey:'qaqc'},
+    {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=de5f44aa',     weightKey:'workset'},
+    {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=e70c7525',   weightKey:'parameters'},
+    {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=fc1646f5',                 weightKey:'clash'}
   ];
 
   var DEFAULT_WEIGHTS = {midp:20, naming:15, qaqc:25, workset:15, parameters:15, clash:10};

@@ -453,6 +453,7 @@ body.dark #ax-modal-card{background:#111C33;border:1px solid #233252}
     <input type="text" id="hub-server-url-midp" placeholder="http://localhost:8787" style="flex:1;min-width:170px;padding:7px 10px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78rem;">
     <input type="text" id="hub-model-name-midp" placeholder="model / project folder name" style="flex:1;min-width:170px;padding:7px 10px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78rem;">
     <button type="button" class="hbtn" onclick="hubLoadLatest('midp-list','hub-server-url-midp','hub-model-name-midp','hub-fetch-status-midp')">Load latest</button>
+    <button type="button" class="hbtn" onclick="hubLoadLatest('midp-lod500','hub-server-url-midp','hub-model-name-midp','hub-fetch-status-midp')">Load LOD500</button>
   </div>
   <div id="hub-fetch-status-midp" style="font-size:.72rem;margin-top:6px;color:rgba(255,255,255,.6);"></div>
 </details>
@@ -4626,6 +4627,7 @@ window.addEventListener('DOMContentLoaded', function(){
         else if(type==='parameters'){ handleCsvFile(file); }
         else if(type==='midp-acc'){ handleAccFile(file); }
         else if(type==='midp-list'){ handleMidpFile(file); }
+        else if(type==='midp-lod500'){ handleMidpFile(file); }
         else { statusEl.textContent = "Loaded " + r.fname + " (no auto-import for this type)"; }
       })
       .catch(function(err){

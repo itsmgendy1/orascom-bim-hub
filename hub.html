@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>/* front-door guard: no session, no hub (deep link is restored after login) */
+try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.length>2){try{sessionStorage.setItem('ohub_next',location.hash);}catch(e){}}location.replace('index.html');}}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Orascom BIM Digital Delivery Hub</title>
 <link rel="icon" href="favicon.ico">
@@ -79,6 +81,7 @@
         <button class="btn btn-outline btn-sm" onclick="OHub.openAcc()" title="Open this project in Autodesk Construction Cloud (new tab)">ACC ↗</button>
         <button class="btn btn-outline btn-sm" onclick="OHub.startTour()" title="Guided tour">▶ Tour</button>
         <button class="btn btn-outline btn-sm" id="theme-toggle" onclick="OHub.toggleDark()" title="Toggle dark mode">🌙</button>
+        <button class="btn btn-outline btn-sm" onclick="OHub.logout()" title="Sign out of the Hub">⏻</button>
       </div>
 
       <div class="search-wrap">
@@ -524,6 +527,7 @@
 
 <script src="assets/js/forma.js?v=9bf97e59"></script>
 <script src="assets/js/site-plots.js?v=64235b04"></script>
-<script src="assets/js/hub.js?v=d10b6d48"></script>
+<script src="assets/js/ohub-auth.js?v=f13827a3"></script>
+<script src="assets/js/hub.js?v=eca413a7"></script>
 </body>
 </html>

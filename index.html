@@ -139,6 +139,25 @@
   #loader .l i{display:block;height:100%;width:40%;background:var(--cyan);animation:flow 1s linear infinite}
   @media (max-width:900px){ .panel{display:none} .brand .logo-wrap{width:min(420px,80vw)}
     .brand .logo-wrap img{max-height:110px} .story{transform:translateX(-50%) scale(.72)} }
+  /* ---- hub login gate ---- */
+  #loginModal{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+    background:rgba(2,6,14,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  #loginModal.on{display:flex}
+  .login-card{width:min(400px,92vw);background:rgba(4,12,26,.85);border:1px solid rgba(56,198,255,.3);
+    border-radius:18px;padding:30px 28px;box-shadow:0 24px 80px rgba(0,0,0,.6);text-align:center}
+  .login-card h2{font-size:15px;letter-spacing:.3em;text-indent:.1em;color:var(--cyan);font-weight:700;margin-bottom:4px}
+  .login-card p.sub{font-size:11.5px;color:rgba(207,238,255,.65);margin-bottom:18px;line-height:1.5}
+  .login-card label{display:block;text-align:left;font-size:9px;letter-spacing:.24em;color:rgba(207,238,255,.6);margin:12px 0 5px;font-weight:600}
+  .login-card input{width:100%;padding:10px 12px;border-radius:9px;border:1px solid rgba(56,198,255,.3);
+    background:rgba(10,30,60,.6);color:#eaf6ff;font-size:13px;outline:none}
+  .login-card input:focus{border-color:var(--cyan);box-shadow:0 0 12px rgba(56,198,255,.35)}
+  #loginGo{width:100%;margin-top:18px;padding:11px;border:none;border-radius:10px;cursor:pointer;
+    background:linear-gradient(135deg,#F5A623,#FFB830);color:#0A1E40;font-weight:800;letter-spacing:.14em;font-size:12px}
+  #loginGo:hover{filter:brightness(1.08)}
+  #loginCancel{width:100%;margin-top:8px;padding:9px;background:transparent;border:1px solid rgba(56,198,255,.25);
+    border-radius:10px;color:rgba(207,238,255,.7);cursor:pointer;font-size:11px;letter-spacing:.14em}
+  #loginErr{display:none;margin-top:12px;font-size:11.5px;color:#ff8a8a;min-height:16px}
+
 </style>
 </head>
 <body>
@@ -188,7 +207,7 @@
 
   <div class="story" id="story"></div>
   <div id="dock">
-    <button id="btnEnter" onclick="location.href='hub.html'">ENTER HUB →</button>
+    <button id="btnEnter" onclick="enterHubFlow()">ENTER HUB →</button>
     <button id="btnModules" onclick="toggleModules()">MODULES</button>
     <button id="btnPlay">PAUSE</button>
     <button id="btnMute">MUTED</button>
@@ -220,7 +239,74 @@
   </script>
 </div>
 
+<div id="loginModal" role="dialog" aria-label="Hub login">
+  <div class="login-card">
+    <h2 id="loginTitle">HUB LOGIN</h2>
+    <p class="sub" id="loginSub">Sign in to enter the BIM Digital Delivery Hub.</p>
+    <form id="loginForm" onsubmit="return submitLogin(event)">
+      <label>USERNAME</label>
+      <input id="loginUser" type="text" autocomplete="username" placeholder="e.g. bim.admin" />
+      <label>PASSWORD</label>
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••" />
+      <div id="loginConfirmWrap" style="display:none">
+        <label>CONFIRM PASSWORD</label>
+        <input id="loginConfirm" type="password" autocomplete="new-password" placeholder="Repeat password" />
+      </div>
+      <div id="loginErr"></div>
+      <button id="loginGo" type="submit">ENTER →</button>
+      <button id="loginCancel" type="button" onclick="closeLogin()">CANCEL</button>
+    </form>
+  </div>
+</div>
+
 <div id="loader"><div class="t">INITIALIZING BIM HUB</div><div class="l"><i></i></div></div>
+<script src="assets/js/ohub-auth.js"></script>
+<script>
+  function loginFail(m){
+    var e = document.getElementById('loginErr');
+    e.style.display = 'block'; e.textContent = m;
+  }
+  function openLogin(){
+    var setup = !(window.OHubAuth && window.OHubAuth.hasUsers());
+    document.getElementById('loginTitle').textContent = setup ? 'CREATE ADMIN' : 'HUB LOGIN';
+    document.getElementById('loginSub').textContent = setup
+      ? 'First run: create the administrator account for this browser.'
+      : 'Sign in to enter the BIM Digital Delivery Hub.';
+    document.getElementById('loginConfirmWrap').style.display = setup ? 'block' : 'none';
+    document.getElementById('loginGo').textContent = setup ? 'CREATE & ENTER →' : 'ENTER →';
+    document.getElementById('loginErr').style.display = 'none';
+    document.getElementById('loginModal').classList.add('on');
+    setTimeout(function(){ document.getElementById('loginUser').focus(); }, 60);
+  }
+  function closeLogin(){ document.getElementById('loginModal').classList.remove('on'); }
+  function enterHubFlow(){
+    if(window.OHubAuth && OHubAuth.hasSession()){ OHubAuth.enterHub(); return; }
+    openLogin();
+  }
+  function submitLogin(ev){
+    if(ev) ev.preventDefault();
+    var u = document.getElementById('loginUser').value;
+    var p = document.getElementById('loginPass').value;
+    var setup = !(window.OHubAuth && window.OHubAuth.hasUsers());
+    if(!window.OHubAuth){ loginFail('Auth library failed to load (offline?).'); return false; }
+    if(!window.crypto || !window.crypto.subtle){ loginFail('This browser cannot do secure login (WebCrypto missing).'); return false; }
+    if(setup){
+      var c = document.getElementById('loginConfirm').value;
+      if(p !== c){ loginFail('Passwords do not match.'); return false; }
+      OHubAuth.setup(u, p).then(function(){
+        return OHubAuth.login(u, p);
+      }).then(function(){ OHubAuth.enterHub(); }).catch(function(err){ loginFail(err.message); });
+    } else {
+      OHubAuth.login(u, p).then(function(ok){
+        if(ok){ OHubAuth.enterHub(); } else { loginFail('Wrong username or password.'); }
+      }).catch(function(){ loginFail('Login failed — try again.'); });
+    }
+    return false;
+  }
+  document.getElementById('loginModal').addEventListener('pointerdown', function(e){
+    if(e.target === this) closeLogin();
+  });
+</script>
 
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}

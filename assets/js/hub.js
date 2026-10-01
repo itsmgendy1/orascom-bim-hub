@@ -170,6 +170,13 @@
     if(currentView==='projects' && projectsViewMode==='map'){ try{ renderProjectsMap(); }catch(e){} }
     if(currentView==='gis'){ try{ renderGis(); }catch(e){} }
   }
+  function logout(){
+    try{
+      if(window.OHubAuth) window.OHubAuth.logout();
+      else { try{ sessionStorage.removeItem('ohub_session'); }catch(e){} }
+    }catch(e){}
+    location.href = 'index.html';
+  }
   function hubTheme(){ return state.dark ? 'dark' : 'light'; }
   function broadcastTheme(){
     MODULES.forEach(function(m){
@@ -4009,6 +4016,7 @@
   /* expose */
   window.OHub = {
     switchView: switchView,
+    logout: logout,
     setActiveProject: setActiveProject,
     openProjectModal: openProjectModal,
     editActiveProject: editActiveProject,

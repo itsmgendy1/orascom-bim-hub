@@ -3767,12 +3767,29 @@
   var CLOUD_KEYS = ['projects','active','scores','weights','activity','issues',
     'thresholds','deliverables','models','dark','reports','history','tour',
     'sync','rollups','gates'];
+  function cloudSession(){
+    try{
+      var s = JSON.parse(sessionStorage.getItem('ohub_session') || 'null');
+      if(s && s.sid && s.cloud) return s;
+    }catch(e){}
+    return null;
+  }
   function cloudCfg(){
+    var sess = cloudSession();
+    var url = sess ? sess.cloud : (state.cloud.url || '');
     return {
-      url:(state.cloud.url||'').replace(/\/+$/,''),
+      url:String(url||'').replace(/\/+$/,''),
       token:(state.cloud.token||''),
+      sid:(sess && sess.sid) || '',
+      user:(sess && sess.u) || '',
       workspace:((state.cloud.workspace||'main').trim()||'main')
     };
+  }
+  function cloudAuth(c){ return 'Bearer ' + (c.sid || c.token); }
+  function cloudNeedAuth(c){
+    if(!c.url){ toast('Set the server URL first'); return false; }
+    if(!c.sid && !c.token){ toast('Sign in with your team account, or paste the sync token, first'); return false; }
+    return true;
   }
   function cloudStatus(msg){ var el = document.getElementById('cloud-status'); if(el) el.textContent = msg||''; }
   function saveCloudSettings(){
@@ -3795,16 +3812,16 @@
   }
   function cloudPush(){
     var c = cloudCfg();
-    if(!c.url){ toast('Set the server URL first'); return; }
-    if(!c.token){ toast('Paste the shared sync token first'); return; }
+    if(!cloudNeedAuth(c)) return;
     cloudStatus('Pushing…');
     var snap = {};
     CLOUD_KEYS.forEach(function(k){ try{ var v = localStorage.getItem(LS[k]); if(v!=null) snap[LS[k]] = v; }catch(e){} });
     fetch(c.url+'/api/state?key='+encodeURIComponent(c.workspace), {
-      method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
+      method:'PUT', headers:{'Content-Type':'application/json','Authorization':cloudAuth(c)},
       body: JSON.stringify({snapshot:snap})
     }).then(function(r){
-      if(r.status===401) throw new Error('token rejected (401) — check the token');
+      if(r.status===401) throw new Error('not signed in (401) — sign in again');
+      if(r.status===403) throw new Error('that workspace is not yours');
       if(!r.ok) throw new Error('HTTP '+r.status);
       return r.json();
     }).then(function(j){
@@ -3816,13 +3833,13 @@
   }
   function cloudPull(){
     var c = cloudCfg();
-    if(!c.url){ toast('Set the server URL first'); return; }
-    if(!c.token){ toast('Paste the shared sync token first'); return; }
+    if(!cloudNeedAuth(c)) return;
     cloudStatus('Pulling…');
     fetch(c.url+'/api/state?key='+encodeURIComponent(c.workspace), {
-      headers:{'Authorization':'Bearer '+c.token}
+      headers:{'Authorization':cloudAuth(c)}
     }).then(function(r){
-      if(r.status===401) throw new Error('token rejected (401) — check the token');
+      if(r.status===401) throw new Error('not signed in (401) — sign in again');
+      if(r.status===403) throw new Error('that workspace is not yours');
       if(!r.ok) throw new Error('HTTP '+r.status);
       return r.json();
     }).then(function(j){

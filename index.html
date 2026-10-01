@@ -322,7 +322,14 @@
           var cc = JSON.parse(localStorage.getItem('ohub_cloud') || '{}');
           cc.url = team; localStorage.setItem('ohub_cloud', JSON.stringify(cc));
         }catch(e){}
-        OHubAuth.cloudLogin(team, u, p).then(function(){ OHubAuth.enterHub(); }).catch(function(err){
+        OHubAuth.cloudLogin(team, u, p).then(function(name){
+          try{
+            var cc = JSON.parse(localStorage.getItem('ohub_cloud') || '{}');
+            cc.url = team; cc.workspace = 'user:' + name;
+            localStorage.setItem('ohub_cloud', JSON.stringify(cc));
+          }catch(e){}
+          OHubAuth.enterHub();
+        }).catch(function(err){
           var msg = (err && err.message) || 'Login failed.';
           if(/unreachable/i.test(msg)){
             // Server down/offline: fall back to this browser's local accounts.

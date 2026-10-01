@@ -171,11 +171,14 @@
     if(currentView==='gis'){ try{ renderGis(); }catch(e){} }
   }
   function logout(){
+    var go = function(){ location.href = 'index.html'; };
     try{
-      if(window.OHubAuth) window.OHubAuth.logout();
-      else { try{ sessionStorage.removeItem('ohub_session'); }catch(e){} }
-    }catch(e){}
-    location.href = 'index.html';
+      if(window.OHubAuth && window.OHubAuth.cloudLogout){ window.OHubAuth.cloudLogout().then(go); }
+      else {
+        try{ if(window.OHubAuth) window.OHubAuth.logout(); else sessionStorage.removeItem('ohub_session'); }catch(e){}
+        go();
+      }
+    }catch(e){ go(); }
   }
   function hubTheme(){ return state.dark ? 'dark' : 'light'; }
   function broadcastTheme(){
@@ -294,7 +297,7 @@
     if(viewId==='reports') renderReports();
     if(viewId==='delivery') renderDeliverables();
     if(viewId==='stages') renderStages();
-    if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); renderCloudSettings(); }
+    if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); renderCloudSettings(); renderTeam(); }
     if(!opts.silent) closeSearch();
     if(viewId!=='gis'){ try{ gisCancelDraw(true); }catch(e){} }
     try{ refreshNavBadges(); }catch(e){}
@@ -3833,6 +3836,83 @@
     }).catch(function(err){ cloudStatus('Pull failed: '+err.message); });
   }
 
+  /* ---------------- Team access (server accounts) ---------------- */
+  function teamBase(){
+    var c = state.cloud || {};
+    return {url:(c.url||'').replace(/\/+$/,''), token:(c.token||'')};
+  }
+  function teamStatus(msg){ var el = document.getElementById('team-status'); if(el) el.textContent = msg||''; }
+  function sha256hexHub(text){
+    return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then(function(buf){
+      return Array.prototype.map.call(new Uint8Array(buf), function(x){ return ('0'+x.toString(16)).slice(-2); }).join('');
+    });
+  }
+  function randHexHub(n){
+    var a = new Uint8Array(n || 16);
+    window.crypto.getRandomValues(a);
+    var s = '';
+    for(var i=0;i<a.length;i++) s += ('0'+a[i].toString(16)).slice(-2);
+    return s;
+  }
+  function renderTeam(){
+    var host = document.getElementById('team-list');
+    if(!host) return;
+    teamLoadUsers(true);
+  }
+  function teamLoadUsers(quiet){
+    var c = teamBase();
+    var host = document.getElementById('team-list');
+    if(!c.url || !c.token){ if(host && !quiet) host.innerHTML = '<p style="font-size:.8rem;color:var(--muted);">Set the server URL + token in Cloud sync first.</p>'; return; }
+    fetch(c.url+'/api/users', {headers:{'Authorization':'Bearer '+c.token}})
+      .then(function(r){ if(r.status===401) throw new Error('token rejected'); if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(j){
+        if(!j.ok) throw new Error(j.error||'server refused');
+        host.innerHTML = j.users.length ? j.users.map(function(u){
+          return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--light);font-size:.82rem;">'+
+            '<strong>'+escapeHtml(u.username)+'</strong>'+
+            '<span style="color:var(--muted);">since '+escapeHtml(new Date(u.created||0).toLocaleDateString())+'</span>'+
+            '<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="OHub.teamDeleteUser(\''+escapeHtml(u.username)+'\')">Remove</button></div>';
+        }).join('') : '<p style="font-size:.8rem;color:var(--muted);">No team accounts yet.</p>';
+        teamStatus('');
+      })
+      .catch(function(err){ teamStatus('Could not load accounts: '+err.message); });
+  }
+  function teamCreateUser(){
+    var c = teamBase();
+    if(!c.url || !c.token){ toast('Set the server URL + token in Cloud sync first'); return; }
+    var u = (document.getElementById('team-user').value||'').trim().toLowerCase();
+    var p = document.getElementById('team-pass').value||'';
+    if(!/^[A-Za-z0-9._-]{3,32}$/.test(u)){ toast('Username: 3-32 chars, letters/numbers/._-'); return; }
+    if(p.length<6){ toast('Password needs 6+ characters'); return; }
+    teamStatus('Creating…');
+    var salt = randHexHub(16);
+    sha256hexHub(salt+'$'+p).then(function(hash){
+      return fetch(c.url+'/api/users', {method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
+        body:JSON.stringify({username:u, salt:salt, hash:hash})});
+    }).then(function(r){
+      if(r.status===401) throw new Error('token rejected');
+      if(r.status===409) throw new Error('username taken');
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    }).then(function(j){
+      if(!j.ok) throw new Error(j.error||'server refused');
+      document.getElementById('team-user').value = '';
+      document.getElementById('team-pass').value = '';
+      teamStatus('Account created for '+u+'.');
+      logActivity('Team account created: '+u);
+      teamLoadUsers(true);
+    }).catch(function(err){ teamStatus('Create failed: '+err.message); });
+  }
+  function teamDeleteUser(username){
+    var c = teamBase();
+    if(!c.url || !c.token) return;
+    if(!confirm('Remove team account "'+username+'"? They will be locked out immediately.')) return;
+    fetch(c.url+'/api/users/'+encodeURIComponent(username), {method:'DELETE', headers:{'Authorization':'Bearer '+c.token}})
+      .then(function(){ teamLoadUsers(true); logActivity('Team account removed: '+username); })
+      .catch(function(err){ teamStatus('Remove failed: '+err.message); });
+  }
+
   /* ---------------- Settings ---------------- */
   function renderSettings(){
     var w = state.weights;
@@ -4008,8 +4088,25 @@
     });
     var startView = viewFromHash() || 'dashboard';
     switchView(startView, {silent:true});
+    verifyCloudSession();
     try{ if(!localStorage.getItem(LS.tour)){ setTimeout(function(){ startTour(); }, 800); } }catch(e){}
     try{ if(syncConfig().auto && syncConfig().url){ setTimeout(function(){ syncFromServer(false); }, 2500); } }catch(e){}
+  }
+  // If this tab signed in with a team account, confirm the server session
+  // is still valid; a revoked/deleted account bounces back to the landing.
+  function verifyCloudSession(){
+    var raw = null;
+    try{ raw = sessionStorage.getItem('ohub_session'); }catch(e){ return; }
+    var s = null;
+    try{ s = JSON.parse(raw || 'null'); }catch(e){ return; }
+    if(!s || !s.sid || !s.cloud) return;
+    fetch(s.cloud + '/api/users/me', {headers:{'Authorization':'Bearer '+s.sid}})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){ if(!j.ok) throw 0; })
+      .catch(function(){
+        if(window.OHubAuth && window.OHubAuth.bounceToLogin) window.OHubAuth.bounceToLogin();
+        else location.replace('index.html');
+      });
   }
   document.addEventListener('DOMContentLoaded', init);
 
@@ -4082,6 +4179,9 @@
     saveCloudSettings: saveCloudSettings,
     cloudPush: cloudPush,
     cloudPull: cloudPull,
+    teamLoadUsers: teamLoadUsers,
+    teamCreateUser: teamCreateUser,
+    teamDeleteUser: teamDeleteUser,
     testSyncServer: testSyncServer,
     syncFromServer: syncFromServer,
     ingestRollups: ingestRollups,

@@ -333,6 +333,20 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
         </div>
         <div style="height:16px;"></div>
         <div class="card">
+          <div class="card-head"><h3>Team access <span class="hint">server-held accounts</span></h3><button class="btn btn-ghost btn-sm" onclick="OHub.teamLoadUsers()">Refresh</button></div>
+          <p style="font-size:.8rem;color:var(--muted);">Create sign-in accounts on the sync server (needs its token in Cloud sync above). teammates sign in from any browser via the landing's team-server login. Passwords travel hashed; the server stores salt + hash only.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:flex-end;">
+            <div class="field" style="flex:1;min-width:140px;margin:0;"><label>Username</label><input type="text" id="team-user" placeholder="e.g. site.engineer" autocomplete="off"></div>
+            <div class="field" style="flex:1;min-width:140px;margin:0;"><label>Password (6+ chars)</label><input type="password" id="team-pass" placeholder="••••••••" autocomplete="new-password"></div>
+            <div style="align-self:flex-end;"><button class="btn btn-primary btn-sm" onclick="OHub.teamCreateUser()">Create account</button></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+            <span id="team-status" style="font-size:.78rem;color:var(--muted);"></span>
+          </div>
+          <div id="team-list" style="margin-top:10px;"></div>
+        </div>
+        <div style="height:16px;"></div>
+        <div class="card">
           <div class="card-head"><h3>Autodesk Forma <span class="hint">file import · no account needed</span></h3></div>
           <p style="font-size:.8rem;color:var(--muted);">Export Area metrics / Units from Forma (CSV) and drop the file in the <a href="#" onclick="OHub.switchView('datacenter');return false;">Data Center</a> — the Hub detects it and saves the figures to the active project. Works offline, from <span style="font-family:monospace;">file://</span>, with zero accounts or tokens.</p>
           <div style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="OHub.switchView('datacenter')">Open Data Center</button></div>
@@ -527,7 +541,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
 
 <script src="assets/js/forma.js?v=9bf97e59"></script>
 <script src="assets/js/site-plots.js?v=64235b04"></script>
-<script src="assets/js/ohub-auth.js?v=f13827a3"></script>
-<script src="assets/js/hub.js?v=eca413a7"></script>
+<script src="assets/js/ohub-auth.js?v=8ac76f57"></script>
+<script src="assets/js/hub.js?v=ab8a24f1"></script>
 </body>
 </html>

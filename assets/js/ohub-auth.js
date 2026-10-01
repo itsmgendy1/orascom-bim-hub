@@ -42,10 +42,65 @@
   function hasSession() {
     try { return !!sessionStorage.getItem(SS_SESSION); } catch (e) { return false; }
   }
+  function cloudCfg() {
+    try {
+      var c = JSON.parse(localStorage.getItem('ohub_cloud') || '{}') || {};
+      return { url: String(c.url || '').replace(/\/+$/, ''), token: String(c.token || '') };
+    } catch (e) { return { url: '', token: '' }; }
+  }
+  function fetchJson(url, opts) {
+    return fetch(url, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j }; });
+    }, function () { throw new Error('Server unreachable — check connection.'); });
+  }
 
   window.OHubAuth = {
     hasUsers: hasUsers,
     hasSession: hasSession,
+    cloudCfg: cloudCfg,
+    // Team sign-in against the Worker. Plaintext password never leaves:
+    // we fetch the salt, hash locally, and send only the hash.
+    cloudLogin: function (url, username, password) {
+      username = String(username || '').trim();
+      var base = String(url || '').replace(/\/+$/, '');
+      if (!base) return Promise.reject(new Error('Set the team server URL first.'));
+      if (!username || !password) return Promise.reject(new Error('Enter username and password.'));
+      return fetchJson(base + '/api/users/salt?username=' + encodeURIComponent(username))
+        .then(function (res) {
+          if (res.status === 404 || !res.body.ok) throw new Error('Unknown team account.');
+          if (!res.body.salt) throw new Error('Server misconfigured (no salt).');
+          return sha256hex(res.body.salt + '$' + password);
+        })
+        .then(function (hash) {
+          return fetchJson(base + '/api/users/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, hash: hash }),
+          });
+        })
+        .then(function (res) {
+          if (res.status === 429) throw new Error('Too many attempts — try later.');
+          if (!res.body.ok || !res.body.sid) throw new Error('Wrong username or password.');
+          try {
+            sessionStorage.setItem(SS_SESSION, JSON.stringify({ u: res.body.username, sid: res.body.sid, cloud: base }));
+          } catch (e) { throw new Error('Browser storage blocked.'); }
+          return res.body.username;
+        });
+    },
+    cloudLogout: function () {
+      var sid = '', cloud = '';
+      try {
+        var s = JSON.parse(sessionStorage.getItem(SS_SESSION) || 'null');
+        if (s && s.sid) { sid = s.sid; cloud = s.cloud || ''; }
+      } catch (e) {}
+      var done = function () {
+        try { sessionStorage.removeItem(SS_SESSION); } catch (e2) {}
+      };
+      if (!sid || !cloud) { done(); return Promise.resolve(); }
+      return fetch(cloud + '/api/users/logout', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + sid },
+      }).catch(function () {}).then(done);
+    },
     setup: function (username, password) {
       username = String(username || '').trim();
       if (!username) return Promise.reject(new Error('Pick a username'));

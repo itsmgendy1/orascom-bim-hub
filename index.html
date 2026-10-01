@@ -243,6 +243,12 @@
   <div class="login-card">
     <h2 id="loginTitle">HUB LOGIN</h2>
     <p class="sub" id="loginSub">Sign in to enter the BIM Digital Delivery Hub.</p>
+    <div id="loginTeamWrap" style="display:none">
+      <label>TEAM SERVER</label>
+      <input id="teamUrl" type="text" placeholder="https://orascom-hub-sync.<account>.workers.dev" />
+    </div>
+    <div style="margin-top:8px;"><a href="#" id="loginTeamToggle" onclick="return toggleTeamServer()"
+      style="font-size:11px;color:var(--cyan);text-decoration:none;">Use team server instead →</a></div>
     <form id="loginForm" onsubmit="return submitLogin(event)">
       <label>USERNAME</label>
       <input id="loginUser" type="text" autocomplete="username" placeholder="e.g. bim.admin" />
@@ -268,13 +274,18 @@
   }
   function openLogin(){
     var setup = !(window.OHubAuth && window.OHubAuth.hasUsers());
+    var teamUrl = '';
+    try{ teamUrl = (JSON.parse(localStorage.getItem('ohub_cloud') || '{}').url || ''); }catch(e){}
+    var teamOn = !!teamUrl;
     document.getElementById('loginTitle').textContent = setup ? 'CREATE ADMIN' : 'HUB LOGIN';
-    document.getElementById('loginSub').textContent = setup
-      ? 'First run: create the administrator account for this browser.'
-      : 'Sign in to enter the BIM Digital Delivery Hub.';
     document.getElementById('loginConfirmWrap').style.display = setup ? 'block' : 'none';
     document.getElementById('loginGo').textContent = setup ? 'CREATE & ENTER →' : 'ENTER →';
     document.getElementById('loginErr').style.display = 'none';
+    document.getElementById('teamUrl').value = teamUrl;
+    document.getElementById('loginTeamWrap').style.display = (!setup && teamOn) ? 'block' : 'none';
+    document.getElementById('loginSub').textContent = setup
+      ? 'First run: create the administrator account for this browser.'
+      : (teamOn ? 'Team sign-in — verified against your sync server.' : 'Sign in to enter the BIM Digital Delivery Hub.');
     document.getElementById('loginModal').classList.add('on');
     setTimeout(function(){ document.getElementById('loginUser').focus(); }, 60);
   }
@@ -282,6 +293,13 @@
   function enterHubFlow(){
     if(window.OHubAuth && OHubAuth.hasSession()){ OHubAuth.enterHub(); return; }
     openLogin();
+  }
+  function toggleTeamServer(){
+    var w = document.getElementById('loginTeamWrap');
+    var show = w.style.display !== 'block';
+    w.style.display = show ? 'block' : 'none';
+    if(show) setTimeout(function(){ document.getElementById('teamUrl').focus(); }, 60);
+    return false;
   }
   function submitLogin(ev){
     if(ev) ev.preventDefault();
@@ -297,9 +315,27 @@
         return OHubAuth.login(u, p);
       }).then(function(){ OHubAuth.enterHub(); }).catch(function(err){ loginFail(err.message); });
     } else {
-      OHubAuth.login(u, p).then(function(ok){
-        if(ok){ OHubAuth.enterHub(); } else { loginFail('Wrong username or password.'); }
-      }).catch(function(){ loginFail('Login failed — try again.'); });
+      var teamInput = document.getElementById('teamUrl');
+      var team = teamInput ? teamInput.value.trim() : '';
+      if(team){
+        try{
+          var cc = JSON.parse(localStorage.getItem('ohub_cloud') || '{}');
+          cc.url = team; localStorage.setItem('ohub_cloud', JSON.stringify(cc));
+        }catch(e){}
+        OHubAuth.cloudLogin(team, u, p).then(function(){ OHubAuth.enterHub(); }).catch(function(err){
+          var msg = (err && err.message) || 'Login failed.';
+          if(/unreachable/i.test(msg)){
+            // Server down/offline: fall back to this browser's local accounts.
+            OHubAuth.login(u, p).then(function(ok2){
+              if(ok2){ OHubAuth.enterHub(); } else { loginFail('Server unreachable and no local match.'); }
+            }).catch(function(){ loginFail('Login failed — try again.'); });
+          } else { loginFail(msg); }
+        });
+      } else {
+        OHubAuth.login(u, p).then(function(ok){
+          if(ok){ OHubAuth.enterHub(); } else { loginFail('Wrong username or password.'); }
+        }).catch(function(){ loginFail('Login failed — try again.'); });
+      }
     }
     return false;
   }

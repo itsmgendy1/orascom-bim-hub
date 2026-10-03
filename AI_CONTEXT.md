@@ -23,6 +23,18 @@ Production: `https://orascom-bim-hub.pages.dev/` — shell `?v=` hashes match `m
 - Remaining: full CSP enforcement (needs per-module preview testing), import/export unification, Playwright runner (no runner here), P3 (AI/API/AIM); MODON benchmark: no access.
 - Local-only `Backup/` + `Sources/` dirs are untracked and git-ignored; never commit.
 
+## Session handoff (2026-10-03, continued on company PC next)
+- `main` = `f7228c6` (live on Pages). Open branches: `hub/login-ux @ ac49253`
+  (cloud-first login, gate label removed, request link above ENTER — needs merge
+  approval, rollback `main @ f7228c6`), older merged-branch heads remain remote.
+- Auth backend LIVE: worker `orascom-hub-auth` + D1 `orascom-hub-db`, 35/35 API
+  pass. Admin user `admin` (password set privately, never in repo).
+- Tokens live in-session ONLY on this machine — company PC needs them again
+  (GitHub fine-grained + Cloudflare Workers/D1/Pages). gh CLI + node/wrangler
+  install steps are in chat history.
+- Blocked on user: login-ux merge, browser smoke (4 modules + Incognito),
+  308-redirect owner, P3/CSP/unification/Playwright scoping.
+
 ## How to run/test/deploy
 - Run: open `index.html` or `python -m http.server` → `http://localhost:8000/`.
 - Test (planned): Playwright e2e + unit (scoring) + Lighthouse + axe; fixtures `0/1/10/100/1000+`, corrupt/empty/large/unexpected-column.

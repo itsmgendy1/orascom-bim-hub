@@ -95,7 +95,8 @@
     sync: readLS(LS.sync, {url:'http://localhost:8787', model:'', auto:false}),
     rollups: readLS(LS.rollups, {}),
     gates: readLS(LS.gates, {}),
-    cloud: readLS(LS.cloud, {url:'https://orascom-hub-sync.mohamedyasserelgendy2015.workers.dev', token:'', workspace:'main', lastSync:0})
+    cloud: readLS(LS.cloud, {url:'https://orascom-hub-sync.mohamedyasserelgendy2015.workers.dev', token:'', workspace:'main', lastSync:0}),
+    authuid: readLS('ohub_authuid', null)
   };
   // migrate older saves that predate a module/threshold being added
   MODULES.forEach(function(m){ if(state.weights[m.weightKey]==null) state.weights[m.weightKey] = DEFAULT_WEIGHTS[m.weightKey]||0; });
@@ -162,6 +163,7 @@
     if(part==='rollups') writeLS(LS.rollups, state.rollups);
     if(part==='gates') writeLS(LS.gates, state.gates);
     if(part==='cloud') writeLS(LS.cloud, state.cloud);
+    if(part==='authuid') writeLS('ohub_authuid', state.authuid);
     try{ refreshNavBadges(); }catch(e){}
   }
   function toggleDark(){
@@ -174,6 +176,20 @@
   }
   function logout(){
     var go = function(){ location.href = 'index.html'; };
+    var sess = null;
+    try{ if(window.OHubAuth && window.OHubAuth.v2session) sess = window.OHubAuth.v2session(); }catch(e){}
+    if(sess){
+      // Cloud account: save latest to D1 first, then sign out server-side,
+      // then wipe THIS browser's dataset so the next login starts clean.
+      // Module IndexedDBs are device-local caches (documented) and untouched.
+      authwPushAll(function(){}).then(function(failed){
+        var proceed = (failed === 0) || confirm('Cloud push failed (offline?). Log out anyway? Unsaved work stays in this browser.');
+        if(!proceed) return;
+        var out = function(){ authwWipeLocal(); go(); };
+        try{ window.OHubAuth.authLogout().then(out, out); }catch(e){ out(); }
+      });
+      return;
+    }
     try{
       if(window.OHubAuth && window.OHubAuth.cloudLogout){ window.OHubAuth.cloudLogout().then(go); }
       else {
@@ -280,6 +296,7 @@
       reports:['Reporting Center','Governance'],
       delivery:['Delivery Overview','Governance'],
       stages:['Stage Gates','Governance'],
+      useradmin:['Users & Access','Governance'],
       settings:['Settings','System']
     };
     var t = titles[viewId] || ['Orascom BIM Hub',''];
@@ -299,10 +316,12 @@
     if(viewId==='reports') renderReports();
     if(viewId==='delivery') renderDeliverables();
     if(viewId==='stages') renderStages();
+    if(viewId==='useradmin') renderUserAdmin();
     if(viewId==='settings'){ renderSettings(); renderSyncSettings(); renderFormaSettings(); renderCloudSettings(); renderTeam(); }
     if(!opts.silent) closeSearch();
     if(viewId!=='gis'){ try{ gisCancelDraw(true); }catch(e){} }
     try{ refreshNavBadges(); }catch(e){}
+    try{ paintAuthwNav(); }catch(e){}
   }
 
   function lazyLoadModule(mod){
@@ -3856,7 +3875,305 @@
     }).catch(function(err){ cloudStatus('Pull failed: '+err.message); });
   }
 
-  /* ---------------- Team access (server accounts) ---------------- */
+  /* ---------------- Cloud accounts (auth Worker + D1, per-user data) ---------------- */
+  // Additive lane beside the legacy KV workspace sync above (untouched).
+  // Loss-averse switch rule: never silently overwrite either side.
+  // - D1 has data + local empty   -> pull (fresh device)
+  // - D1 empty + local has data   -> push once (migration)
+  // - both have data              -> keep local; explicit Push/Pull only
+  // - account switch + D1 has data-> stash local timestamped, pull theirs
+  var AUTHW_STORES = ['projects','scores','issues','deliverables','models','gates','weights','thresholds','activity','reports','history','dark'];
+  function authwSession(){ try{ if(window.OHubAuth && window.OHubAuth.v2session) return window.OHubAuth.v2session(); }catch(e){} return null; }
+  function authwMe(){ return (state.authuid && state.authuid.uid) ? state.authuid : null; }
+  function authwIsAdmin(){ var m = authwMe(); return !!(m && m.role==='ADMIN'); }
+  function authwApi(path, opts){
+    if(!window.OHubAuth || !window.OHubAuth.wapi) return Promise.reject(new Error('Auth library too old — reload the landing page.'));
+    return window.OHubAuth.wapi(path, opts);
+  }
+  function authwLocalHasData(){
+    try{
+      var p = JSON.parse(localStorage.getItem(LS.projects) || '[]');
+      var s = JSON.parse(localStorage.getItem(LS.scores) || '{}');
+      return !!((p && p.length) || Object.keys(s || {}).length);
+    }catch(e){ return false; }
+  }
+  function authwReadLocal(){
+    var snap = {};
+    AUTHW_STORES.forEach(function(k){ try{ var v = localStorage.getItem(LS[k]); if(v != null) snap[k] = JSON.parse(v); }catch(e){} });
+    return snap;
+  }
+  function reloadStateFromLS(){
+    state.projects = readLS(LS.projects, []);
+    state.scores = readLS(LS.scores, {});
+    state.weights = readLS(LS.weights, DEFAULT_WEIGHTS);
+    state.activity = readLS(LS.activity, []);
+    state.issues = readLS(LS.issues, []);
+    state.thresholds = readLS(LS.thresholds, DEFAULT_THRESHOLDS);
+    state.deliverables = readLS(LS.deliverables, []);
+    state.models = readLS(LS.models, []);
+    state.dark = readLS(LS.dark, false);
+    state.reports = readLS(LS.reports, []);
+    state.history = readLS(LS.history, {});
+    state.gates = readLS(LS.gates, {});
+  }
+  function authwWriteLocal(snap){
+    AUTHW_STORES.forEach(function(k){
+      try{
+        if(snap && snap[k] !== undefined && snap[k] !== null) localStorage.setItem(LS[k], JSON.stringify(snap[k]));
+        else localStorage.removeItem(LS[k]);
+      }catch(e){}
+    });
+    reloadStateFromLS();
+  }
+  function authwLastUid(){ try{ return localStorage.getItem('ohub_last_uid') || null; }catch(e){ return null; } }
+  function authwSetLastUid(id){ try{ if(id) localStorage.setItem('ohub_last_uid', id); else localStorage.removeItem('ohub_last_uid'); }catch(e){} }
+  function authwStash(tag){
+    var snap = authwReadLocal(), n = 0;
+    try{
+      Object.keys(snap).forEach(function(k){ localStorage.setItem('ohub_stash_' + tag + '_' + k, JSON.stringify(snap[k])); n++; });
+    }catch(e){}
+    return n;
+  }
+  function authwWipeLocal(){
+    AUTHW_STORES.forEach(function(k){ try{ localStorage.removeItem(LS[k]); }catch(e){} });
+    try{ localStorage.removeItem(LS.active); }catch(e){}
+    state.authuid = null; persist('authuid');
+    authwSetLastUid(null);
+    try{ if(window.OHubAuth) window.OHubAuth.logout(); }catch(e){}
+  }
+  function authwPushAll(statusFn){
+    statusFn = statusFn || function(){};
+    statusFn('Pushing…');
+    var keys = Object.keys(authwReadLocal()), done = 0, failed = 0, chain = Promise.resolve();
+    keys.forEach(function(k){
+      chain = chain.then(function(){
+        return authwApi('/api/data/' + k, {method:'PUT', body:{snapshot: authwReadLocal()[k]}})
+          .then(function(){ done++; }, function(){ failed++; });
+      });
+    });
+    return chain.then(function(){
+      statusFn('Pushed ' + done + '/' + keys.length + (failed ? ' (' + failed + ' failed)' : '') + '.');
+      logActivity('Cloud account push (' + done + ' stores)' + (failed ? ' — ' + failed + ' failed' : ''), failed ? 'warn' : 'ok');
+      return failed;
+    });
+  }
+  function authwPullAll(statusFn){
+    statusFn = statusFn || function(){};
+    statusFn('Pulling…');
+    var snap = {}, chain = Promise.resolve();
+    AUTHW_STORES.forEach(function(k){
+      chain = chain.then(function(){
+        return authwApi('/api/data/' + k).then(function(j){ snap[k] = (j && j.snapshot !== undefined) ? j.snapshot : null; });
+      });
+    });
+    return chain.then(function(){
+      authwWriteLocal(snap);
+      statusFn('Pulled — reloading.');
+      logActivity('Cloud account pull', 'ok');
+      try{ location.reload(); }catch(e){}
+    });
+  }
+  function authwGentleSync(){
+    // Returning user, same browser: pull only onto an empty local dataset.
+    if(authwLocalHasData()) return;
+    authwApi('/api/data/projects').then(function(j){
+      if(j && j.snapshot && j.snapshot.length) authwPullAll(function(){});
+    }).catch(function(){});
+  }
+  function authwBoot(){
+    var sess = authwSession();
+    if(!sess || !window.OHubAuth || !window.OHubAuth.authMe) return;
+    window.OHubAuth.authMe().then(function(me){
+      state.authuid = {uid: me.id, username: me.username, role: me.role};
+      persist('authuid');
+      try{ paintAuthwNav(); }catch(e){}
+      var last = authwLastUid();
+      if(last === me.id){ authwGentleSync(); return; }
+      authwApi('/api/data/projects').then(function(j){
+        var hasCloud = !!(j && j.snapshot && j.snapshot.length);
+        var hasLocal = authwLocalHasData();
+        if(hasCloud && hasLocal){
+          authwStash('switch_' + Date.now());
+          toast('Switched account — previous browser data stashed, loading yours');
+          authwPullAll(function(){});
+        } else if(hasCloud){
+          authwPullAll(function(){});
+        } else if(hasLocal){
+          toast('Migrating this browser data to your cloud account…');
+          authwPushAll(function(){});
+        }
+        authwSetLastUid(me.id);
+      }).catch(function(){ /* offline: keep local dataset untouched */ });
+    }).catch(function(){
+      if(window.OHubAuth && window.OHubAuth.bounceToLogin) window.OHubAuth.bounceToLogin();
+      else location.replace('index.html');
+    });
+  }
+  function paintAuthwNav(){
+    var show = !!authwMe();
+    Array.prototype.forEach.call(document.querySelectorAll('.nav-item[data-view="useradmin"]'), function(n){
+      n.style.display = show ? '' : 'none';
+    });
+  }
+
+  /* ----- Users & Access view (own account for all; admin tables for ADMIN) ----- */
+  var uaQ = '', uaStatus = '', uaRole = '', uaUsers = [], uaAudit = [], uaStores = null, uaStoresUid = null, uaStoresName = '';
+  function uaStatusMsg(m){ var el = document.getElementById('ua-status'); if(el) el.textContent = m || ''; }
+  function renderUserAdmin(){
+    var host = document.getElementById('useradmin-content');
+    if(!host) return;
+    var sess = authwSession(), me = authwMe();
+    if(!sess){
+      host.innerHTML = '<div class="card"><div class="card-head"><h3>Cloud accounts</h3></div>' +
+        '<p style="font-size:.85rem;color:var(--muted);">Sign in with a cloud account (landing → team server URL pointing at the auth Worker) to get your own cloud dataset and, for admins, user management.</p></div>';
+      return;
+    }
+    var admin = authwIsAdmin();
+    host.innerHTML =
+      '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>My account</h3><span class="hint">' + escapeHtml(sess.u || '') + '</span></div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.83rem;">' +
+      '<span class="badge badge-' + (me && me.role === 'ADMIN' ? 'ok' : 'info') + '">' + escapeHtml((me && me.role) || '?') + '</span>' +
+      '<button class="btn btn-outline btn-sm" onclick="OHub.authwPushBtn()">Push my data now</button>' +
+      '<button class="btn btn-outline btn-sm" onclick="OHub.authwPullBtn()">Pull my data</button>' +
+      '<span id="ua-sync-status" style="color:var(--muted);"></span></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:flex-end;">' +
+      '<div class="field" style="margin:0;"><label>Current password</label><input type="password" id="ua-pw-cur" autocomplete="current-password"></div>' +
+      '<div class="field" style="margin:0;"><label>New password (12+)</label><input type="password" id="ua-pw-next" autocomplete="new-password"></div>' +
+      '<div><button class="btn btn-outline btn-sm" onclick="OHub.authwPasswordBtn()">Change password</button></div>' +
+      '<span id="ua-pw-status" style="font-size:.78rem;color:var(--muted);"></span></div></div>' +
+      (admin ? '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>Account requests & users</h3><span class="hint" id="ua-count"></span></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' +
+      '<input type="text" id="ua-q" placeholder="Search name / email…" value="' + escapeHtml(uaQ) + '" oninput="OHub.uaFilter(this.value)" style="flex:2;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);">' +
+      '<select id="ua-fstatus" onchange="OHub.uaFilterStatus(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);"><option value="">All statuses</option>' +
+      ['PENDING', 'ACTIVE', 'DISABLED', 'REJECTED'].map(function(s){ return '<option' + (uaStatus === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
+      '<select id="ua-frole" onchange="OHub.uaFilterRole(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);"><option value="">All roles</option>' +
+      ['ADMIN', 'MANAGER', 'COORDINATOR', 'QA', 'VIEWER', 'USER'].map(function(s){ return '<option' + (uaRole === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
+      '<button class="btn btn-ghost btn-sm" onclick="OHub.uaLoad()">Refresh</button></div>' +
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Last login</th><th>Actions</th></tr></thead><tbody id="ua-rows"><tr><td colspan="7" style="color:var(--muted);">Loading…</td></tr></tbody></table></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:flex-end;">' +
+      '<div class="field" style="margin:0;"><label>New username</label><input type="text" id="ua-new-u" autocomplete="off"></div>' +
+      '<div class="field" style="margin:0;"><label>Password (12+)</label><input type="password" id="ua-new-p" autocomplete="new-password"></div>' +
+      '<div class="field" style="margin:0;"><label>Role</label><select id="ua-new-r"><option>USER</option><option>VIEWER</option><option>QA</option><option>COORDINATOR</option><option>MANAGER</option><option>ADMIN</option></select></div>' +
+      '<div><button class="btn btn-primary btn-sm" onclick="OHub.uaCreate()">Create account</button></div></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:.83rem;"><label style="display:flex;gap:6px;align-items:center;color:var(--muted);"><input type="checkbox" id="ua-reg" onchange="OHub.uaRegToggle(this.checked)" style="width:auto;"> Allow account requests</label>' +
+      '<span id="ua-status" style="color:var(--muted);"></span></div></div>' +
+      '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>User data inspector</h3><span class="hint">audited</span></div><div id="ua-data"><p style="font-size:.83rem;color:var(--muted);">Pick “Data” on a user row to inspect their cloud stores (read-only).</p></div></div>' +
+      '<div class="card"><div class="card-head"><h3>Audit log</h3><button class="btn btn-ghost btn-sm" onclick="OHub.uaAudit()">Refresh</button></div><div class="tbl-wrap" id="ua-audit"><p style="font-size:.83rem;color:var(--muted);">Loading…</p></div></div>'
+      : '<div class="card"><p style="font-size:.85rem;color:var(--muted);">User management is restricted to administrators. Your data syncs to your private cloud dataset on push.</p></div>');
+    if(admin){ uaLoad(); uaLoadReg(); uaAudit(); }
+  }
+  function uaRowActions(r){
+    var b = [];
+    if(r.status === 'PENDING'){ b.push('<button class="btn btn-primary btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'ACTIVE\')">Approve</button>'); b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'REJECTED\')">Reject</button>'); }
+    if(r.status === 'ACTIVE') b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'DISABLED\')">Disable</button>');
+    if(r.status === 'DISABLED' || r.status === 'REJECTED') b.push('<button class="btn btn-outline btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'ACTIVE\')">Enable</button>');
+    b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaViewData(\'' + r.id + '\')">Data</button>');
+    b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaDelete(\'' + r.id + '\')">Delete</button>');
+    return b.join(' ');
+  }
+  function uaLoad(){
+    uaStatusMsg('Loading…');
+    authwApi('/api/admin/users').then(function(j){
+      uaUsers = j.users || [];
+      var q = uaQ.toLowerCase();
+      var rows = uaUsers.filter(function(r){
+        if(q && ((r.username + ' ' + (r.email || '') + ' ' + (r.display_name || '')).toLowerCase().indexOf(q) < 0)) return false;
+        if(uaStatus && r.status !== uaStatus) return false;
+        if(uaRole && r.role !== uaRole) return false;
+        return true;
+      });
+      var tb = document.getElementById('ua-rows');
+      if(tb) tb.innerHTML = rows.map(function(r){
+        return '<tr><td><strong>' + escapeHtml(r.username) + '</strong><br><span style="color:var(--muted);font-size:.74rem;">' + escapeHtml(r.display_name || '') + '</span></td>' +
+          '<td style="font-size:.78rem;">' + escapeHtml(r.email || '—') + '</td>' +
+          '<td><select onchange="OHub.uaSetRole(\'' + r.id + '\',this.value)" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);font-size:.76rem;">' +
+          ['ADMIN', 'MANAGER', 'COORDINATOR', 'QA', 'VIEWER', 'USER'].map(function(x){ return '<option' + (r.role === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></td>' +
+          '<td><span class="badge badge-' + (r.status === 'ACTIVE' ? 'ok' : r.status === 'PENDING' ? 'warn' : 'muted') + '">' + r.status + '</span></td>' +
+          '<td style="font-size:.76rem;">' + fmtDate(r.created_at * 1000) + '</td>' +
+          '<td style="font-size:.76rem;">' + (r.last_login_at ? fmtDate(r.last_login_at * 1000) : '—') + '</td>' +
+          '<td style="white-space:nowrap;">' + uaRowActions(r) + '</td></tr>';
+      }).join('') || '<tr><td colspan="7" style="color:var(--muted);">No users match.</td></tr>';
+      var cc = document.getElementById('ua-count');
+      if(cc) cc.textContent = rows.length + ' shown · ' + uaUsers.filter(function(r){ return r.status === 'PENDING'; }).length + ' pending';
+      uaStatusMsg('');
+    }).catch(function(err){ uaStatusMsg('Load failed: ' + err.message); });
+  }
+  function uaLoadReg(){
+    authwApi('/api/admin/settings').then(function(j){
+      var el = document.getElementById('ua-reg');
+      if(el) el.checked = (j.settings && j.settings.registration_open === '1');
+    }).catch(function(){});
+  }
+  function uaAudit(){
+    var host = document.getElementById('ua-audit');
+    authwApi('/api/admin/audit?limit=100').then(function(j){
+      if(host) host.innerHTML = '<table class="tbl"><thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Target</th><th>Detail</th></tr></thead><tbody>' +
+        (j.audit || []).map(function(a){
+          return '<tr><td style="font-size:.74rem;white-space:nowrap;">' + escapeHtml(new Date(a.ts * 1000).toLocaleString()) + '</td>' +
+            '<td><span class="badge badge-info" style="font-size:.68rem;">' + escapeHtml(a.action) + '</span></td>' +
+            '<td style="font-size:.78rem;">' + escapeHtml(a.actor_username || '—') + '</td>' +
+            '<td style="font-size:.78rem;">' + escapeHtml(a.target_id || '—') + '</td>' +
+            '<td style="font-size:.76rem;color:var(--muted);">' + escapeHtml(a.detail || '') + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }).catch(function(err){ if(host) host.innerHTML = '<p style="color:var(--muted);">Audit unavailable: ' + escapeHtml(err.message) + '</p>'; });
+  }
+  function uaSetStatus(id, st){
+    uaStatusMsg('Saving…');
+    authwApi('/api/admin/users/' + encodeURIComponent(id), {method:'PATCH', body:{status: st}})
+      .then(function(){ uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+  }
+  function uaSetRole(id, role){
+    if(!confirm('Change role to ' + role + '?')){ uaLoad(); return; }
+    uaStatusMsg('Saving…');
+    authwApi('/api/admin/users/' + encodeURIComponent(id), {method:'PATCH', body:{role: role}})
+      .then(function(){ uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+  }
+  function uaDelete(id){
+    var r = null;
+    uaUsers.forEach(function(x){ if(x.id === id) r = x; });
+    if(!confirm('Delete account ' + (r ? r.username : id) + ' and ALL its cloud data? This cannot be undone.')) return;
+    uaStatusMsg('Deleting…');
+    authwApi('/api/admin/users/' + encodeURIComponent(id), {method:'DELETE'})
+      .then(function(){ uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+  }
+  function uaCreate(){
+    var u = (document.getElementById('ua-new-u').value || '').trim();
+    var p = document.getElementById('ua-new-p').value || '';
+    var r = document.getElementById('ua-new-r').value || 'USER';
+    uaStatusMsg('Creating…');
+    authwApi('/api/admin/users', {method:'POST', body:{username: u, password: p, role: r}})
+      .then(function(){ document.getElementById('ua-new-u').value = ''; document.getElementById('ua-new-p').value = ''; uaLoad(); })
+      .catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+  }
+  function uaRegToggle(on){
+    uaStatusMsg('Saving…');
+    authwApi('/api/admin/settings', {method:'PUT', body:{registration_open: on ? '1' : '0'}})
+      .then(function(){ uaStatusMsg(on ? 'Account requests OPEN.' : 'Account requests CLOSED.'); })
+      .catch(function(err){ uaStatusMsg('Failed: ' + err.message); uaLoadReg(); });
+  }
+  function uaViewData(id){
+    var host = document.getElementById('ua-data');
+    if(host) host.innerHTML = '<p style="font-size:.83rem;color:var(--muted);">Loading…</p>';
+    authwApi('/api/admin/data/' + encodeURIComponent(id)).then(function(j){
+      uaStoresUid = id; uaStoresName = (j.user && (j.user.display_name || j.user.username)) || id;
+      var rows = (j.stores || []).map(function(s){
+        return '<tr><td><strong>' + escapeHtml(s.store_key) + '</strong></td>' +
+          '<td style="font-size:.76rem;">' + (s.updated_at ? new Date(s.updated_at * 1000).toLocaleString() : '—') + '</td>' +
+          '<td><button class="btn btn-ghost btn-sm" onclick="OHub.uaOpenStore(\'' + uaStoresUid + '\',\'' + escapeHtml(s.store_key) + '\')">Open</button></td></tr>';
+      }).join('') || '<tr><td colspan="3" style="color:var(--muted);">No cloud data for this user yet.</td></tr>';
+      if(host) host.innerHTML = '<p style="font-size:.83rem;margin-bottom:8px;"><strong>' + escapeHtml(uaStoresName) + '</strong> <span style="color:var(--muted);">(access logged)</span></p>' +
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Store</th><th>Updated</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div><div id="ua-store-body" style="margin-top:8px;"></div>';
+    }).catch(function(err){ if(host) host.innerHTML = '<p style="color:var(--muted);">Failed: ' + escapeHtml(err.message) + '</p>'; });
+  }
+  function uaOpenStore(uid, store){
+    var host = document.getElementById('ua-store-body');
+    if(host) host.innerHTML = '<p style="font-size:.8rem;color:var(--muted);">Loading…</p>';
+    authwApi('/api/admin/data/' + encodeURIComponent(uid) + '/' + encodeURIComponent(store)).then(function(j){
+      var txt = JSON.stringify(j.snapshot, null, 1) || 'null';
+      if(txt.length > 20000) txt = txt.slice(0, 20000) + '\n…(truncated, full JSON available via API)';
+      if(host) host.innerHTML = '<pre style="max-height:320px;overflow:auto;font-size:.72rem;background:var(--light);padding:10px;border-radius:6px;white-space:pre-wrap;">' + escapeHtml(txt) + '</pre>';
+    }).catch(function(err){ if(host) host.innerHTML = '<p style="color:var(--muted);">Failed: ' + escapeHtml(err.message) + '</p>'; });
+  }
   function teamBase(){
     var c = state.cloud || {};
     return {url:(c.url||'').replace(/\/+$/,''), token:(c.token||'')};
@@ -4066,7 +4383,7 @@
   function viewFromHash(){
     var h = (location.hash||'').replace(/^#\/?/, '');
     if(!h) return null;
-    var known = ['dashboard','projects','models','datacenter','midp','naming','qaqc','workset','parameters','clash','quality-center','reports','delivery','settings'];
+    var known = ['dashboard','projects','models','datacenter','midp','naming','qaqc','workset','parameters','clash','quality-center','reports','delivery','useradmin','settings'];
     return known.indexOf(h)>-1 ? h : null;
   }
   function init(){
@@ -4112,6 +4429,7 @@
     var startView = viewFromHash() || 'dashboard';
     switchView(startView, {silent:true});
     verifyCloudSession();
+    try{ authwBoot(); }catch(e){}
     try{ if(!localStorage.getItem(LS.tour)){ setTimeout(function(){ startTour(); }, 800); } }catch(e){}
     try{ if(syncConfig().auto && syncConfig().url){ setTimeout(function(){ syncFromServer(false); }, 2500); } }catch(e){}
   }
@@ -4202,6 +4520,27 @@
     saveCloudSettings: saveCloudSettings,
     cloudPush: cloudPush,
     cloudPull: cloudPull,
+    authwPushBtn: function(){ var el = document.getElementById('ua-sync-status'); authwPushAll(function(m){ if(el) el.textContent = m; }); },
+    authwPullBtn: function(){ if(!confirm('Replace ALL Hub data in this browser with your cloud dataset?')) return; var el = document.getElementById('ua-sync-status'); authwPullAll(function(m){ if(el) el.textContent = m; }); },
+    authwPasswordBtn: function(){
+      var st = document.getElementById('ua-pw-status');
+      var cur = document.getElementById('ua-pw-cur').value || '', nx = document.getElementById('ua-pw-next').value || '';
+      authwApi('/api/auth/password', {method:'POST', body:{current: cur, next: nx}})
+        .then(function(){ if(st) st.textContent = 'Password changed.'; document.getElementById('ua-pw-cur').value = ''; document.getElementById('ua-pw-next').value = ''; })
+        .catch(function(err){ if(st) st.textContent = 'Failed: ' + err.message; });
+    },
+    uaLoad: uaLoad,
+    uaAudit: uaAudit,
+    uaFilter: function(v){ uaQ = v || ''; uaLoad(); },
+    uaFilterStatus: function(v){ uaStatus = v || ''; uaLoad(); },
+    uaFilterRole: function(v){ uaRole = v || ''; uaLoad(); },
+    uaSetStatus: uaSetStatus,
+    uaSetRole: uaSetRole,
+    uaDelete: uaDelete,
+    uaCreate: uaCreate,
+    uaRegToggle: uaRegToggle,
+    uaViewData: uaViewData,
+    uaOpenStore: uaOpenStore,
     teamLoadUsers: teamLoadUsers,
     teamCreateUser: teamCreateUser,
     teamDeleteUser: teamDeleteUser,

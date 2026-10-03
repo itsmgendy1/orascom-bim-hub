@@ -1,5 +1,13 @@
 # CHANGELOG — Orascom BIM Digital Delivery Hub
 
+## 2026-10-03 — Multi-user auth + user data (branch `hub/multiuser-auth`, unmerged)
+- Change: new additive `worker/` backend (D1 schema, session-cookie auth, PBKDF2, RBAC ADMIN/USER+4, per-user stores, audit log, registration toggle, bootstrap); extended existing login card (request-account mode, v2 team login w/ legacy fallback); Hub dataset switch (pull/push/migrate/stash/wipe) + Users & Access view (admin tables, audit, registration, inspector; account card for all).
+- Reason: per-user accounts, backend-enforced isolation, admin control. Existing login UI/nav/modules untouched; legacy local + team flows preserved.
+- Files: worker/{schema.sql,wrangler.toml,README.md,src/index.js}, assets/js/{ohub-auth,hub}.js, index.html, hub.html.
+- Tests: ref-count + diff review; live API + browser verification pending (needs D1/Workers deploy + upgraded token).
+- Deployment: none yet. Rollback: `main @ 962e701`.
+- Remaining: provision D1 + deploy worker + bootstrap admin (needs Workers+D1 Edit token); Playwright/security retest (UserA/B tamper, admin perms).
+
 ## 2026-10-03 — Asset versions (branch `hub/asset-versions`, unmerged)
 - Change: bumped `?v=` cache-busters (content hashes) for all P1/P2-touched assets: hub.js, forma.js, ohub-auth.js (hub.html + auth.html) and all 6 module iframes (MODULES array). Unchanged files (hub.css, site-plots.js) untouched.
 - Reason: `/assets/*` serves `immutable, max-age=1y` — without new versions, returning visitors/edge cache would run stale pre-P1/P2 JS.

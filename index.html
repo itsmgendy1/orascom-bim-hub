@@ -248,7 +248,10 @@
       <input id="teamUrl" type="text" placeholder="https://orascom-hub-sync.<account>.workers.dev" />
     </div>
     <div style="margin-top:8px;"><a href="#" id="loginTeamToggle" onclick="return toggleTeamServer()"
-      style="font-size:11px;color:var(--cyan);text-decoration:none;">Use team server instead →</a></div>
+      style="font-size:11px;color:var(--cyan);text-decoration:none;">Use team server instead →</a>
+      <span style="color:rgba(207,238,255,.35);font-size:11px;"> · </span>
+      <a href="#" id="loginRequestToggle" onclick="return toggleRequest()"
+      style="font-size:11px;color:var(--cyan);text-decoration:none;">No account? Request one →</a></div>
     <form id="loginForm" onsubmit="return submitLogin(event)">
       <label>USERNAME</label>
       <input id="loginUser" type="text" autocomplete="username" placeholder="e.g. bim.admin" />
@@ -257,6 +260,14 @@
       <div id="loginConfirmWrap" style="display:none">
         <label>CONFIRM PASSWORD</label>
         <input id="loginConfirm" type="password" autocomplete="new-password" placeholder="Repeat password" />
+      </div>
+      <div id="loginRequestWrap" style="display:none">
+        <label>DISPLAY NAME</label>
+        <input id="loginDisplay" type="text" autocomplete="nickname" placeholder="e.g. Ahmed Hassan" />
+        <label>EMAIL (optional)</label>
+        <input id="loginEmail" type="email" autocomplete="email" placeholder="you@company.com" />
+        <label>ACCOUNT SERVER</label>
+        <input id="requestUrl" type="text" placeholder="https://orascom-hub-auth.<account>.workers.dev" />
       </div>
       <div id="loginErr"></div>
       <button id="loginGo" type="submit">ENTER →</button>
@@ -274,6 +285,7 @@
   }
   function openLogin(){
     var setup = !(window.OHubAuth && window.OHubAuth.hasUsers());
+    if(requestMode) toggleRequest();
     var teamUrl = '';
     try{ teamUrl = (JSON.parse(localStorage.getItem('ohub_cloud') || '{}').url || ''); }catch(e){}
     var teamOn = !!teamUrl;
@@ -290,6 +302,49 @@
     setTimeout(function(){ document.getElementById('loginUser').focus(); }, 60);
   }
   function closeLogin(){ document.getElementById('loginModal').classList.remove('on'); }
+  var requestMode = false;
+  function toggleRequest(){
+    requestMode = !requestMode;
+    document.getElementById('loginRequestWrap').style.display = requestMode ? 'block' : 'none';
+    document.getElementById('loginConfirmWrap').style.display = requestMode ? 'block' : 'none';
+    document.getElementById('loginGo').textContent = requestMode ? 'SEND REQUEST →' : 'ENTER →';
+    document.getElementById('loginTitle').textContent = requestMode ? 'REQUEST ACCOUNT' : 'HUB LOGIN';
+    document.getElementById('loginRequestToggle').textContent = requestMode ? '← Back to sign in' : 'No account? Request one →';
+    if(requestMode){
+      var t = document.getElementById('teamUrl');
+      var r = document.getElementById('requestUrl');
+      if(r && !r.value && t && t.value.trim()) r.value = t.value.trim();
+      try{
+        var w = window.OHubAuth && window.OHubAuth.authWorker();
+        if(r && !r.value && w) r.value = w;
+      }catch(e){}
+      setTimeout(function(){ document.getElementById('loginDisplay').focus(); }, 60);
+    }
+    return false;
+  }
+  function submitRequest(){
+    var u = document.getElementById('loginUser').value;
+    var p = document.getElementById('loginPass').value;
+    var c = document.getElementById('loginConfirm').value;
+    if(p !== c){ loginFail('Passwords do not match.'); return false; }
+    if(!p || p.length < 12){ loginFail('Password needs 12+ characters.'); return false; }
+    var url = document.getElementById('requestUrl').value.trim();
+    if(!url){ loginFail('Enter the account server URL.'); return false; }
+    document.getElementById('loginGo').textContent = 'SENDING…';
+    window.OHubAuth.authRequest(url, {
+      username: u,
+      email: document.getElementById('loginEmail').value,
+      password: p,
+      displayName: document.getElementById('loginDisplay').value || u
+    }).then(function(){
+      toggleRequest();
+      loginFail('Request sent — an admin must approve it. Sign in after approval.');
+      document.getElementById('loginErr').style.color = '#7dffc8';
+      setTimeout(function(){ document.getElementById('loginErr').style.color = ''; }, 4000);
+    }).catch(function(err){ loginFail(err.message); resetGo(); });
+    function resetGo(){ document.getElementById('loginGo').textContent = 'SEND REQUEST →'; }
+    return false;
+  }
   function enterHubFlow(){
     if(window.OHubAuth && OHubAuth.hasSession()){ OHubAuth.enterHub(); return; }
     openLogin();
@@ -303,6 +358,7 @@
   }
   function submitLogin(ev){
     if(ev) ev.preventDefault();
+    if(requestMode) return submitRequest();
     var u = document.getElementById('loginUser').value;
     var p = document.getElementById('loginPass').value;
     var setup = !(window.OHubAuth && window.OHubAuth.hasUsers());
@@ -322,21 +378,27 @@
           var cc = JSON.parse(localStorage.getItem('ohub_cloud') || '{}');
           cc.url = team; localStorage.setItem('ohub_cloud', JSON.stringify(cc));
         }catch(e){}
-        OHubAuth.cloudLogin(team, u, p).then(function(name){
-          try{
-            var cc = JSON.parse(localStorage.getItem('ohub_cloud') || '{}');
-            cc.url = team; cc.workspace = 'user:' + name;
-            localStorage.setItem('ohub_cloud', JSON.stringify(cc));
-          }catch(e){}
-          OHubAuth.enterHub();
-        }).catch(function(err){
-          var msg = (err && err.message) || 'Login failed.';
-          if(/unreachable/i.test(msg)){
-            // Server down/offline: fall back to this browser's local accounts.
-            OHubAuth.login(u, p).then(function(ok2){
-              if(ok2){ OHubAuth.enterHub(); } else { loginFail('Server unreachable and no local match.'); }
-            }).catch(function(){ loginFail('Login failed — try again.'); });
-          } else { loginFail(msg); }
+        // Cloud accounts (new auth Worker) first; legacy team sync second.
+        // Either success enters the Hub — dataset switch happens on hub load.
+        OHubAuth.authLogin(team, u, p).then(function(){ OHubAuth.enterHub(); }).catch(function(v2err){
+          var v2msg = (v2err && v2err.message) || '';
+          var v2real = /pending|disabled|wrong password|signed out/i.test(v2msg);
+          OHubAuth.cloudLogin(team, u, p).then(function(name){
+            try{
+              var cc = JSON.parse(localStorage.getItem('ohub_cloud') || '{}');
+              cc.url = team; cc.workspace = 'user:' + name;
+              localStorage.setItem('ohub_cloud', JSON.stringify(cc));
+            }catch(e){}
+            OHubAuth.enterHub();
+          }).catch(function(err){
+            var msg = (err && err.message) || 'Login failed.';
+            if(/unreachable/i.test(msg)){
+              // Server down/offline: fall back to this browser's local accounts.
+              OHubAuth.login(u, p).then(function(ok2){
+                if(ok2){ OHubAuth.enterHub(); } else { loginFail(v2real ? v2msg : 'Server unreachable and no local match.'); }
+              }).catch(function(){ loginFail(v2real ? v2msg : 'Login failed — try again.'); });
+            } else { loginFail(v2real ? v2msg : msg); }
+          });
         });
       } else {
         OHubAuth.login(u, p).then(function(ok){

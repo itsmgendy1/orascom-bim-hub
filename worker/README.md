@@ -1,5 +1,10 @@
 # Hub Auth+Data Worker (D1 + sessions + RBAC + audit)
 
+Live: `https://orascom-hub-auth.mohamedyasserelgendy2015.workers.dev`
+D1: `orascom-hub-db`. Verified 2026-10-03: **35/35 API tests pass**
+(request→approve→login, per-user isolation, tamper→403/401, admin view
+audited, registration toggle, password rotation, logout, disable/enable).
+
 Additive backend for per-user accounts and user-isolated data. The Pages Hub
 and the old KV workspace sync are untouched.
 

@@ -5,6 +5,7 @@
 - Reason: per-user accounts, backend-enforced isolation, admin control. Existing login UI/nav/modules untouched; legacy local + team flows preserved.
 - Files: worker/{schema.sql,wrangler.toml,README.md,src/index.js}, assets/js/{ohub-auth,hub}.js, index.html, hub.html.
 - Tests: ref-count + diff review; live API + browser verification pending (needs D1/Workers deploy + upgraded token).
+- Backend LIVE 2026-10-03: D1 `orascom-hub-db` + worker deployed, first ADMIN bootstrapped, **35/35 API tests pass** (isolation, tamper→403/401, audit, registration, password rotation, disable/enable); test accounts cleaned.
 - Deployment: none yet. Rollback: `main @ 962e701`.
 - Remaining: provision D1 + deploy worker + bootstrap admin (needs Workers+D1 Edit token); Playwright/security retest (UserA/B tamper, admin perms).
 

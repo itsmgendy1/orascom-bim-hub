@@ -3,11 +3,12 @@
 name = "orascom-hub-auth"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
+account_id = "a958de2753ec2723dfbf530f36275746"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "orascom-hub-db"
-database_id = "REPLACE_WITH_D1_ID"
+database_id = "5608049f-481f-4385-8acc-05aa1205f03b"
 
 [vars]
 # BOOTSTRAP_KEY is set as a SECRET, never here:

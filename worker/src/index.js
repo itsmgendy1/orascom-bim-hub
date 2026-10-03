@@ -7,7 +7,7 @@
 
 const SESSION_COOKIE = 'ohub_sid';
 const SESSION_TTL = 7 * 24 * 3600;
-const PBKDF2_ITER = 120000;
+const PBKDF2_ITER = 100000; // Workers cap: iteration counts above 100000 throw (verified live).
 const MAX_SNAPSHOT = 5 * 1024 * 1024;
 
 // Stores this API will persist (Hub ohub_* dataset names). Anything else: 400.

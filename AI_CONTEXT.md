@@ -16,11 +16,12 @@ Production: `https://orascom-bim-hub.pages.dev/` — shell `?v=` hashes match `m
 - Secrets via env/connector only, never chat, never client-side. `.gitignore` covers `.env*`, `*.pem`, selection files.
 - Headers in `_headers` (no global CSP by design — would break module CDNs; `X-Frame-Options:SAMEORIGIN`).
 
-## Known issues (Phase A/B, Verified unless noted)
-- README describes `automation/`, `tools/build_deploy.py`, `HTMLs/`, `OC Hub/`, 529MB tree — absent from repo (31 files). Deploy method undocumented (Not verified).
-- XSS High: `modules/workset-validator.html:950,1114-1118,1367-1492` raw CSV → innerHTML. Medium: `model-quality.html:5527`, `parameter-validator.html:2745`, `hub.js:3887` username → onclick. `postMessage '*'` + no `ev.origin` check. Missing CSP/HSTS. Auth demo-grade.
-- Perf: modules 329KB–1.2MB single files + 12.9MB `showreel.mp4` + ~6MB hero PNGs. 1000+ row / IndexedDB / import-export stress Not verified.
-- MODON benchmark: no access — Not verified.
+## Known issues (Verified unless noted)
+- Fixed P1 (live): workset/model-quality/parameter/hub.js XSS escaping; same-origin postMessage Hub<->6 modules; HSTS; README structure/deploy rewritten to repo truth.
+- Fixed P2 (live): auth honesty (demo-grade labels, 12+ setup, plain$ auto-upgrade); Forma session-only refresh option; module CSP connect-src +cdnjs; tests/fixtures ladder.
+- Routing observation (2026-10-03): all `*.html` URLs 308 to extensionless (`/hub.html`→`/hub`); no `_redirects` in repo or deploy; owner unknown — browsers follow transparently, app verified working.
+- Remaining: full CSP enforcement (needs per-module preview testing), import/export unification, Playwright runner (no runner here), P3 (AI/API/AIM); MODON benchmark: no access.
+- Local-only `Backup/` + `Sources/` dirs are untracked and git-ignored; never commit.
 
 ## How to run/test/deploy
 - Run: open `index.html` or `python -m http.server` → `http://localhost:8000/`.

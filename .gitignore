@@ -9,3 +9,6 @@ desktop.ini
 *-secret*
 hub_selection.txt
 selected_models.json
+# Local-only bulk folders (workstation backups/sources) — never ship.
+Backup/
+Sources/

@@ -4014,6 +4014,29 @@
     Array.prototype.forEach.call(document.querySelectorAll('.nav-item[data-view="useradmin"]'), function(n){
       n.style.display = show ? '' : 'none';
     });
+    try{ renderAccountBtn(); }catch(e){}
+  }
+  function renderAccountBtn(){
+    var sess = authwSession(), name = 'Account', sub = 'Browser-local session';
+    if(sess){
+      name = sess.u || 'Account';
+      var m = authwMe();
+      sub = m ? (m.username + ' · ' + m.role + ' · cloud account') : 'Cloud session';
+    } else {
+      try{ var l = (window.OHubAuth && window.OHubAuth.user) ? window.OHubAuth.user() : ''; if(l) name = l; }catch(e){}
+    }
+    var b = document.getElementById('account-name'); if(b) b.textContent = name;
+    var w = document.getElementById('account-who');
+    if(w) w.innerHTML = '<strong>' + escapeHtml(name) + '</strong><br><span style="color:var(--muted);font-size:.74rem;">' + escapeHtml(sub) + '</span>';
+  }
+  function toggleAccountMenu(ev){
+    try{ if(ev) ev.stopPropagation(); }catch(e){}
+    var m = document.getElementById('account-menu');
+    if(m) m.style.display = (m.style.display === 'block' ? 'none' : 'block');
+  }
+  function accountGo(){
+    var m = document.getElementById('account-menu'); if(m) m.style.display = 'none';
+    if(authwSession()) switchView('useradmin'); else switchView('settings');
   }
 
   /* ----- Users & Access view (own account for all; admin tables for ADMIN) ----- */
@@ -4426,6 +4449,13 @@
       var v = viewFromHash();
       if(v && v!==currentView) switchView(v);
     });
+    document.addEventListener('click', function(e){
+      try{
+        var m = document.getElementById('account-menu');
+        if(m && m.style.display === 'block' && e.target &&
+           !e.target.closest('#account-menu') && !e.target.closest('#account-btn')) m.style.display = 'none';
+      }catch(x){}
+    });
     var startView = viewFromHash() || 'dashboard';
     switchView(startView, {silent:true});
     verifyCloudSession();
@@ -4520,6 +4550,8 @@
     saveCloudSettings: saveCloudSettings,
     cloudPush: cloudPush,
     cloudPull: cloudPull,
+    toggleAccountMenu: toggleAccountMenu,
+    accountGo: accountGo,
     authwPushBtn: function(){ var el = document.getElementById('ua-sync-status'); authwPushAll(function(m){ if(el) el.textContent = m; }); },
     authwPullBtn: function(){ if(!confirm('Replace ALL Hub data in this browser with your cloud dataset?')) return; var el = document.getElementById('ua-sync-status'); authwPullAll(function(m){ if(el) el.textContent = m; }); },
     authwPasswordBtn: function(){

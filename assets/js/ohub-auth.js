@@ -17,6 +17,9 @@
   var SS_SESSION = 'ohub_session';
   var SS_NEXT = 'ohub_next';
   var LS_AUTHW = 'ohub_authw'; // {url} remembered auth-worker URL (not a secret)
+  // Built-in account server (Orascom auth Worker). The request form no longer
+  // asks for a URL; a previously saved team-server URL still wins when set.
+  var DEFAULT_AUTHW_URL = 'https://orascom-hub-auth.mohamedyasserelgendy2015.workers.dev';
 
   function readUsers() {
     try { return JSON.parse(localStorage.getItem(LS_USERS) || '{}') || {}; }
@@ -74,13 +77,14 @@
     // Session cookie is HttpOnly (worker-set); sessionStorage keeps only WHO
     // is signed in ({u, v2:url, id}) so the gate + dataset switch can work.
     authWorker: function (url) {
-      if (typeof url === 'string') {
+      if (typeof url === 'string' && url) {
         try { localStorage.setItem(LS_AUTHW, JSON.stringify({ url: url.replace(/\/+$/, '') })); } catch (e) {}
         return url;
       }
       try { return (JSON.parse(localStorage.getItem(LS_AUTHW) || '{}').url || ''); }
       catch (e) { return ''; }
     },
+    authDefaultUrl: function () { return DEFAULT_AUTHW_URL; },
     wapi: function (path, opts) {
       var base = this.authWorker();
       if (!base) return Promise.reject(new Error('Set the account server URL first.'));
@@ -98,6 +102,7 @@
       }, function () { throw new Error('Account server unreachable.'); });
     },
     authRequest: function (url, f) {
+      url = url || this.authDefaultUrl();
       this.authWorker(url);
       return this.wapi('/api/auth/request', {
         method: 'POST',

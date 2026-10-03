@@ -149,6 +149,7 @@ export default {
       const email = String(body.email || '').trim().slice(0, 120);
       const display = String(body.displayName || username).trim().slice(0, 80);
       if (!/^[A-Za-z0-9._-]{3,32}$/.test(username)) return json(req, { ok: false, error: 'bad username' }, 400);
+      if (!/.+@.+\..+/.test(email)) return json(req, { ok: false, error: 'a valid email is required' }, 400);
       if (password.length < 12) return json(req, { ok: false, error: 'password needs 12+ characters' }, 400);
       const salt = hex(rand(16));
       try {

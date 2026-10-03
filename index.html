@@ -264,10 +264,8 @@
       <div id="loginRequestWrap" style="display:none">
         <label>DISPLAY NAME</label>
         <input id="loginDisplay" type="text" autocomplete="nickname" placeholder="e.g. Ahmed Hassan" />
-        <label>EMAIL (optional)</label>
+        <label>EMAIL</label>
         <input id="loginEmail" type="email" autocomplete="email" placeholder="you@company.com" />
-        <label>ACCOUNT SERVER</label>
-        <input id="requestUrl" type="text" placeholder="https://orascom-hub-auth.<account>.workers.dev" />
       </div>
       <div id="loginErr"></div>
       <button id="loginGo" type="submit">ENTER →</button>
@@ -312,12 +310,7 @@
     document.getElementById('loginRequestToggle').textContent = requestMode ? '← Back to sign in' : 'No account? Request one →';
     if(requestMode){
       var t = document.getElementById('teamUrl');
-      var r = document.getElementById('requestUrl');
-      if(r && !r.value && t && t.value.trim()) r.value = t.value.trim();
-      try{
-        var w = window.OHubAuth && window.OHubAuth.authWorker();
-        if(r && !r.value && w) r.value = w;
-      }catch(e){}
+      if(t && t.value.trim()) { try{ window.OHubAuth.authWorker(t.value.trim()); }catch(e){} }
       setTimeout(function(){ document.getElementById('loginDisplay').focus(); }, 60);
     }
     return false;
@@ -328,12 +321,14 @@
     var c = document.getElementById('loginConfirm').value;
     if(p !== c){ loginFail('Passwords do not match.'); return false; }
     if(!p || p.length < 12){ loginFail('Password needs 12+ characters.'); return false; }
-    var url = document.getElementById('requestUrl').value.trim();
-    if(!url){ loginFail('Enter the account server URL.'); return false; }
+    var em = document.getElementById('loginEmail').value.trim();
+    if(!/.+@.+\..+/.test(em)){ loginFail('A valid email is required.'); return false; }
+    var t = document.getElementById('teamUrl');
+    var url = (t && t.value.trim()) || '';
     document.getElementById('loginGo').textContent = 'SENDING…';
     window.OHubAuth.authRequest(url, {
       username: u,
-      email: document.getElementById('loginEmail').value,
+      email: em,
       password: p,
       displayName: document.getElementById('loginDisplay').value || u
     }).then(function(){

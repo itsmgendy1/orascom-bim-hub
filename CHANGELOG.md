@@ -1,5 +1,12 @@
 # CHANGELOG — Orascom BIM Digital Delivery Hub
 
+## 2026-10-03 — Auth UX (branch `hub/auth-ux`, unmerged)
+- Change: request form email now mandatory (client regex + Worker 400); removed ACCOUNT SERVER field — built-in auth-Worker URL used (saved team URL still wins).
+- Reason: simpler signup; one account server.
+- Files: index.html, assets/js/ohub-auth.js, worker/src/index.js (redeployed).
+- Tests: pending browser + API retest (email-missing 400).
+- Deployment: worker redeployed; Pages side none yet. Rollback: `main @ 2fe5e9e`.
+
 ## 2026-10-03 — Multi-user auth + user data (branch `hub/multiuser-auth`, unmerged)
 - Change: new additive `worker/` backend (D1 schema, session-cookie auth, PBKDF2, RBAC ADMIN/USER+4, per-user stores, audit log, registration toggle, bootstrap); extended existing login card (request-account mode, v2 team login w/ legacy fallback); Hub dataset switch (pull/push/migrate/stash/wipe) + Users & Access view (admin tables, audit, registration, inspector; account card for all).
 - Reason: per-user accounts, backend-enforced isolation, admin control. Existing login UI/nav/modules untouched; legacy local + team flows preserved.

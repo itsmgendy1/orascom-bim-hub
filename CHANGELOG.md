@@ -1,5 +1,12 @@
 # CHANGELOG — Orascom BIM Digital Delivery Hub
 
+## 2026-10-03 — Asset versions (branch `hub/asset-versions`, unmerged)
+- Change: bumped `?v=` cache-busters (content hashes) for all P1/P2-touched assets: hub.js, forma.js, ohub-auth.js (hub.html + auth.html) and all 6 module iframes (MODULES array). Unchanged files (hub.css, site-plots.js) untouched.
+- Reason: `/assets/*` serves `immutable, max-age=1y` — without new versions, returning visitors/edge cache would run stale pre-P1/P2 JS.
+- Files: hub.html, auth.html, assets/js/hub.js.
+- Tests: hash ↔ file match verified; no logic touched.
+- Deployment: none yet. Rollback: `main @ 2a1c5f1`.
+
 ## 2026-10-03 — P2 standardize (branch `hub/p2-standardize`, unmerged)
 - Change: auth honesty (demo-grade labels, 12+ char setup, plain$ auto-upgrade on login); Forma refresh token session-only option + Settings checkbox, strict OAuth state check, safe auth-msg fallback; module meta CSP connect-src +cdnjs (sourcemap noise); tests/fixtures ladder (0/1/10/100/1000, dup, missing, xss, extra-cols).
 - Reason: Audit P2 (A1, F1, CSP touch-up, fixtures). No scoring/import/export logic touched.

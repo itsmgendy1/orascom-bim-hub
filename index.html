@@ -285,7 +285,7 @@
     document.getElementById('loginTeamWrap').style.display = (!setup && teamOn) ? 'block' : 'none';
     document.getElementById('loginSub').textContent = setup
       ? 'First run: create the administrator account for this browser.'
-      : (teamOn ? 'Team sign-in — verified against your sync server.' : 'Sign in to enter the BIM Digital Delivery Hub.');
+      : (teamOn ? 'Team sign-in — verified against your sync server.' : 'Sign in to enter the BIM Digital Delivery Hub. (Browser-local gate.)');
     document.getElementById('loginModal').classList.add('on');
     setTimeout(function(){ document.getElementById('loginUser').focus(); }, 60);
   }

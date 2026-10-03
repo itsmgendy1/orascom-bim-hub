@@ -3534,9 +3534,10 @@
     if(!window.OForma) return;
     var c = window.OForma.cfg();
     var ci = document.getElementById('forma-client'), rg = document.getElementById('forma-region'),
-        st = document.getElementById('forma-status');
+        st = document.getElementById('forma-status'), so = document.getElementById('forma-session');
     if(ci && document.activeElement!==ci) ci.value = c.clientId||'';
     if(rg) rg.value = c.region||'EMEA';
+    if(so) so.checked = (c.sessionOnly===true);
     if(st){
       if(!window.OForma.secureCtx()) st.textContent = 'Serve over HTTP for login (file:// cannot do OAuth).';
       else if(!c.clientId) st.textContent = 'Paste a Client ID to enable Connect.';

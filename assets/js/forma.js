@@ -15,10 +15,11 @@
      3. A Forma license/trial + the Forma Project ID (last part of the
         Forma project URL).
 
-   Security notes (shown in Settings too):
-     - Access token lives in MEMORY only. Refresh token (15 days) lives in
-       THIS browser's localStorage. Disconnect wipes both.
-     - Read-only scope (data:read). Nothing is ever written back to Forma.
+    Security notes (shown in Settings too):
+      - Access token lives in MEMORY only. Refresh token (15 days) lives in
+        THIS browser's localStorage by default, or sessionStorage-only when
+        "Forget on tab close" is ticked in Settings. Disconnect wipes both.
+      - Read-only scope (data:read). Nothing is ever written back to Forma.
    ========================================================================== */
 (function(){
   "use strict";
@@ -28,8 +29,20 @@
   var FORMA_API = 'https://developer.api.autodesk.com/forma/project/v1alpha';
   var SCOPES    = 'data:read';
 
-  var LS_CFG     = 'ohub_forma_cfg';      // {clientId, region}
+  var LS_CFG     = 'ohub_forma_cfg';      // {clientId, region, sessionOnly}
   var LS_REFRESH = 'ohub_forma_refresh';  // refresh token (this browser only)
+
+  // Refresh-token store follows the Settings choice: localStorage (stay signed
+  // in across restarts) or sessionStorage-only (forget on tab close). Default
+  // stays local — existing behavior unchanged unless the user opts in.
+  function refreshStore(){ try{ return (cfg().sessionOnly===true) ? sessionStorage : localStorage; }catch(e){ return localStorage; } }
+  function readRefresh(){ try{ var v = refreshStore().getItem(LS_REFRESH); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+  function writeRefresh(tok){
+    try{ localStorage.removeItem(LS_REFRESH); }catch(e){}
+    try{ sessionStorage.removeItem(LS_REFRESH); }catch(e){}
+    if(tok==null) return;
+    try{ refreshStore().setItem(LS_REFRESH, JSON.stringify(tok)); }catch(e){}
+  }
   var LS_LINKS   = 'ohub_forma_links';    // {hubProjectId: {formaId, name, figures, updated}}
 
   var memAccess = null, memExpiry = 0;
@@ -39,7 +52,17 @@
   function toast(m){ var h=document.getElementById('toast-host'); if(!h){ alert(m); return; } var t=document.createElement('div'); t.className='toast'; t.textContent=m; h.appendChild(t); setTimeout(function(){ t.remove(); }, 3000); }
 
   function cfg(){ return readLS(LS_CFG, {clientId:'', region:'EMEA'}); }
-  function saveCfg(c){ writeLS(LS_CFG, c); }
+  // Merge (never replace): Settings inputs save partial objects; dropping
+  // unknown keys here would silently wipe the sessionOnly choice.
+  function saveCfg(c){ writeLS(LS_CFG, Object.assign({}, cfg(), c)); }
+  // Move any stored refresh token between stores when the choice flips.
+  function setSessionOnly(on){
+    var cur = readRefresh();
+    var c = cfg(); c.sessionOnly = !!on; saveCfg(c);
+    writeRefresh(null);
+    if(cur){ try{ ((!!on) ? sessionStorage : localStorage).setItem(LS_REFRESH, JSON.stringify(cur)); }catch(e){} }
+    return !!(cfg().sessionOnly);
+  }
   function callbackUrl(){
     var path = location.pathname.replace(/[^/]*$/, '');
     return location.origin + path + 'auth.html';
@@ -101,7 +124,7 @@
       state = sessionStorage.getItem('ohub_forma_state');
       ret = sessionStorage.getItem('ohub_forma_return') || 'settings';
     }catch(e){}
-    if(!verifier || (state && q.state && state !== q.state)){ renderAuthMsg('Session mismatch — start login again from the Hub.'); return; }
+    if(!verifier || !q.state || !state || q.state!==state){ renderAuthMsg('Session mismatch — start login again from the Hub.'); return; }
     renderAuthMsg('Exchanging code for token…');
     var body = 'grant_type=authorization_code' +
       '&code=' + encodeURIComponent(q.code) +
@@ -114,7 +137,7 @@
         if(!j.access_token) throw new Error('no access token returned');
         memAccess = j.access_token;
         memExpiry = Date.now() + ((j.expires_in || 3600) * 1000) - 60000;
-        if(j.refresh_token){ try{ localStorage.setItem(LS_REFRESH, JSON.stringify(j.refresh_token)); }catch(e){} }
+        if(j.refresh_token){ writeRefresh(j.refresh_token); }
         try{ sessionStorage.removeItem('ohub_forma_verifier'); sessionStorage.removeItem('ohub_forma_state'); }catch(e){}
         back(ret);
       })
@@ -122,13 +145,16 @@
   }
   function renderAuthMsg(m){
     var el = document.getElementById('auth-msg');
-    if(el) el.textContent = m; else document.body.innerHTML = '<p style="font-family:sans-serif;padding:40px;">' + m + '</p>';
+    if(el){ el.textContent = m; return; }
+    var p = document.createElement('p');
+    p.style.cssText = 'font-family:sans-serif;padding:40px;';
+    p.textContent = m;
+    document.body.appendChild(p);
   }
 
   function getAccessToken(){
     if(memAccess && Date.now() < memExpiry) return Promise.resolve(memAccess);
-    var rt = null;
-    try{ rt = JSON.parse(localStorage.getItem(LS_REFRESH) || 'null'); }catch(e){}
+    var rt = readRefresh();
     if(!rt) return Promise.resolve(null);
     var body = 'grant_type=refresh_token' +
       '&refresh_token=' + encodeURIComponent(rt) +
@@ -139,7 +165,7 @@
       .then(function(j){
         memAccess = j.access_token;
         memExpiry = Date.now() + ((j.expires_in || 3600) * 1000) - 60000;
-        if(j.refresh_token){ try{ localStorage.setItem(LS_REFRESH, JSON.stringify(j.refresh_token)); }catch(e){} }
+        if(j.refresh_token){ writeRefresh(j.refresh_token); }
         return memAccess;
       })
       .catch(function(){ memAccess = null; return null; });
@@ -147,7 +173,7 @@
 
   function disconnect(){
     memAccess = null; memExpiry = 0;
-    try{ localStorage.removeItem(LS_REFRESH); }catch(e){}
+    writeRefresh(null);
     toast('Forma disconnected (tokens wiped)');
     if(window.OHub) window.OHub.switchView('settings');
   }
@@ -218,7 +244,8 @@
   }
 
   window.OForma = {
-    cfg: cfg, saveCfg: saveCfg,
+    cfg: cfg, saveCfg: saveCfg, setSessionOnly: setSessionOnly,
+    isSessionOnly: function(){ return cfg().sessionOnly===true; },
     isConfigured: function(){ return !!(cfg().clientId); },
     beginLogin: beginLogin, handleCallback: handleCallback,
     getAccessToken: getAccessToken, disconnect: disconnect,

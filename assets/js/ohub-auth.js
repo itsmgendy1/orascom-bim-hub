@@ -1,5 +1,10 @@
 /* Orascom BIM Hub — front-door auth (static, no backend).
  *
+ * honesty: this is a DEMO-GRADE browser-local gate, not server security.
+ * It keeps honest people honest on a shared workstation; anyone with
+ * DevTools can bypass it. Real enforcement lives on the sync Worker
+ * (team accounts). Labels in the login UI say the same.
+ *
  * Model: first run creates an admin (setup mode); after that the landing
  * shows login. Credentials live in THIS browser's localStorage as
  * salted SHA-256 hashes (never plaintext). A session flag in
@@ -37,6 +42,12 @@
     // No WebCrypto (old browser / insecure context): plain fallback hash.
     // Honest downgrade — works everywhere, weaker offline protection.
     return Promise.resolve('plain$' + btoa(unescape(encodeURIComponent(text))).split('').reverse().join(''));
+  }
+  // Legacy verifier for accounts created where WebCrypto was missing.
+  // Used once to transparently upgrade plain$ hashes to salted SHA-256.
+  function legacyPlain(text) {
+    try { return 'plain$' + btoa(unescape(encodeURIComponent(text))).split('').reverse().join(''); }
+    catch (e) { return null; }
   }
   function hasUsers() { return Object.keys(readUsers()).length > 0; }
   function hasSession() {
@@ -104,7 +115,7 @@
     setup: function (username, password) {
       username = String(username || '').trim();
       if (!username) return Promise.reject(new Error('Pick a username'));
-      if (!password || password.length < 4) return Promise.reject(new Error('Password needs 4+ characters'));
+      if (!password || password.length < 12) return Promise.reject(new Error('Password needs 12+ characters'));
       var users = readUsers();
       if (users[username]) return Promise.reject(new Error('That username is taken'));
       var salt = randHex(16);
@@ -119,7 +130,18 @@
       var rec = users[username];
       if (!rec) return Promise.resolve(false);
       return sha256hex(rec.salt + '$' + password).then(function (hash) {
-        if (hash !== rec.hash) return false;
+        if (hash !== rec.hash) {
+          // Legacy plain$ account (created where WebCrypto was missing):
+          // verify with the old formula once, then transparently upgrade
+          // to salted SHA-256 so access is never lost and never stays weak.
+          if (rec.hash && rec.hash.indexOf('plain$') === 0 &&
+              window.crypto && window.crypto.subtle &&
+              legacyPlain(rec.salt + '$' + password) === rec.hash) {
+            rec.hash = hash; users[username] = rec; writeUsers(users);
+          } else {
+            return false;
+          }
+        }
         try {
           sessionStorage.setItem(SS_SESSION, JSON.stringify({ u: username, t: Date.now() }));
         } catch (e) { return false; }

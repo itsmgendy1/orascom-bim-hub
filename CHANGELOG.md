@@ -1,5 +1,13 @@
 # CHANGELOG — Orascom BIM Digital Delivery Hub
 
+## 2026-10-03 — P2 standardize (branch `hub/p2-standardize`, unmerged)
+- Change: auth honesty (demo-grade labels, 12+ char setup, plain$ auto-upgrade on login); Forma refresh token session-only option + Settings checkbox, strict OAuth state check, safe auth-msg fallback; module meta CSP connect-src +cdnjs (sourcemap noise); tests/fixtures ladder (0/1/10/100/1000, dup, missing, xss, extra-cols).
+- Reason: Audit P2 (A1, F1, CSP touch-up, fixtures). No scoring/import/export logic touched.
+- Files: assets/js/ohub-auth.js, assets/js/forma.js, assets/js/hub.js, hub.html, index.html, modules/{clash,parameter-validator,workset-validator}.html, tests/fixtures/.
+- Tests: diff review per hunk; fixtures generated deterministically (seed 42); browser + preview verification pending.
+- Deployment: none yet. Rollback: `main @ c87626e`.
+- Remaining: full CSP enforcement, import/export unification, Playwright (no runner here), P3 items.
+
 ## 2026-10-03 — P1 security (branch `hub/p1-security`, unmerged)
 - Change: XSS escaping in workset-validator (11 sites), model-quality sidebar (DOM build), parameter tooltip (textContent); hub.js team/GIS string-in-onclick → encodeURIComponent/data-attribute; same-origin postMessage Hub<->6 modules (file:// behavior preserved); HSTS header; README structure/deploy rewrite to match repo reality.
 - Reason: Audit P1 (X1, X2, M1, H1, D1). No scoring/import/export logic touched.

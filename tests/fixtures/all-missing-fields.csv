@@ -1,0 +1,31 @@
+Category,Workset,Family and Type,RVT Link: File Name,Element Id,Comments,Mark
+,,,,100000,,
+Windows,EL - Windows,Fam01 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100001,note 1,M-1
+Walls,PL - Walls,Fam02 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100002,note 2,M-2
+Lighting Fixtures,,Fam03 : Type3,,100003,note 3,M-3
+,PL - Cable Trays,Fam04 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100004,,M-4
+Lighting Fixtures,,,P0152-K00146-OCC-UB02-ZZ-M3-AR-000001.rvt,100005,note 5,
+Pipe Fittings,,Fam06 : Type6,,100006,note 6,M-6
+Doors,ME_Doors,Fam07 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100007,note 7,M-7
+,XX - Pipe Fittings,Fam08 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-AR-000001.rvt,100008,,M-8
+Cable Trays,,Fam09 : Type2,,100009,note 9,M-9
+Doors,EL - Doors,,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100010,note 10,
+Cable Trays,XX - Cable Trays,Fam11 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100011,note 11,M-0
+,,Fam12 : Type5,,100012,,M-1
+Floors,,Fam13 : Type6,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100013,note 13,M-2
+Columns,ST - Columns,Fam14 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100014,note 14,M-3
+Floors,,,,100015,note 15,
+,EL - Lighting Fixtures,Fam16 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100016,,M-5
+Pipes,AR - Pipes,Fam17 : Type3,P0152-K00146-OCC-UB02-ZZ-M3-AR-000001.rvt,100017,note 17,M-6
+Cable Trays,,Fam18 : Type4,,100018,note 18,M-7
+Pipes,ME - Pipes,Fam19 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100019,note 19,M-8
+,XX - Floors,,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100020,,
+Ducts,,Fam21 : Type0,,100021,note 21,M-10
+Lighting Fixtures,XX - Lighting Fixtures,Fam22 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100022,note 22,M-0
+Floors,EL - Floors,Fam00 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100023,note 23,M-1
+,,Fam01 : Type3,,100024,,M-2
+Cable Trays,EL_Cable_Trays,,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100025,note 25,
+Floors,XX - Floors,Fam03 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100026,note 26,M-4
+Ducts,,Fam04 : Type6,,100027,note 27,M-5
+,EL - Windows,Fam05 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100028,,M-6
+Floors,PL - Floors,Fam06 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100029,note 29,M-7

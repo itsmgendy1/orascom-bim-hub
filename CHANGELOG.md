@@ -1,5 +1,12 @@
 # CHANGELOG — Orascom BIM Digital Delivery Hub
 
+## 2026-10-03 — Login UX (branch `hub/login-ux`, unmerged)
+- Change: ENTER tries built-in cloud accounts first, then local (no manual server URL needed); removed "(Browser-local gate.)" suffix; team-server toggle documented (tooltip + inline hint); Request-account link moved above ENTER.
+- Reason: admin cloud login failed without a typed server URL; link discoverability.
+- Files: index.html.
+- Tests: logic review; browser verification pending.
+- Deployment: none yet. Rollback: `main @ f7228c6`.
+
 ## 2026-10-03 — Auth UX (branch `hub/auth-ux`, unmerged)
 - Change: request form email now mandatory (client regex + Worker 400); removed ACCOUNT SERVER field — built-in auth-Worker URL used (saved team URL still wins).
 - Reason: simpler signup; one account server.

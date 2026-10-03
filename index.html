@@ -246,12 +246,10 @@
     <div id="loginTeamWrap" style="display:none">
       <label>TEAM SERVER</label>
       <input id="teamUrl" type="text" placeholder="https://orascom-hub-sync.<account>.workers.dev" />
+      <p style="font-size:11px;color:rgba(207,238,255,.6);margin:6px 0 0;line-height:1.5;">Connects this browser to shared cloud accounts &amp; data on your sync server. Leave this hidden for sign-in on this browser only.</p>
     </div>
-    <div style="margin-top:8px;"><a href="#" id="loginTeamToggle" onclick="return toggleTeamServer()"
-      style="font-size:11px;color:var(--cyan);text-decoration:none;">Use team server instead →</a>
-      <span style="color:rgba(207,238,255,.35);font-size:11px;"> · </span>
-      <a href="#" id="loginRequestToggle" onclick="return toggleRequest()"
-      style="font-size:11px;color:var(--cyan);text-decoration:none;">No account? Request one →</a></div>
+    <div style="margin-top:8px;"><a href="#" id="loginTeamToggle" onclick="return toggleTeamServer()" title="Connect to shared cloud accounts & data on your sync server"
+      style="font-size:11px;color:var(--cyan);text-decoration:none;">Use team server instead →</a></div>
     <form id="loginForm" onsubmit="return submitLogin(event)">
       <label>USERNAME</label>
       <input id="loginUser" type="text" autocomplete="username" placeholder="e.g. bim.admin" />
@@ -268,6 +266,8 @@
         <input id="loginEmail" type="email" autocomplete="email" placeholder="you@company.com" />
       </div>
       <div id="loginErr"></div>
+      <div style="margin:10px 0 4px;text-align:center;"><a href="#" id="loginRequestToggle" onclick="return toggleRequest()"
+        style="font-size:11px;color:var(--cyan);text-decoration:none;">No account? Request one →</a></div>
       <button id="loginGo" type="submit">ENTER →</button>
       <button id="loginCancel" type="button" onclick="closeLogin()">CANCEL</button>
     </form>
@@ -295,7 +295,7 @@
     document.getElementById('loginTeamWrap').style.display = (!setup && teamOn) ? 'block' : 'none';
     document.getElementById('loginSub').textContent = setup
       ? 'First run: create the administrator account for this browser.'
-      : (teamOn ? 'Team sign-in — verified against your sync server.' : 'Sign in to enter the BIM Digital Delivery Hub. (Browser-local gate.)');
+      : (teamOn ? 'Team sign-in — verified against your sync server.' : 'Sign in to enter the BIM Digital Delivery Hub.');
     document.getElementById('loginModal').classList.add('on');
     setTimeout(function(){ document.getElementById('loginUser').focus(); }, 60);
   }
@@ -396,9 +396,20 @@
           });
         });
       } else {
-        OHubAuth.login(u, p).then(function(ok){
-          if(ok){ OHubAuth.enterHub(); } else { loginFail('Wrong username or password.'); }
-        }).catch(function(){ loginFail('Login failed — try again.'); });
+        // No server typed: try the built-in cloud accounts first, then this
+        // browser's local accounts — either success enters the Hub.
+        var wurl = (window.OHubAuth.authDefaultUrl ? window.OHubAuth.authDefaultUrl() : '');
+        var doLocal = function(){
+          OHubAuth.login(u, p).then(function(ok){
+            if(ok){ OHubAuth.enterHub(); } else { loginFail('Wrong username or password.'); }
+          }).catch(function(){ loginFail('Login failed — try again.'); });
+        };
+        if(wurl && window.OHubAuth.authLogin){
+          OHubAuth.authLogin(wurl, u, p).then(function(){ OHubAuth.enterHub(); }).catch(function(v2err){
+            var m = (v2err && v2err.message) || '';
+            if(/pending|disabled/i.test(m)) loginFail(m); else doLocal();
+          });
+        } else doLocal();
       }
     }
     return false;

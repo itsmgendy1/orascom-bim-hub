@@ -153,7 +153,7 @@ export default {
       const salt = hex(rand(16));
       try {
         await env.DB.prepare(
-          'INSERT INTO users(id,username,email,display_name,pass_salt,pass_hash,role,status,created_at) VALUES (?,?,?,?,?,?,?,?)')
+          'INSERT INTO users(id,username,email,display_name,pass_salt,pass_hash,role,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
           .bind(uid('usr'), username, email || null, display, salt, await pbkdf2(password, salt), 'USER', 'PENDING', now()).run();
       } catch (_) { return json(req, { ok: false, error: 'username taken' }, 409); }
       ctx.waitUntil(audit(env, ctx, { action: 'ACCOUNT_CREATED', target_id: username, ip: ipOf(req) }));
@@ -282,7 +282,7 @@ export default {
       const id = uid('usr');
       try {
         await env.DB.prepare(
-          'INSERT INTO users(id,username,email,display_name,pass_salt,pass_hash,role,status,created_at) VALUES (?,?,?,?,?,?,?,?)')
+          'INSERT INTO users(id,username,email,display_name,pass_salt,pass_hash,role,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
           .bind(id, username, String(body.email || '').trim().slice(0, 120) || null,
             String(body.displayName || username).trim().slice(0, 80),
             salt, await pbkdf2(password, salt), role, 'ACTIVE', now()).run();
@@ -378,7 +378,7 @@ export default {
       const salt = hex(rand(16));
       const id = uid('usr');
       await env.DB.prepare(
-        'INSERT INTO users(id,username,email,display_name,pass_salt,pass_hash,role,status,created_at) VALUES (?,?,?,?,?,?,?,?)')
+        'INSERT INTO users(id,username,email,display_name,pass_salt,pass_hash,role,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
         .bind(id, String(body.username || 'admin').trim(), null, 'Administrator',
           salt, await pbkdf2(String(body.password || ''), salt), 'ADMIN', 'ACTIVE', now()).run();
       ctx.waitUntil(audit(env, ctx, { action: 'ACCOUNT_CREATED', target_id: 'bootstrap-admin', detail: 'first ADMIN' }));

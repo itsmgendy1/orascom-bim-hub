@@ -6,25 +6,31 @@ then **Enter Hub** → `hub.html` (command center).
 ## Structure
 
 ```text
-HUB/
+HUB/  (this repo — the complete, directly deployable static site)
 ├── index.html                  Homepage / landing (cinematic hero + module cards → hub.html#/view)
 ├── hub.html                    Main hub shell (sidebar, project picker, dashboard, iframes)
+├── auth.html                   Forma OAuth callback (→ hub.html#/settings)
+├── 404.html                    Not-found page (hash-route help)
+├── _headers                    Cloudflare Pages headers (security + cache; no global CSP by design)
 ├── assets/css/hub.css          Hub design system (navy/gold, Barlow)
 ├── assets/js/hub.js            Router, KPI engine, project registry, issues, search (window.OHub)
+├── assets/js/ohub-auth.js      Front-door login (local users + team server)
+├── assets/js/forma.js          Forma live link (PKCE, data:read)
+├── assets/js/site-plots.js     Built-in DP plot geometries
 ├── assets/img/orascom-logo.*   Branding
 ├── modules/
-│   ├── delivery-verification.html  MIDP + As-Built + file-exchange audit (from HTMLs/)
-│   ├── naming-convention.html      OCC naming rule engine (from HTMLs/)
-│   ├── parameter-validator.html    LOIN completeness (from HTMLs/)
-│   ├── model-quality.html          Multi-discipline model health (from HTMLs/)
-│   ├── workset-validator.html      Workset assignment (from HTMLs/)
-│   └── clash.html                  Coordination review (hub-native bonus module)
-├── automation/                   Revit→Hub pipeline (pyRevit batch export +
-│                                 local CORS export server + nightly .bat)
-├── HTMLs/                      Pristine sources (untouched)
-├── OC Hub/                     Previous hub iterations (untouched, reference only)
+│   ├── delivery-verification.html  MIDP + As-Built + file-exchange audit
+│   ├── naming-convention.html      OCC naming rule engine
+│   ├── parameter-validator.html    LOIN completeness
+│   ├── model-quality.html          Multi-discipline model health
+│   ├── workset-validator.html      Workset assignment
+│   └── clash.html                  Coordination review
 └── README.md
 ```
+
+> Local-only pipeline scripts (`automation/`, `tools/build_deploy.py`) and pristine
+> sources (`HTMLs/`, `OC Hub/`) are deliberately NOT in this repo — they live on
+> the BIM workstation only and must never ship (export-server URLs, machine paths).
 
 ## Architecture — why iframes
 
@@ -144,14 +150,15 @@ Leaflet map); validators otherwise run offline once cached.
 
 ## Deploy to Cloudflare Pages
 
-The working tree is ~529MB, but the app is a 21-file / 22MB static subset
-(Pages rejects any file over 25MB — the 27.5MB Clash Report HTML alone would
-fail the deploy, and sources/archives/automation must not ship).
+This repo IS the deployable site (31 files; largest single file is
+`showreel.mp4` at ~13MB — under the Pages 25MB/file limit). No build step.
 
-1. `python tools\build_deploy.py` — assembles `deploy/` and verifies limits.
-2. Pages dashboard → Create → Pages → Upload assets → drag `deploy/`,
-   **or** `wrangler pages deploy deploy/`. No build command, no output-dir
-   tricks, no redirects file (all navigation is `#/` hash routes).
+- **Auto-deploy (verified 2026-10-03):** Pages tracks `main`; pushing/merging to
+  `main` redeploys production automatically (merge `6c08140` went live with no
+  manual step). Preview deployments are created for pull requests.
+- **Manual alternative:** Pages dashboard → this project → Upload assets, or
+  `wrangler pages deploy ./`. No build command, no output-dir tricks, no
+  redirects file (all navigation is `#/` hash routes).
 3. Local pipeline keeps working unchanged: run `serve_exports.py` on your
    machine as usual. It now answers Private Network Access preflights, so the
    HTTPS-hosted Hub can still reach your `http://localhost:8787` — verified

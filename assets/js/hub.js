@@ -37,6 +37,8 @@
   ];
 
   var DEFAULT_WEIGHTS = {midp:20, naming:15, qaqc:25, workset:15, parameters:15, clash:10};
+  // Strict same-origin Hub<->module messaging on http(s); file:// keeps "*" (no origin boundary there).
+  var HUB_ORIGIN = (location.protocol.indexOf("http")===0) ? location.origin : "*";
   var DEFAULT_THRESHOLDS = {ok:90, warn:75};
   var DELIV_STATUSES = ['Upcoming','In Progress','Submitted','Delayed','Milestone'];
 
@@ -186,7 +188,7 @@
       if(!loadedModules[m.id]) return;
       var frame = document.getElementById('frame-'+m.id);
       if(!frame || !frame.contentWindow) return;
-      try{ frame.contentWindow.postMessage({source:'orascom-hub', type:'set-theme', theme:hubTheme()}, '*'); }catch(e){}
+      try{ frame.contentWindow.postMessage({source:'orascom-hub', type:'set-theme', theme:hubTheme()}, HUB_ORIGIN); }catch(e){}
     });
   }
 
@@ -327,11 +329,11 @@
       source:'orascom-hub', type:'set-context',
       context: p ? {id:p.id, name:p.name, code:p.code} : null,
       theme: hubTheme()
-    }, '*');
+    }, HUB_ORIGIN);
   }
 
   window.addEventListener('message', function(ev){
-    if(!ev || !ev.data || ev.data.source!=='orascom-hub-module') return;
+    if(!ev || (HUB_ORIGIN!=='*' && ev.origin!==HUB_ORIGIN) || !ev.data || ev.data.source!=='orascom-hub-module') return;
 
     if(ev.data.type==='theme-toggle'){ toggleDark(); return; }
 
@@ -1038,7 +1040,7 @@
           var kpi = pl.kpi || {};
           var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
           var r = function(v){ return '<td style="text-align:right;">'+numFmt(v)+'</td>'; };
-          return '<tr style="cursor:pointer;" onclick="OHub.gisFocusPlot(\''+escapeHtml(pl.code)+'\')">'+
+          return '<tr style="cursor:pointer;" onclick="OHub.gisFocusPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))">'+
             '<td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+zoneColor(holder,(DP_COLORS[pl.code]||'#8E9BB3'))+';margin-right:7px;"></span><strong>'+escapeHtml(pl.code)+'</strong> <span style="color:var(--muted);font-size:.76rem;">'+escapeHtml(pl.name)+'</span></td>'+
             '<td>'+bucketBadge(plotBucket(holder, g, overdue))+'</td>'+
             '<td>'+escapeHtml(stageName)+'</td>'+
@@ -1107,7 +1109,7 @@
         var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
         var prog = g.total ? Math.round(g.approved/g.total*100) : 0;
         var dot = gisMode==='package' ? zoneColor(holder, (DP_COLORS[pl.code]||'#8E9BB3')) : plotModeStyle(pl, holder, g, overdue, holder?holderOpenIssues(holder.id):0).color;
-        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="OHub.gisFocusPlot(\''+escapeHtml(pl.code)+'\')">'+
+        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="OHub.gisFocusPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))">'+
           '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">'+
             '<span style="width:12px;height:12px;border-radius:3px;background:'+dot+';flex-shrink:0;"></span>'+
             '<h3 style="font-size:.92rem;margin:0;">'+escapeHtml(pl.code)+'</h3>'+
@@ -1122,8 +1124,8 @@
           (holder
             ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
             : '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
-              '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(\''+escapeHtml(pl.code)+'\')"'+(ap?'':' disabled')+'>Assign to active project</button>'+
-              '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();OHub.gisNewProjectFromPlot(\''+escapeHtml(pl.code)+'\')">\uff0b New project</button></div>')+
+              '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))"'+(ap?'':' disabled')+'>Assign to active project</button>'+
+              '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();OHub.gisNewProjectFromPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))">\uff0b New project</button></div>')+
         '</div>';
       }).join('');
     if(gisSearchFocus){
@@ -3065,7 +3067,7 @@
     }
     var frame = document.getElementById('frame-'+modId);
     try{
-      frame.contentWindow.postMessage({source:'orascom-hub', type:'hub-files', role:role||'', files:files}, '*');
+      frame.contentWindow.postMessage({source:'orascom-hub', type:'hub-files', role:role||'', files:files}, HUB_ORIGIN);
       logActivity('Sent '+files.length+' file(s) to '+mod.label, 'ok');
       toast('Sent '+files.length+' file(s) to '+mod.label);
       if(done) done();
@@ -3888,8 +3890,11 @@
           return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--light);font-size:.82rem;">'+
             '<strong>'+escapeHtml(u.username)+'</strong>'+
             '<span style="color:var(--muted);">since '+escapeHtml(new Date(u.created||0).toLocaleDateString())+'</span>'+
-            '<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="OHub.teamDeleteUser(\''+escapeHtml(u.username)+'\')">Remove</button></div>';
+            '<button class="btn btn-ghost btn-sm" style="margin-left:auto;" data-deluser="'+encodeURIComponent(u.username||'')+'">Remove</button></div>';
         }).join('') : '<p style="font-size:.8rem;color:var(--muted);">No team accounts yet.</p>';
+        Array.prototype.forEach.call(host.querySelectorAll('[data-deluser]'), function(b){
+          b.addEventListener('click', function(){ teamDeleteUser(decodeURIComponent(b.getAttribute('data-deluser')||'')); });
+        });
         teamStatus('');
       })
       .catch(function(err){ teamStatus('Could not load accounts: '+err.message); });

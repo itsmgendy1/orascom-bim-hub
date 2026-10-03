@@ -947,7 +947,7 @@ function updateRvtLinkInfo(rows){
   const vals=[...new Set(rows.map(r=> getRvtLinkValue(r)).filter(Boolean))].slice(0,3);
   const discs=[...new Set(vals.map(extractDisciplineFromRvtLink).filter(Boolean))];
   const preview=vals.map(v=> extractDisciplineFromRvtLink(v)+" ← "+v).join(" · ");
-  el.innerHTML=`<b>RVT Link: File Name</b> detected — convention reads <b>UB02-EL</b> style: <code>${preview}</code>${discs.length>1?" · disciplines: "+discs.join(", "):""}`;
+  el.innerHTML=`<b>RVT Link: File Name</b> detected — convention reads <b>UB02-EL</b> style: <code>${escapeHtml(preview)}</code>${discs.length>1?" · disciplines: "+discs.map(escapeHtml).join(", "):""}`;
   el.style.display="block";
   // also update map-example
   if(discs[0]) document.getElementById("map-example").textContent=discs[0]+" - Walls";
@@ -1114,7 +1114,7 @@ function populateWsChecklist(rows){
   grid.innerHTML=distinct.map(ws=>{
     const count=rows.filter(r=>r.Workset===ws).length;
     const checked=SELECTED_WORKSETS.has(ws);
-    const safe=ws.replace(/"/g,"&quot;");
+    const safe=escapeHtml(ws);
     return `<label class="param-check"><input type="checkbox" value="${safe}" ${checked?"checked":""} onchange="onWsCheckChange(this)"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${safe}">${safe}</span><span class="map-tag">${count}</span></label>`;
   }).join("");
   document.getElementById("ws-select-panel").style.display="block";
@@ -1364,7 +1364,7 @@ function renderDisciplines(){
     const cls=pct>=90?"hi":pct>=60?"md":"lo";
     const progColor=pct>=90?"var(--ok)":pct>=60?"var(--warn)":"var(--fail)";
     const selClass=SELECTED_DISC===disc?" sel":"";
-    return `<div class="dc${selClass}" onclick="showDiscDetail('${disc.replace(/'/g,"\\'")}')"><div class="dc-hdr"><span class="dc-code" title="${disc}">${disc}</span><span class="dc-rate ${cls}">${pct}%</span></div><div class="dc-body"><div class="dc-prog-bg"><div class="dc-prog-fill" style="width:${pct}%;background:${progColor}"></div></div><div class="dc-pills"><span class="pill p">${s.valid} Valid</span><span class="pill f">${s.invalid} Invalid</span>${s.missing?`<span class="pill" style="background:#FFF4E1;color:#A06A00">${s.missing} Missing</span>`:""}${s.skipped?`<span class="pill n">${s.skipped} Skip</span>`:""}</div><div style="font-size:.68rem;color:var(--muted);margin-top:6px">${s.total} elements · UB02-EL style</div></div></div>`;
+    return `<div class="dc${selClass}" onclick="showDiscDetail(decodeURIComponent('${encodeURIComponent(disc)}'))"><div class="dc-hdr"><span class="dc-code" title="${escapeHtml(disc)}">${escapeHtml(disc)}</span><span class="dc-rate ${cls}">${pct}%</span></div><div class="dc-body"><div class="dc-prog-bg"><div class="dc-prog-fill" style="width:${pct}%;background:${progColor}"></div></div><div class="dc-pills"><span class="pill p">${s.valid} Valid</span><span class="pill f">${s.invalid} Invalid</span>${s.missing?`<span class="pill" style="background:#FFF4E1;color:#A06A00">${s.missing} Missing</span>`:""}${s.skipped?`<span class="pill n">${s.skipped} Skip</span>`:""}</div><div style="font-size:.68rem;color:var(--muted);margin-top:6px">${s.total} elements · UB02-EL style</div></div></div>`;
   }).join("") || '<div style="padding:20px;color:var(--muted)">No disciplines match filter.</div>';
 }
 function showDiscDetail(disc){
@@ -1375,16 +1375,16 @@ function showDiscDetail(disc){
   // breakdown by category within discipline
   const catMap={}; rows.forEach(r=>{ const c=r.category||"(No Cat)"; if(!catMap[c]) catMap[c]={valid:0,invalid:0,missing:0,skipped:0,total:0}; catMap[c].total++; catMap[c][r.status.toLowerCase()]++; });
   const cats=Object.keys(catMap).sort((a,b)=> catMap[b].total - catMap[a].total).slice(0,10);
-  let html=`<div class="det on" id="disc-det"><div class="det-hdr"><div><div class="det-title">${disc}</div><div class="det-meta">${rows.length} elements · ${Object.keys(catMap).length} categories · ${Math.round(s.valid/s.total*1000)/10}% valid</div></div><div class="det-rate">${Math.round(s.valid/s.total*1000)/10}%</div><button class="det-x" onclick="closeDiscDetail()">✕</button></div><div class="det-body">`;
-  html+=`<div class="cl"><h4>Categories in ${disc}</h4>`+cats.map(c=>{
+  let html=`<div class="det on" id="disc-det"><div class="det-hdr"><div><div class="det-title">${escapeHtml(disc)}</div><div class="det-meta">${rows.length} elements · ${Object.keys(catMap).length} categories · ${Math.round(s.valid/s.total*1000)/10}% valid</div></div><div class="det-rate">${Math.round(s.valid/s.total*1000)/10}%</div><button class="det-x" onclick="closeDiscDetail()">✕</button></div><div class="det-body">`;
+  html+=`<div class="cl"><h4>Categories in ${escapeHtml(disc)}</h4>`+cats.map(c=>{
     const cs=catMap[c]; const pct=cs.total?Math.round(cs.valid/cs.total*1000)/10:0;
-    return `<div class="ci"><span class="ci-dot ${pct>=90?"p":"f"}"></span><span class="ci-name">${c} <span style="color:var(--muted);font-size:.72rem">${cs.valid}✔ ${cs.invalid}✘ ${cs.missing}⚠</span></span><span class="ci-st ${pct>=90?"p":"f"}">${pct}%</span></div>`;
+    return `<div class="ci"><span class="ci-dot ${pct>=90?"p":"f"}"></span><span class="ci-name">${escapeHtml(c)} <span style="color:var(--muted);font-size:.72rem">${cs.valid}✔ ${cs.invalid}✘ ${cs.missing}⚠</span></span><span class="ci-st ${pct>=90?"p":"f"}">${pct}%</span></div>`;
   }).join("")+`</div>`;
   const byStatus={Valid:[],Invalid:[],Missing:[],Skipped:[]};
   rows.forEach(r=> byStatus[r.status].push(r));
   ["Valid","Invalid","Missing","Skipped"].forEach(st=>{
     if(!byStatus[st].length) return;
-    html+=`<div class="cl"><h4>${st} — ${byStatus[st].length}</h4>`+byStatus[st].slice(0,8).map(r=>`<div class="ci"><span class="ci-dot ${st==="Valid"?"p":"f"}"></span><span class="ci-name">${r.family||"—"} <span style="color:var(--muted);font-size:.72rem">(${r.workset_name||"no ws"} → ${r.expected_workset||"—"})</span></span><span class="ci-st ${st==="Valid"?"p":"f"}">${st}</span></div>`).join("")+(byStatus[st].length>8?`<div style="font-size:.72rem;color:var(--muted);margin-top:6px">+ ${byStatus[st].length-8} more…</div>`:"")+`</div>`;
+    html+=`<div class="cl"><h4>${st} — ${byStatus[st].length}</h4>`+byStatus[st].slice(0,8).map(r=>`<div class="ci"><span class="ci-dot ${st==="Valid"?"p":"f"}"></span><span class="ci-name">${escapeHtml(r.family)||"—"} <span style="color:var(--muted);font-size:.72rem">(${escapeHtml(r.workset_name)||"no ws"} → ${escapeHtml(r.expected_workset)||"—"})</span></span><span class="ci-st ${st==="Valid"?"p":"f"}">${st}</span></div>`).join("")+(byStatus[st].length>8?`<div style="font-size:.72rem;color:var(--muted);margin-top:6px">+ ${byStatus[st].length-8} more…</div>`:"")+`</div>`;
   });
   html+='</div></div>';
   document.getElementById("disc-det").outerHTML=html;
@@ -1420,7 +1420,7 @@ function renderMissing(){
   if(filtered.length){
     let html='<tr><th>Discipline</th><th>Missing Workset</th><th>Elements Affected</th></tr>';
     filtered.slice(0,300).forEach(x=>{
-      html+=`<tr><td style="font-weight:700;color:var(--b3)">${x.discipline}</td><td>${x.workset}</td><td><span class="mcell lo">${x.count}</span></td></tr>`;
+      html+=`<tr><td style="font-weight:700;color:var(--b3)">${escapeHtml(x.discipline)}</td><td>${escapeHtml(x.workset)}</td><td><span class="mcell lo">${x.count}</span></td></tr>`;
     });
     tbl.innerHTML=html;
   } else {
@@ -1437,7 +1437,7 @@ function renderMissing(){
   if(discs.length){
     grid.innerHTML=discs.map(d=>{
       const s=byDiscCount[d];
-      return `<div class="dc"><div class="dc-hdr"><span class="dc-code">${d}</span><span class="dc-rate lo">${s.worksets}</span></div><div class="dc-body"><div style="font-size:.82rem;color:var(--muted)">${s.worksets} missing worksets</div><div style="font-weight:800;color:var(--fail);font-size:1.1rem">${s.total} elements</div><div style="font-size:.68rem;color:var(--muted)">need creation</div></div></div>`;
+      return `<div class="dc"><div class="dc-hdr"><span class="dc-code">${escapeHtml(d)}</span><span class="dc-rate lo">${s.worksets}</span></div><div class="dc-body"><div style="font-size:.82rem;color:var(--muted)">${s.worksets} missing worksets</div><div style="font-weight:800;color:var(--fail);font-size:1.1rem">${s.total} elements</div><div style="font-size:.68rem;color:var(--muted)">need creation</div></div></div>`;
     }).join("");
   } else {
     grid.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center">No missing worksets for current filter.</div>';
@@ -1457,19 +1457,19 @@ function renderCategories(){
     const cls=pct>=90?"hi":pct>=60?"md":"lo";
     const progColor=pct>=90?"var(--ok)":pct>=60?"var(--warn)":"var(--fail)";
     const expected=WS_MAPPING[cat]||"—";
-    return `<div class="dc" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}')"><div class="dc-hdr"><span class="dc-code" title="${cat}">${cat}</span><span class="dc-rate ${cls}">${pct}%</span></div><div class="dc-body"><div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">Expected: <b style="color:var(--text)">${expected}</b></div><div class="dc-prog-bg"><div class="dc-prog-fill" style="width:${pct}%;background:${progColor}"></div></div><div class="dc-pills"><span class="pill p">${s.valid} Valid</span><span class="pill f">${s.invalid} Invalid</span>${s.missing?`<span class="pill" style="background:#FFF4E1;color:#A06A00">${s.missing} Missing</span>`:""}${s.skipped?`<span class="pill n">${s.skipped} Skip</span>`:""}</div><div style="font-size:.68rem;color:var(--muted);margin-top:6px">${s.total} elements</div></div></div>`;
+    return `<div class="dc" onclick="showCatDetail(decodeURIComponent('${encodeURIComponent(cat)}'))"><div class="dc-hdr"><span class="dc-code" title="${escapeHtml(cat)}">${escapeHtml(cat)}</span><span class="dc-rate ${cls}">${pct}%</span></div><div class="dc-body"><div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">Expected: <b style="color:var(--text)">${escapeHtml(expected)}</b></div><div class="dc-prog-bg"><div class="dc-prog-fill" style="width:${pct}%;background:${progColor}"></div></div><div class="dc-pills"><span class="pill p">${s.valid} Valid</span><span class="pill f">${s.invalid} Invalid</span>${s.missing?`<span class="pill" style="background:#FFF4E1;color:#A06A00">${s.missing} Missing</span>`:""}${s.skipped?`<span class="pill n">${s.skipped} Skip</span>`:""}</div><div style="font-size:.68rem;color:var(--muted);margin-top:6px">${s.total} elements</div></div></div>`;
   }).join("") || '<div style="padding:20px;color:var(--muted)">No categories match filter.</div>';
 }
 function showCatDetail(cat){
   const s=CATEGORY_STATS[cat];
   const rows=ELEMENTS.filter(e=>e.category===cat);
   const expected=WS_MAPPING[cat]||"—";
-  let html=`<div class="det on" id="det"><div class="det-hdr"><div><div class="det-title">${cat}</div><div class="det-meta">Expected workset: <b style="color:var(--g3)">${expected}</b> · ${rows.length} elements</div></div><div class="det-rate">${Math.round(s.valid/s.total*1000)/10}%</div><button class="det-x" onclick="closeDetail()">✕</button></div><div class="det-body">`;
+  let html=`<div class="det on" id="det"><div class="det-hdr"><div><div class="det-title">${escapeHtml(cat)}</div><div class="det-meta">Expected workset: <b style="color:var(--g3)">${escapeHtml(expected)}</b> · ${rows.length} elements</div></div><div class="det-rate">${Math.round(s.valid/s.total*1000)/10}%</div><button class="det-x" onclick="closeDetail()">✕</button></div><div class="det-body">`;
   const byStatus={Valid:[],Invalid:[],Missing:[],Skipped:[]};
   rows.forEach(r=> byStatus[r.status].push(r));
   ["Valid","Invalid","Missing","Skipped"].forEach(st=>{
     if(!byStatus[st].length) return;
-    html+=`<div class="cl"><h4>${st} — ${byStatus[st].length}</h4>`+byStatus[st].slice(0,12).map(r=>`<div class="ci"><span class="ci-dot ${st==="Valid"?"p":"f"}"></span><span class="ci-name">${r.family||"—"} <span style="color:var(--muted);font-size:.72rem">(${r.workset_name||"no ws"} → ${r.expected_workset||"—"})</span></span><span class="ci-st ${st==="Valid"?"p":"f"}">${st}</span></div>`).join("")+(byStatus[st].length>12?`<div style="font-size:.72rem;color:var(--muted);margin-top:6px">+ ${byStatus[st].length-12} more…</div>`:"")+`</div>`;
+    html+=`<div class="cl"><h4>${st} — ${byStatus[st].length}</h4>`+byStatus[st].slice(0,12).map(r=>`<div class="ci"><span class="ci-dot ${st==="Valid"?"p":"f"}"></span><span class="ci-name">${escapeHtml(r.family)||"—"} <span style="color:var(--muted);font-size:.72rem">(${escapeHtml(r.workset_name)||"no ws"} → ${escapeHtml(r.expected_workset)||"—"})</span></span><span class="ci-st ${st==="Valid"?"p":"f"}">${st}</span></div>`).join("")+(byStatus[st].length>12?`<div style="font-size:.72rem;color:var(--muted);margin-top:6px">+ ${byStatus[st].length-12} more…</div>`:"")+`</div>`;
   });
   html+='</div></div>';
   document.getElementById("det").outerHTML=html;
@@ -1489,7 +1489,7 @@ function renderWorksets(){
     const s=WORKSET_STATS[ws];
     const pct=s.total?Math.round(s.valid/s.total*1000)/10:0;
     const cls=pct>=90?"hi":pct>=60?"md":"lo";
-    return `<div class="dc"><div class="dc-hdr"><span class="dc-code">${ws}</span><span class="dc-rate ${cls}">${s.total}</span></div><div class="dc-body"><div class="dc-prog-bg"><div class="dc-prog-fill" style="width:${pct}%;background:${pct>=90?"var(--ok)":pct>=60?"var(--warn)":"var(--fail)"}"></div></div><div class="dc-pills"><span class="pill p">${s.valid} Valid</span><span class="pill f">${s.invalid} Invalid</span>${s.missing?`<span class="pill" style="background:#FFF4E1;color:#A06A00">${s.missing} Missing</span>`:""}</div><div style="font-size:.68rem;color:var(--muted);margin-top:4px">${pct}% valid</div></div></div>`;
+    return `<div class="dc"><div class="dc-hdr"><span class="dc-code">${escapeHtml(ws)}</span><span class="dc-rate ${cls}">${s.total}</span></div><div class="dc-body"><div class="dc-prog-bg"><div class="dc-prog-fill" style="width:${pct}%;background:${pct>=90?"var(--ok)":pct>=60?"var(--warn)":"var(--fail)"}"></div></div><div class="dc-pills"><span class="pill p">${s.valid} Valid</span><span class="pill f">${s.invalid} Invalid</span>${s.missing?`<span class="pill" style="background:#FFF4E1;color:#A06A00">${s.missing} Missing</span>`:""}</div><div style="font-size:.68rem;color:var(--muted);margin-top:4px">${pct}% valid</div></div></div>`;
   }).join("");
   // matrix
   renderWsMatrix();
@@ -1501,9 +1501,9 @@ function renderWsMatrix(){
   // build counts
   const mat={};
   ELEMENTS.forEach(e=>{ const k=e.workset_name+"||"+e.category; mat[k]=(mat[k]||0)+1; });
-  let html='<tr><th class="check-col">Workset \\ Category</th>'+cats.map(c=>'<th>'+c+'</th>').join("")+'<th>Tot</th></tr>';
+  let html='<tr><th class="check-col">Workset \\ Category</th>'+cats.map(c=>'<th>'+escapeHtml(c)+'</th>').join("")+'<th>Tot</th></tr>';
   wss.forEach(ws=>{
-    html+='<tr><td class="check-lbl">'+ws+'</td>';
+    html+='<tr><td class="check-lbl">'+escapeHtml(ws)+'</td>';
     cats.forEach(cat=>{ const n=mat[ws+"||"+cat]||0; const cls=n>0?"hi":"none"; html+='<td><span class="mcell '+cls+'">'+(n||"—")+'</span></td>'; });
     html+='<td><span class="mcell hi">'+WORKSET_STATS[ws].total+'</span></td></tr>';
   });
@@ -1530,7 +1530,7 @@ function renderElements(){
   list.slice(0,600).forEach((e,i)=>{
     const badge=e.status==="Valid"?'<span class="badge-ok">✓</span>':e.status==="Skipped"?'<span class="badge-na">—</span>':'<span class="badge-bad">✕</span>';
     const col=e.status==="Valid"?"var(--ok2)":e.status==="Invalid"?"var(--fail)":e.status==="Missing"?"var(--warn)":"var(--na)";
-    html+=`<tr><td>${i+1}</td><td style="font-weight:700;color:var(--b3)">${e.discipline||"—"}</td><td>${e.family||"—"}</td><td>${e.category||"—"}</td><td>${e.workset_name||"—"}</td><td>${e.expected_workset||"—"}</td><td style="color:${col};font-weight:800">${badge} ${e.status}</td><td style="font-size:.72rem;color:var(--muted)">${e.failure_reason||"—"}</td></tr>`;
+    html+=`<tr><td>${i+1}</td><td style="font-weight:700;color:var(--b3)">${escapeHtml(e.discipline)||"—"}</td><td>${escapeHtml(e.family)||"—"}</td><td>${escapeHtml(e.category)||"—"}</td><td>${escapeHtml(e.workset_name)||"—"}</td><td>${escapeHtml(e.expected_workset)||"—"}</td><td style="color:${col};font-weight:800">${badge} ${e.status}</td><td style="font-size:.72rem;color:var(--muted)">${escapeHtml(e.failure_reason)||"—"}</td></tr>`;
   });
   tbl.innerHTML=html;
   if(list.length>600) tbl.innerHTML+='<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:10px">Showing first 600 of '+list.length+' — use filters or CSV export to see all.</td></tr>';
@@ -2016,7 +2016,10 @@ function timestamp(){ return new Date().toISOString().slice(0,19).replace(/[-:T]
 /* Orascom BIM Hub context bridge -- added for Hub integration only; does not alter native tool logic */
 (function(){
   window.OrascomHubContext = window.OrascomHubContext || null;
+  // Strict same-origin Hub messaging on http(s); file:// standalone keeps "*" (no origin boundary there).
+  window.OrascomHubOrigin = (location.protocol.indexOf("http")===0) ? location.origin : "*";
   window.addEventListener("message", function(ev){
+    if (window.OrascomHubOrigin !== "*" && (!ev || ev.origin !== window.OrascomHubOrigin)) return;
     if (ev && ev.data && ev.data.source === "orascom-hub" && ev.data.type === "set-context") {
       window.OrascomHubContext = ev.data.context || null;
       try { document.dispatchEvent(new CustomEvent("orascom-hub-context", { detail: window.OrascomHubContext })); } catch(e) {}
@@ -2031,13 +2034,13 @@ function timestamp(){ return new Date().toISOString().slice(0,19).replace(/[-:T]
           issues: Math.max(0, Math.round(issues || 0)),
           meta: meta || null,
           context: window.OrascomHubContext || null
-        }, "*");
+        }, window.OrascomHubOrigin);
       }
     }catch(e){}
   };
   try {
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ source: "orascom-hub-module", type: "ready" }, "*");
+      window.parent.postMessage({ source: "orascom-hub-module", type: "ready" }, window.OrascomHubOrigin);
     }
   } catch(e) {}
 })();
@@ -2096,6 +2099,7 @@ function timestamp(){ return new Date().toISOString().slice(0,19).replace(/[-:T]
 /* Orascom Hub Data Center push -- added for Hub integration only; feeds Hub-pushed files into the native import queue */
 (function(){
   window.addEventListener("message", function(ev){
+    if(window.OrascomHubOrigin!=="*" && (!ev || ev.origin!==window.OrascomHubOrigin)) return;
     if(!ev || !ev.data || ev.data.source!=="orascom-hub" || ev.data.type!=="hub-files") return;
     try{ hubReceiveFiles(ev.data.files||[], ev.data.role||""); }catch(e){}
   });
@@ -2123,6 +2127,7 @@ function timestamp(){ return new Date().toISOString().slice(0,19).replace(/[-:T]
   }
   function readStored(){ try{ return localStorage.getItem(KEY)==="1"?"dark":null; }catch(e){ return null; } }
   window.addEventListener("message", function(ev){
+    if(window.OrascomHubOrigin!=="*" && (!ev || ev.origin!==window.OrascomHubOrigin)) return;
     if(!ev || !ev.data || ev.data.source!=="orascom-hub") return;
     if(ev.data.type==="set-theme" && ev.data.theme){ applyHubTheme(ev.data.theme); return; }
     if(ev.data.type==="set-context"){
@@ -2131,7 +2136,7 @@ function timestamp(){ return new Date().toISOString().slice(0,19).replace(/[-:T]
     }
   });
   window.hubToggleTheme = function(){
-    try{ if(window.parent && window.parent!==window){ window.parent.postMessage({source:"orascom-hub-module", type:"theme-toggle"}, "*"); return true; } }catch(e){}
+    try{ if(window.parent && window.parent!==window){ window.parent.postMessage({source:"orascom-hub-module", type:"theme-toggle"}, window.OrascomHubOrigin); return true; } }catch(e){}
     return false;
   };
 })();

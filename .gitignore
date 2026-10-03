@@ -3,3 +3,9 @@
 Thumbs.db
 desktop.ini
 *.log
+# Secrets / local config — never commit tokens (see AI_CONTEXT.md § Access).
+.env*
+*.pem
+*-secret*
+hub_selection.txt
+selected_models.json

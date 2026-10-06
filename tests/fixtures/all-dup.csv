@@ -1,0 +1,61 @@
+Category,Workset,Family and Type,RVT Link: File Name,Element Id,Comments,Mark
+Floors,,Fam00 : Type0,,100000,,
+Floors,,Fam00 : Type0,,100000,,
+Floors,,Fam00 : Type0,,100000,,
+Pipe Fittings,EL - Pipe Fittings,Fam01 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100001,note 1,M-1
+Pipe Fittings,EL - Pipe Fittings,Fam01 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100001,note 1,M-1
+Pipe Fittings,EL - Pipe Fittings,Fam01 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100001,note 1,M-1
+Cable Trays,,Fam02 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100002,note 2,M-2
+Cable Trays,,Fam02 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100002,note 2,M-2
+Cable Trays,,Fam02 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100002,note 2,M-2
+Walls,,Fam03 : Type3,,100003,note 3,M-3
+Walls,,Fam03 : Type3,,100003,note 3,M-3
+Walls,,Fam03 : Type3,,100003,note 3,M-3
+Lighting Fixtures,EL - Lighting Fixtures,Fam04 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100004,,M-4
+Lighting Fixtures,EL - Lighting Fixtures,Fam04 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100004,,M-4
+Lighting Fixtures,EL - Lighting Fixtures,Fam04 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100004,,M-4
+Doors,ST - Doors,Fam05 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100005,note 5,
+Doors,ST - Doors,Fam05 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100005,note 5,
+Doors,ST - Doors,Fam05 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100005,note 5,
+Pipe Fittings,ST - Pipe Fittings,Fam06 : Type6,,100006,note 6,M-6
+Pipe Fittings,ST - Pipe Fittings,Fam06 : Type6,,100006,note 6,M-6
+Pipe Fittings,ST - Pipe Fittings,Fam06 : Type6,,100006,note 6,M-6
+Walls,EL - Walls,Fam07 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100007,note 7,M-7
+Walls,EL - Walls,Fam07 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100007,note 7,M-7
+Walls,EL - Walls,Fam07 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100007,note 7,M-7
+Walls,PL - Walls,Fam08 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100008,,M-8
+Walls,PL - Walls,Fam08 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100008,,M-8
+Walls,PL - Walls,Fam08 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100008,,M-8
+Cable Trays,PL - Cable Trays,Fam09 : Type2,,100009,note 9,M-9
+Cable Trays,PL - Cable Trays,Fam09 : Type2,,100009,note 9,M-9
+Cable Trays,PL - Cable Trays,Fam09 : Type2,,100009,note 9,M-9
+Pipe Fittings,XX - Pipe Fittings,Fam10 : Type3,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100010,note 10,
+Pipe Fittings,XX - Pipe Fittings,Fam10 : Type3,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100010,note 10,
+Pipe Fittings,XX - Pipe Fittings,Fam10 : Type3,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100010,note 10,
+Cable Trays,AR - Cable Trays,Fam11 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-AR-000001.rvt,100011,note 11,M-0
+Cable Trays,AR - Cable Trays,Fam11 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-AR-000001.rvt,100011,note 11,M-0
+Cable Trays,AR - Cable Trays,Fam11 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-AR-000001.rvt,100011,note 11,M-0
+Lighting Fixtures,XX - Lighting Fixtures,Fam12 : Type5,,100012,,M-1
+Lighting Fixtures,XX - Lighting Fixtures,Fam12 : Type5,,100012,,M-1
+Lighting Fixtures,XX - Lighting Fixtures,Fam12 : Type5,,100012,,M-1
+Ducts,ME_Ducts,Fam13 : Type6,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100013,note 13,M-2
+Ducts,ME_Ducts,Fam13 : Type6,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100013,note 13,M-2
+Ducts,ME_Ducts,Fam13 : Type6,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100013,note 13,M-2
+Cable Trays,ST - Cable Trays,Fam14 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100014,note 14,M-3
+Cable Trays,ST - Cable Trays,Fam14 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100014,note 14,M-3
+Cable Trays,ST - Cable Trays,Fam14 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100014,note 14,M-3
+Cable Trays,ME - Cable Trays,Fam15 : Type1,,100015,note 15,
+Cable Trays,ME - Cable Trays,Fam15 : Type1,,100015,note 15,
+Cable Trays,ME - Cable Trays,Fam15 : Type1,,100015,note 15,
+Pipe Fittings,XX - Pipe Fittings,Fam16 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100016,,M-5
+Pipe Fittings,XX - Pipe Fittings,Fam16 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100016,,M-5
+Pipe Fittings,XX - Pipe Fittings,Fam16 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100016,,M-5
+Columns,ME - Columns,Fam17 : Type3,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100017,note 17,M-6
+Columns,ME - Columns,Fam17 : Type3,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100017,note 17,M-6
+Columns,ME - Columns,Fam17 : Type3,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100017,note 17,M-6
+Ducts,XX - Ducts,Fam18 : Type4,,100018,note 18,M-7
+Ducts,XX - Ducts,Fam18 : Type4,,100018,note 18,M-7
+Ducts,XX - Ducts,Fam18 : Type4,,100018,note 18,M-7
+Doors,XX - Doors,Fam19 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100019,note 19,M-8
+Doors,XX - Doors,Fam19 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100019,note 19,M-8
+Doors,XX - Doors,Fam19 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100019,note 19,M-8

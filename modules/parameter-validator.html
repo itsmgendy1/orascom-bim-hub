@@ -14,7 +14,7 @@
 <meta name="twitter:title" content="Parameter Validator Dashboard">
 <meta name="twitter:description" content="A client-side BIM QA/QC dashboard for validating Revit parameter data, completeness, and information quality.">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230A1E40' width='100' height='100' rx='15'/><text x='50' y='68' text-anchor='middle' fill='%23F5A623' font-size='48' font-family='Arial' font-weight='bold'>PV</text></svg>">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; connect-src http://localhost:* http://127.0.0.1:*; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; connect-src http://localhost:* http://127.0.0.1:* https://cdnjs.cloudflare.com; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha384-D/t0ZMqQW31H3az8ktEiNb39wyKnS82iFY52QPACM+IjKW3jDUhyIgh2PApRqJZs" crossorigin="anonymous"></script>
@@ -2742,7 +2742,7 @@ function renderDonutChart() {
             if (!tipEl) { tipEl = document.createElement('div'); tipEl.id = 'donut-tooltip'; tipEl.style.cssText = 'position:absolute;pointer-events:none;transition:all .15s ease;background:rgba(10,30,64,.92);color:#fff;padding:6px 12px;border-radius:6px;font-family:Barlow,sans-serif;font-size:.75rem;font-weight:600;white-space:nowrap;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.25)'; document.body.appendChild(tipEl); }
             var model = context.tooltip;
             if (model.opacity === 0) { tipEl.style.opacity = '0'; return; }
-            tipEl.innerHTML = model.body ? model.body[0].lines.join('') : '';
+            tipEl.textContent = model.body ? model.body[0].lines.join('') : '';
             var chartArea = context.chart.canvas.getBoundingClientRect();
             tipEl.style.opacity = '1';
             tipEl.style.left = chartArea.left + window.scrollX + model.caretX + 'px';
@@ -4982,7 +4982,10 @@ function endTour() {
 /* Orascom BIM Hub context bridge -- added for Hub integration only; does not alter native tool logic */
 (function(){
   window.OrascomHubContext = window.OrascomHubContext || null;
+  // Strict same-origin Hub messaging on http(s); file:// standalone keeps "*" (no origin boundary there).
+  window.OrascomHubOrigin = (location.protocol.indexOf("http")===0) ? location.origin : "*";
   window.addEventListener("message", function(ev){
+    if (window.OrascomHubOrigin !== "*" && (!ev || ev.origin !== window.OrascomHubOrigin)) return;
     if (ev && ev.data && ev.data.source === "orascom-hub" && ev.data.type === "set-context") {
       window.OrascomHubContext = ev.data.context || null;
       try { document.dispatchEvent(new CustomEvent("orascom-hub-context", { detail: window.OrascomHubContext })); } catch(e) {}
@@ -4997,13 +5000,13 @@ function endTour() {
           issues: Math.max(0, Math.round(issues || 0)),
           meta: meta || null,
           context: window.OrascomHubContext || null
-        }, "*");
+        }, window.OrascomHubOrigin);
       }
     }catch(e){}
   };
   try {
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ source: "orascom-hub-module", type: "ready" }, "*");
+      window.parent.postMessage({ source: "orascom-hub-module", type: "ready" }, window.OrascomHubOrigin);
     }
   } catch(e) {}
 })();
@@ -5062,6 +5065,7 @@ function endTour() {
 /* Orascom Hub Data Center push -- added for Hub integration only; feeds Hub-pushed files into the native import queue */
 (function(){
   window.addEventListener("message", function(ev){
+    if(window.OrascomHubOrigin!=="*" && (!ev || ev.origin!==window.OrascomHubOrigin)) return;
     if(!ev || !ev.data || ev.data.source!=="orascom-hub" || ev.data.type!=="hub-files") return;
     try{ hubReceiveFiles(ev.data.files||[], ev.data.role||""); }catch(e){}
   });
@@ -5089,6 +5093,7 @@ function endTour() {
   }
   function readStored(){ try{ return localStorage.getItem(KEY)==="1"?"dark":null; }catch(e){ return null; } }
   window.addEventListener("message", function(ev){
+    if(window.OrascomHubOrigin!=="*" && (!ev || ev.origin!==window.OrascomHubOrigin)) return;
     if(!ev || !ev.data || ev.data.source!=="orascom-hub") return;
     if(ev.data.type==="set-theme" && ev.data.theme){ applyHubTheme(ev.data.theme); return; }
     if(ev.data.type==="set-context"){
@@ -5097,7 +5102,7 @@ function endTour() {
     }
   });
   window.hubToggleTheme = function(){
-    try{ if(window.parent && window.parent!==window){ window.parent.postMessage({source:"orascom-hub-module", type:"theme-toggle"}, "*"); return true; } }catch(e){}
+    try{ if(window.parent && window.parent!==window){ window.parent.postMessage({source:"orascom-hub-module", type:"theme-toggle"}, window.OrascomHubOrigin); return true; } }catch(e){}
     return false;
   };
 })();

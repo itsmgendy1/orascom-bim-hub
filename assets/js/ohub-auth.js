@@ -1,5 +1,10 @@
 /* Orascom BIM Hub — front-door auth (static, no backend).
  *
+ * honesty: this is a DEMO-GRADE browser-local gate, not server security.
+ * It keeps honest people honest on a shared workstation; anyone with
+ * DevTools can bypass it. Real enforcement lives on the sync Worker
+ * (team accounts). Labels in the login UI say the same.
+ *
  * Model: first run creates an admin (setup mode); after that the landing
  * shows login. Credentials live in THIS browser's localStorage as
  * salted SHA-256 hashes (never plaintext). A session flag in
@@ -11,6 +16,10 @@
   var LS_USERS = 'ohub_users';
   var SS_SESSION = 'ohub_session';
   var SS_NEXT = 'ohub_next';
+  var LS_AUTHW = 'ohub_authw'; // {url} remembered auth-worker URL (not a secret)
+  // Built-in account server (Orascom auth Worker). The request form no longer
+  // asks for a URL; a previously saved team-server URL still wins when set.
+  var DEFAULT_AUTHW_URL = 'https://orascom-hub-auth.mohamedyasserelgendy2015.workers.dev';
 
   function readUsers() {
     try { return JSON.parse(localStorage.getItem(LS_USERS) || '{}') || {}; }
@@ -38,6 +47,12 @@
     // Honest downgrade — works everywhere, weaker offline protection.
     return Promise.resolve('plain$' + btoa(unescape(encodeURIComponent(text))).split('').reverse().join(''));
   }
+  // Legacy verifier for accounts created where WebCrypto was missing.
+  // Used once to transparently upgrade plain$ hashes to salted SHA-256.
+  function legacyPlain(text) {
+    try { return 'plain$' + btoa(unescape(encodeURIComponent(text))).split('').reverse().join(''); }
+    catch (e) { return null; }
+  }
   function hasUsers() { return Object.keys(readUsers()).length > 0; }
   function hasSession() {
     try { return !!sessionStorage.getItem(SS_SESSION); } catch (e) { return false; }
@@ -58,6 +73,77 @@
     hasUsers: hasUsers,
     hasSession: hasSession,
     cloudCfg: cloudCfg,
+    // ---- Cloud accounts (auth Worker + D1). Additive; local/team flows untouched.
+    // Session cookie is HttpOnly (worker-set); sessionStorage keeps only WHO
+    // is signed in ({u, v2:url, id}) so the gate + dataset switch can work.
+    authWorker: function (url) {
+      if (typeof url === 'string' && url) {
+        try { localStorage.setItem(LS_AUTHW, JSON.stringify({ url: url.replace(/\/+$/, '') })); } catch (e) {}
+        return url;
+      }
+      try { return (JSON.parse(localStorage.getItem(LS_AUTHW) || '{}').url || ''); }
+      catch (e) { return ''; }
+    },
+    authDefaultUrl: function () { return DEFAULT_AUTHW_URL; },
+    wapi: function (path, opts) {
+      var base = this.authWorker();
+      if (!base) return Promise.reject(new Error('Set the account server URL first.'));
+      opts = opts || {};
+      opts.credentials = 'include';
+      opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+      if (opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+      return fetch(base + path, opts).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (r.status === 401) throw new Error('Signed out — sign in again.');
+          if (r.status === 403) throw new Error((j && j.error) || 'Not allowed.');
+          if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+          return j;
+        });
+      }, function () { throw new Error('Account server unreachable.'); });
+    },
+    authRequest: function (url, f) {
+      url = url || this.authDefaultUrl();
+      this.authWorker(url);
+      return this.wapi('/api/auth/request', {
+        method: 'POST',
+        body: { username: f.username, email: f.email, password: f.password, displayName: f.displayName },
+      });
+    },
+    authLogin: function (url, username, password) {
+      var self = this;
+      self.authWorker(url);
+      return self.wapi('/api/auth/login', {
+        method: 'POST', body: { username: username, password: password },
+      }).then(function (j) {
+        if (!j.ok || !j.user) throw new Error('Login failed.');
+        try {
+          sessionStorage.setItem(SS_SESSION, JSON.stringify(
+            { u: j.user.username, id: j.user.id, role: j.user.role, v2: self.authWorker() }));
+        } catch (e) { throw new Error('Browser storage blocked.'); }
+        return j.user;
+      });
+    },
+    authMe: function () {
+      var self = this;
+      var sess = self.v2session();
+      if (!sess) return Promise.reject(new Error('Not signed in.'));
+      self.authWorker(sess.v2);
+      return self.wapi('/api/auth/me').then(function (j) { return j.user; });
+    },
+    authLogout: function () {
+      var self = this;
+      var sess = self.v2session();
+      var done = function () { try { sessionStorage.removeItem(SS_SESSION); } catch (e) {} };
+      if (!sess) { done(); return Promise.resolve(); }
+      self.authWorker(sess.v2);
+      return self.wapi('/api/auth/logout', { method: 'POST' }).catch(function () {}).then(done);
+    },
+    v2session: function () {
+      try {
+        var s = JSON.parse(sessionStorage.getItem(SS_SESSION) || 'null');
+        return (s && s.v2 && s.id) ? s : null;
+      } catch (e) { return null; }
+    },
     // Team sign-in against the Worker. Plaintext password never leaves:
     // we fetch the salt, hash locally, and send only the hash.
     cloudLogin: function (url, username, password) {
@@ -104,7 +190,7 @@
     setup: function (username, password) {
       username = String(username || '').trim();
       if (!username) return Promise.reject(new Error('Pick a username'));
-      if (!password || password.length < 4) return Promise.reject(new Error('Password needs 4+ characters'));
+      if (!password || password.length < 12) return Promise.reject(new Error('Password needs 12+ characters'));
       var users = readUsers();
       if (users[username]) return Promise.reject(new Error('That username is taken'));
       var salt = randHex(16);
@@ -119,7 +205,18 @@
       var rec = users[username];
       if (!rec) return Promise.resolve(false);
       return sha256hex(rec.salt + '$' + password).then(function (hash) {
-        if (hash !== rec.hash) return false;
+        if (hash !== rec.hash) {
+          // Legacy plain$ account (created where WebCrypto was missing):
+          // verify with the old formula once, then transparently upgrade
+          // to salted SHA-256 so access is never lost and never stays weak.
+          if (rec.hash && rec.hash.indexOf('plain$') === 0 &&
+              window.crypto && window.crypto.subtle &&
+              legacyPlain(rec.salt + '$' + password) === rec.hash) {
+            rec.hash = hash; users[username] = rec; writeUsers(users);
+          } else {
+            return false;
+          }
+        }
         try {
           sessionStorage.setItem(SS_SESSION, JSON.stringify({ u: username, t: Date.now() }));
         } catch (e) { return false; }

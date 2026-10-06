@@ -152,6 +152,8 @@ fail the deploy, and sources/archives/automation must not ship).
 2. Pages dashboard → Create → Pages → Upload assets → drag `deploy/`,
    **or** `wrangler pages deploy deploy/`. No build command, no output-dir
    tricks, no redirects file (all navigation is `#/` hash routes).
+   With the Git bridge connected, pushing/merging to `main` redeploys
+   production automatically (plus PR previews).
 3. Local pipeline keeps working unchanged: run `serve_exports.py` on your
    machine as usual. It now answers Private Network Access preflights, so the
    HTTPS-hosted Hub can still reach your `http://localhost:8787` — verified

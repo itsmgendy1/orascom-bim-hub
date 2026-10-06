@@ -55,6 +55,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
       <div class="nav-item" data-view="reports"><span class="ic">📊</span> Reports</div>
       <div class="nav-item" data-view="delivery"><span class="ic">📅</span> Delivery Overview</div>
       <div class="nav-item" data-view="stages"><span class="ic">🚦</span> Stage Gates</div>
+      <div class="nav-item" data-view="useradmin" id="nav-useradmin" style="display:none;"><span class="ic">👥</span> Users & Access</div>
 
       <div class="nav-group-label">System</div>
       <div class="nav-item" data-view="settings"><span class="ic">⚙</span> Settings</div>
@@ -81,7 +82,14 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
         <button class="btn btn-outline btn-sm" onclick="OHub.openAcc()" title="Open this project in Autodesk Construction Cloud (new tab)">ACC ↗</button>
         <button class="btn btn-outline btn-sm" onclick="OHub.startTour()" title="Guided tour">▶ Tour</button>
         <button class="btn btn-outline btn-sm" id="theme-toggle" onclick="OHub.toggleDark()" title="Toggle dark mode">🌙</button>
-        <button class="btn btn-outline btn-sm" onclick="OHub.logout()" title="Sign out of the Hub">⏻</button>
+        <div style="position:relative;">
+          <button class="btn btn-outline btn-sm" id="account-btn" onclick="OHub.toggleAccountMenu(event)" title="Account & sign out">👤 <span id="account-name">Account</span></button>
+          <div id="account-menu" style="display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:230px;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.25);z-index:60;overflow:hidden;">
+            <div id="account-who" style="padding:10px 12px;border-bottom:1px solid var(--light);font-size:.8rem;"></div>
+            <button class="btn btn-ghost btn-sm" style="display:block;width:100%;text-align:left;border-radius:0;" onclick="OHub.accountGo()">My account & data</button>
+            <button class="btn btn-ghost btn-sm" style="display:block;width:100%;text-align:left;border-radius:0;" onclick="OHub.logout()">⏻ Sign out</button>
+          </div>
+        </div>
       </div>
 
       <div class="search-wrap">
@@ -286,6 +294,11 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
         <div id="stages-content"></div>
       </section>
 
+      <!-- ---------- Users & Access (cloud accounts; admin tables need ADMIN) ---------- -->
+      <section class="view" id="view-useradmin">
+        <div id="useradmin-content"></div>
+      </section>
+
       <!-- ---------- Settings ---------- -->
       <section class="view" id="view-settings">
         <div class="grid grid-2">
@@ -357,6 +370,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
               <div class="field" style="flex:2;min-width:200px;margin:0;"><label>APS Client ID</label><input type="text" id="forma-client" placeholder="paste from aps.autodesk.com/myapps" oninput="OForma.saveCfg({clientId:this.value,region:document.getElementById('forma-region').value});OHub.renderFormaSettings();"></div>
               <div class="field" style="flex:0;min-width:110px;margin:0;"><label>Region</label><select id="forma-region" onchange="OForma.saveCfg({clientId:document.getElementById('forma-client').value,region:this.value});OHub.renderFormaSettings();"><option>EMEA</option><option>US</option></select></div>
             </div>
+            <div style="margin-top:8px;"><label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);font-weight:400;white-space:nowrap;"><input type="checkbox" id="forma-session" onchange="OForma.setSessionOnly(this.checked);OHub.renderFormaSettings();" style="width:auto;"> Forget login on tab close (refresh token in session only)</label></div>
             <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
               <button class="btn btn-primary btn-sm" onclick="OForma.beginLogin('settings')">Connect Forma</button>
               <button class="btn btn-ghost btn-sm" onclick="OForma.disconnect()">Disconnect</button>
@@ -539,9 +553,9 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
 <div id="toast-host"></div>
 <div class="tour-overlay" id="tour-overlay" style="display:none"></div>
 
-<script src="assets/js/forma.js?v=9bf97e59"></script>
+<script src="assets/js/forma.js?v=70eecd5c"></script>
 <script src="assets/js/site-plots.js?v=64235b04"></script>
-<script src="assets/js/ohub-auth.js?v=8ac76f57"></script>
-<script src="assets/js/hub.js?v=12ca330b"></script>
+<script src="assets/js/ohub-auth.js?v=007ee619"></script>
+<script src="assets/js/hub.js?v=2515cdfc"></script>
 </body>
 </html>

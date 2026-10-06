@@ -1,0 +1,11 @@
+Category,Workset,Family and Type,RVT Link: File Name,Element Id,Comments,Mark
+Doors,EL - Doors,Fam00 : Type0,,100000,,
+Pipes,PL - Pipes,Fam01 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100001,note 1,M-1
+Floors,AR - Floors,Fam02 : Type2,P0152-K00146-OCC-UB02-ZZ-M3-AR-000001.rvt,100002,note 2,M-2
+Doors,EL - Doors,Fam03 : Type3,,100003,note 3,M-3
+Walls,PL - Walls,Fam04 : Type4,P0152-K00146-OCC-UB02-ZZ-M3-PL-000001.rvt,100004,,M-4
+Ducts,ST - Ducts,Fam05 : Type5,P0152-K00146-OCC-UB02-ZZ-M3-ST-000001.rvt,100005,note 5,
+Lighting Fixtures,XX - Lighting Fixtures,Fam06 : Type6,,100006,note 6,M-6
+Walls,EL - Walls,Fam07 : Type0,P0152-K00146-OCC-UB02-ZZ-M3-EL-000001.rvt,100007,note 7,M-7
+Cable Trays,ME - Cable Trays,Fam08 : Type1,P0152-K00146-OCC-UB02-ZZ-M3-ME-000001.rvt,100008,,M-8
+Cable Trays,AR - Cable Trays,Fam09 : Type2,,100009,note 9,M-9

@@ -1,0 +1,15 @@
+# Orascom Hub Auth+Data Worker. Fill account_id + database_id, then:
+#   set CLOUDFLARE_API_TOKEN (Workers Edit + D1 Edit), wrangler d1 execute DB --file=./schema.sql, wrangler deploy
+name = "orascom-hub-auth"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+account_id = "a958de2753ec2723dfbf530f36275746"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "orascom-hub-db"
+database_id = "5608049f-481f-4385-8acc-05aa1205f03b"
+
+[vars]
+# BOOTSTRAP_KEY is set as a SECRET, never here:
+#   wrangler secret put BOOTSTRAP_KEY

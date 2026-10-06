@@ -1,0 +1,5 @@
+Category,Workset,Family and Type,RVT Link: File Name,Element Id,Comments,Mark
+Walls,<img src=x onerror=alert(1)>,Fam: <b>bold</b>,a.rvt,1,<script>alert(2)</script>,x
+Pipes,"""><svg onload=alert(3)>","Fam 'quoted' ""dbl""",b.rvt,2,it's,y
+Doors,EL - Doors,Fam${7*7},c.rvt,3,{{7*7}},z
+Walls,AR - Walls,Normal Fam,d.rvt,4,ok,m

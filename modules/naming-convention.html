@@ -2684,7 +2684,10 @@ document.addEventListener('DOMContentLoaded', function(){
 /* Orascom BIM Hub context bridge -- added for Hub integration only; does not alter native tool logic */
 (function(){
   window.OrascomHubContext = window.OrascomHubContext || null;
+  // Strict same-origin Hub messaging on http(s); file:// standalone keeps "*" (no origin boundary there).
+  window.OrascomHubOrigin = (location.protocol.indexOf("http")===0) ? location.origin : "*";
   window.addEventListener("message", function(ev){
+    if (window.OrascomHubOrigin !== "*" && (!ev || ev.origin !== window.OrascomHubOrigin)) return;
     if (ev && ev.data && ev.data.source === "orascom-hub" && ev.data.type === "set-context") {
       window.OrascomHubContext = ev.data.context || null;
       try { document.dispatchEvent(new CustomEvent("orascom-hub-context", { detail: window.OrascomHubContext })); } catch(e) {}
@@ -2699,13 +2702,13 @@ document.addEventListener('DOMContentLoaded', function(){
           issues: Math.max(0, Math.round(issues || 0)),
           meta: meta || null,
           context: window.OrascomHubContext || null
-        }, "*");
+        }, window.OrascomHubOrigin);
       }
     }catch(e){}
   };
   try {
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ source: "orascom-hub-module", type: "ready" }, "*");
+      window.parent.postMessage({ source: "orascom-hub-module", type: "ready" }, window.OrascomHubOrigin);
     }
   } catch(e) {}
 })();
@@ -2715,6 +2718,7 @@ document.addEventListener('DOMContentLoaded', function(){
 /* Orascom Hub Data Center push -- added for Hub integration only; feeds Hub-pushed files into the native import queue */
 (function(){
   window.addEventListener("message", function(ev){
+    if(window.OrascomHubOrigin!=="*" && (!ev || ev.origin!==window.OrascomHubOrigin)) return;
     if(!ev || !ev.data || ev.data.source!=="orascom-hub" || ev.data.type!=="hub-files") return;
     try{ hubReceiveFiles(ev.data.files||[], ev.data.role||""); }catch(e){}
   });
@@ -2750,6 +2754,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   function readStored(){ try{ return localStorage.getItem(KEY)==="1"?"dark":null; }catch(e){ return null; } }
   window.addEventListener("message", function(ev){
+    if(window.OrascomHubOrigin!=="*" && (!ev || ev.origin!==window.OrascomHubOrigin)) return;
     if(!ev || !ev.data || ev.data.source!=="orascom-hub") return;
     if(ev.data.type==="set-theme" && ev.data.theme){ applyHubTheme(ev.data.theme); return; }
     if(ev.data.type==="set-context"){
@@ -2758,7 +2763,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
   window.hubToggleTheme = function(){
-    try{ if(window.parent && window.parent!==window){ window.parent.postMessage({source:"orascom-hub-module", type:"theme-toggle"}, "*"); return true; } }catch(e){}
+    try{ if(window.parent && window.parent!==window){ window.parent.postMessage({source:"orascom-hub-module", type:"theme-toggle"}, window.OrascomHubOrigin); return true; } }catch(e){}
     return false;
   };
 })();

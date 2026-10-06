@@ -2158,6 +2158,22 @@ function buildQAQCSections(disc,isDark,borderColor,textColor,mutedColor){
     if(scN==='GENERAL'&&!isSuite){
       generalFails.push(...failsFor(shData,code));
     }
+    else if(scN==='GENERAL'&&isSuiteFF){
+      // Plain GENERAL sheet carries a real FF column (col J) in workbooks
+      // without a separate GENERAL FF sheet — read it (de-duplicated).
+      // Without this, all GENERAL FF failures silently vanish.
+      const seen = new Set(generalFails.map(f=>f.id));
+      failsFor(shData,'FF').forEach(function(f){
+        if(!seen.has(f.id)){ seen.add(f.id); generalFails.push(f); }
+      });
+    }
+    else if(scN==='GENERAL'&&isSuiteID){
+      // Same treatment for the ID column on plain GENERAL sheets.
+      const seen = new Set(generalFails.map(f=>f.id));
+      failsFor(shData,'ID').forEach(function(f){
+        if(!seen.has(f.id)){ seen.add(f.id); generalFails.push(f); }
+      });
+    }
     else if(scN==='GENERALFF'&&isSuiteFF){
       // Suite FF → match by location (old behavior) + all model columns (new)
       generalFails.push(...failsFor(shData,loc));
@@ -2216,7 +2232,7 @@ function buildQAQCSections(disc,isDark,borderColor,textColor,mutedColor){
   let out='';
 
   if(generalFails.length){
-    const lbl=isSuiteFF?`QA/QC CHECKLIST – GENERAL FF (${loc})`:isSuiteID?`QA/QC CHECKLIST – GENERAL ID (${loc})`:`QA/QC CHECKLIST – GENERAL`;
+    const lbl=isSuiteFF?`QA/QC CHECKLIST – GENERAL (FF column)`:isSuiteID?`QA/QC CHECKLIST – GENERAL (ID column)`:`QA/QC CHECKLIST – GENERAL`;
     out+=`<div style="font-family:'Barlow Condensed',sans-serif;font-size:.68rem;font-weight:800;color:${mutedColor};letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;margin-top:10px">📋 ${lbl}</div>`;
     out+=renderRows(generalFails);
   }

@@ -107,7 +107,19 @@ verified by audit):
   and direct **Navisworks HTML report import** (verified field-by-field against
   `P0152-…-000001`: 12,708 listed rows, real Element IDs, test pairing —
   report summaries may claim higher totals since the HTML lists a subset).
-  IDs/grid/clash-name are mappable targets carried into table, copy and Excel.
+   IDs/grid/clash-name are mappable targets carried into table, copy and Excel.
+ - **Clash Auto-Approval** (Auto-Approval tab) — port of the `ClashAutoApprove`
+   Navisworks add-in's rule engine to dependency-free JS (`CLASH_RULES_DEFAULT`
+   in `modules/clash.html`). Only New/Active clashes are evaluated; first match
+   wins with unordered sides; B2 flags repeat element-pairs. Dry run → Apply
+   selected (Tier A ticked, Tier B unticked) → per-rule/batch undo; plan +
+   audit CSVs. Rule schema: `{id, tier A|B, enabled, type?, name, setA/nameA,
+   setB/nameB (case-insensitive regexes, empty = match-all), sameDiscipline
+   (equal prefix before first "-" or space), sameItemName, maxDistance /
+   minDistance (m, 0 = no limit), excludeWhenBothSets}`. Add a rule by
+   appending to the JSON (thresholds editable in-UI, persisted) — engine reads
+   config, never hardcodes. Validated on the SF01 report: A1=1532, A2=440,
+   A3=1188, A4=3675, B1=650, B2=877, manual=5331 (Approved/Resolved untouched).
 - **Package grouping** — optional package field on models, with filter, column
   and search support (programme-friendly without MODON-specific structure).
 - **Data Center** (`hub.html#/datacenter`) — import shared files once, push to

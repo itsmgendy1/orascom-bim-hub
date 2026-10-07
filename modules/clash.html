@@ -42,6 +42,7 @@ body.dark .kpi-val.blue{color:#58A6FF}
 }
 .io-card{background:rgba(255,255,255,.05);border:1.5px solid rgba(245,166,35,.3);border-radius:16px;
   padding:34px 42px;text-align:center;max-width:920px;width:96%;box-sizing:border-box}
+.io-logo img{height:56px;filter:drop-shadow(0 4px 16px rgba(0,0,0,.4))}
 .io-card h2{font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;color:#fff;
   letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px}
 .io-card>p.io-lead{color:var(--g3);font-size:.86rem;margin-bottom:26px;opacity:.9;line-height:1.5}
@@ -155,6 +156,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
 <!-- IMPORT OVERLAY -->
 <div id="import-overlay">
   <div class="io-card">
+    <div class="io-logo"><img src="../orascom-cyber-logo-transparent.png" alt="ORASCOM"></div>
     <h2>Clash Analysis Dashboard</h2>
     <p class="io-lead">Import a clash test export (CSV) &mdash; e.g. a Navisworks Clash Detective report. Map your columns below; this tool doesn't assume a fixed schema since clash exports vary by coordination tool.</p>
 
@@ -231,6 +233,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
   <button class="tab-btn active" data-tab="t-overview" onclick="switchTab('t-overview')">Overview</button>
   <button class="tab-btn" data-tab="t-clashes" onclick="switchTab('t-clashes')">Clashes</button>
   <button class="tab-btn" data-tab="t-disc" onclick="switchTab('t-disc')">Disciplines</button>
+  <button class="tab-btn" data-tab="t-auto" onclick="switchTab('t-auto')">Auto-Approval</button>
 </div>
 <main>
   <div class="tab-content active" id="t-overview">
@@ -249,6 +252,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
       <select class="filter-select" id="cl-priority-f" onchange="renderClashTable()"><option value="">All priorities</option></select>
       <select class="filter-select" id="cl-status-f" onchange="renderClashTable()"><option value="">All statuses</option><option value="Open">Open</option><option value="Closed">Closed</option></select>
       <select class="filter-select" id="cl-pair-f" onchange="renderClashTable()"><option value="">All pairs</option></select>
+      <select class="filter-select" id="cl-disc-f" onchange="renderClashTable()"><option value="">All disciplines</option></select>
       <button class="hbtn" style="color:var(--b3);border-color:var(--border)" onclick="copyVisibleClashes()">Copy visible list</button>
       <span class="filter-count" id="cl-count"></span>
     </div>
@@ -258,6 +262,26 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
   <div class="tab-content" id="t-disc">
     <div class="sec">Discipline pairs</div>
     <div class="ccard"><h3>Clash count by discipline pair</h3><div class="ch" style="height:340px"><canvas id="ch-disc"></canvas></div></div>
+  </div>
+
+  <div class="tab-content" id="t-auto">
+    <div class="sec">Clash Auto-Approval</div>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">Dry run first — nothing is marked until you click <strong>Apply selected rules</strong>. Only <strong>New / Active</strong> clashes are ever evaluated; Reviewed / Approved / Resolved are never touched. Approvals apply to this Hub dashboard only — they do not change Navisworks itself.</p>
+    <div class="filter-bar">
+      <button class="hbtn" onclick="autoRunEvaluate()">▶ Run evaluation</button>
+      <button class="hbtn" onclick="autoApplySelected()">✓ Apply selected rules</button>
+      <button class="hbtn" onclick="autoUndoLast()">↩ Undo last apply</button>
+      <button class="hbtn" onclick="autoExportPlan()">Plan CSV</button>
+      <button class="hbtn pdf" onclick="autoExportAudit()">Audit CSV</button>
+      <span class="filter-count" id="auto-prog"></span>
+    </div>
+    <div class="kpi-row" id="auto-kpis"></div>
+    <div class="ccard" style="margin-bottom:16px"><h3>Rules</h3><div class="tbl-wrap"><table class="dtbl" id="auto-rules"></table></div></div>
+    <div class="ccard" style="margin-bottom:16px"><h3>Rule drill-down <span class="filter-count" id="auto-drill-count"></span></h3>
+      <div class="filter-bar"><input type="text" id="auto-search" placeholder="🔍 Search test / clash / item..." oninput="autoRenderDrill()"></div>
+      <div class="tbl-wrap"><table class="dtbl" id="auto-drill"></table></div>
+    </div>
+    <div class="ccard"><h3>Manual review — grouped by test</h3><div class="tbl-wrap"><table class="dtbl" id="auto-manual"></table></div></div>
   </div>
 </main>
 </div>
@@ -502,6 +526,134 @@ function renderStatusChecklist(){
   wrap.style.display = DISTINCT_STATUS.length ? 'block' : 'none';
 }
 
+/* ═══ AUTO-APPROVAL RULE ENGINE (pure — no DOM; mirrors ClashAutoApprove) ═══ */
+var CLASH_RULES_DEFAULT = {
+  version: 1,
+  settings: { statuses: ["New", "Active"] },
+  approveComment: "Auto-approved by rule {id} - {name} (penetration {mm} mm)",
+  rules: [
+    {id:"A1", tier:"A", enabled:true, name:"Insulation vs its own host (same system)",
+     setA:"Insulation", setB:"^(AC|WS|DR|PS|FS)-", sameDiscipline:true, sameItemName:true, maxDistance:0.05},
+    {id:"A2", tier:"A", enabled:true, name:"Same-system connection overlap",
+     sameDiscipline:true, sameItemName:true, maxDistance:0.01},
+    {id:"A3", tier:"A", enabled:true, name:"Hanger / support / anchor embedded in structure",
+     setA:"Accessories", nameA:"hanger|support|anchor|bracket|clamp|strut|^TB_|hilti|fischer|miro",
+     setB:"^(ST-|ST WALLS)", maxDistance:0.03},
+    {id:"A4", tier:"A", enabled:true, name:"Within modelling tolerance (<= 10 mm), excluding primary MEP vs MEP",
+     maxDistance:0.01, excludeWhenBothSets:"(Ducts|Pipes|Cable Trays|Conduits|Flex Ducts)\\s*$"},
+    {id:"B1", tier:"B", enabled:true, name:"Architectural finish overlapping structure (<= 150 mm)",
+     setA:"^AR-", nameA:"terrazzo|paint|plaster|tile|screed|cement|sand|marble|granite|stone|render",
+     setB:"^(ST-|ST WALLS)", maxDistance:0.15},
+    {id:"B2", tier:"B", enabled:true, type:"duplicate", name:"Same element pair already clashed in another test"}
+  ]
+};
+function clashRuleCompile(r){
+  function c(pat){ if(!pat || !String(pat).trim()) return null; try{ return new RegExp(pat, "i"); }catch(e){ return null; } }
+  r._rSetA = c(r.setA); r._rNameA = c(r.nameA); r._rSetB = c(r.setB); r._rNameB = c(r.nameB); r._rExcl = c(r.excludeWhenBothSets);
+  return r;
+}
+function clashDiscipline(set){
+  var m = /^([A-Za-z]+)/.exec(String(set||"").trim());
+  return m ? m[1].toUpperCase() : "";
+}
+function clashSplitTest(testName){
+  var parts = String(testName||"").split(/-vs-/i);
+  var a = parts.length ? parts[0].trim() : "";
+  var b = parts.length > 1 ? parts.slice(1).join("-vs-").trim() : "";
+  return [a, b];
+}
+function clashRuleHit(re, a, b){
+  if(re === null) return true;
+  return (a != null && re.test(a)) || (b != null && re.test(b));
+}
+function clashRuleSide(rSet, rName, set, name, path){
+  if(rSet !== null && !rSet.test(set || "")) return false;
+  if(rName !== null && !clashRuleHit(rName, name, path)) return false;
+  return true;
+}
+function clashRuleMatches(r, c){
+  if(!r.enabled || r.type === "duplicate") return false;
+  // Exact C# semantics: NaN distances never trip a distance gate.
+  if(r.maxDistance > 0 && c.dist > r.maxDistance + 1e-9) return false;
+  if(r.minDistance > 0 && c.dist < r.minDistance - 1e-9) return false;
+  if(r.sameDiscipline && clashDiscipline(c.setA) !== clashDiscipline(c.setB)) return false;
+  if(r.sameItemName && String(c.nameA||"").trim().toLowerCase() !== String(c.nameB||"").trim().toLowerCase()) return false;
+  if(r._rExcl !== null && r._rExcl.test(c.setA || "") && r._rExcl.test(c.setB || "")) return false;
+  var straight = clashRuleSide(r._rSetA, r._rNameA, c.setA, c.nameA, c.pathA) &&
+                 clashRuleSide(r._rSetB, r._rNameB, c.setB, c.nameB, c.pathB);
+  var swapped = clashRuleSide(r._rSetA, r._rNameA, c.setB, c.nameB, c.pathB) &&
+                clashRuleSide(r._rSetB, r._rNameB, c.setA, c.nameA, c.pathA);
+  return !!(straight || swapped);
+}
+function clashParseDist(v){
+  var n = parseFloat(String(v==null?"":v).replace(/,/g,""));
+  return isNaN(n) ? NaN : Math.abs(n);
+}
+function clashBuildRecords(items){
+  return (items||[]).map(function(it){
+    var sp = clashSplitTest(it.test||"");
+    return {test:it.test||"", setA:sp[0], setB:sp[1], clash:it.clash||"",
+      status:it.statusRaw||"", dist:clashParseDist(it.distance),
+      nameA:it.aName||"", nameB:it.bName||"",
+      keyA:it.aId||"", keyB:it.bId||"", pathA:"", pathB:"", ref:it};
+  });
+}
+function clashEvaluate(records, rules, statuses){
+  var open = {};
+  (statuses||["New","Active"]).forEach(function(s){ open[String(s).toLowerCase()] = true; });
+  var act = rules.filter(function(r){ return r.enabled && r.type !== "duplicate"; });
+  var dup = null;
+  rules.forEach(function(r){ if(r.enabled && r.type === "duplicate" && !dup) dup = r; });
+  var out = [];
+  records.forEach(function(c){
+    if(!open[String(c.status||"").toLowerCase()]) return;
+    var hit = null;
+    for(var i=0;i<act.length;i++){ if(clashRuleMatches(act[i], c)){ hit = act[i]; break; } }
+    out.push({rec:c, rule:hit ? hit.id : null, tier:hit ? hit.tier : null, note:""});
+  });
+  if(dup){
+    var first = {};
+    out.forEach(function(d){
+      var c = d.rec;
+      if(!c.keyA || !c.keyB) return;
+      var k = c.keyA <= c.keyB ? c.keyA+"|"+c.keyB : c.keyB+"|"+c.keyA;
+      if(!first[k]){ first[k] = c; return; }
+      if(d.rule === null){
+        d.rule = dup.id; d.tier = dup.tier;
+        d.note = "duplicate of " + first[k].clash + " in " + String(first[k].test||"").trim();
+      }
+    });
+  }
+  return out;
+}
+var AUTO_RULES_KEY = "clash_rules_v1";
+function clashDefaultRules(){
+  var copy = JSON.parse(JSON.stringify(CLASH_RULES_DEFAULT.rules));
+  copy.forEach(clashRuleCompile);
+  return copy;
+}
+function clashLoadRules(){
+  var rules = clashDefaultRules();
+  var ov = null;
+  try{ ov = JSON.parse(localStorage.getItem(AUTO_RULES_KEY) || "null"); }catch(e){}
+  if(ov){
+    rules.forEach(function(r){
+      var o = ov[r.id];
+      if(!o) return;
+      if(typeof o.enabled === "boolean") r.enabled = o.enabled;
+      if(typeof o.maxDistance === "number" && o.maxDistance >= 0) r.maxDistance = o.maxDistance;
+      if(typeof o.minDistance === "number" && o.minDistance >= 0) r.minDistance = o.minDistance;
+    });
+    rules.forEach(clashRuleCompile);
+  }
+  return rules;
+}
+function clashSaveRules(rules){
+  var ov = {};
+  rules.forEach(function(r){ ov[r.id] = {enabled:!!r.enabled, maxDistance:Number(r.maxDistance)||0, minDistance:Number(r.minDistance)||0}; });
+  try{ localStorage.setItem(AUTO_RULES_KEY, JSON.stringify(ov)); }catch(e){}
+}
+var AUTO = {decisions:[], counts:{}, ranAt:0, batches:[], selected:{A1:true,A2:true,A3:true,A4:true,B1:false,B2:false}};
 function priorityBucket(raw){
   if(!raw) return 'Unspecified';
   var v = raw.toLowerCase();
@@ -561,17 +713,15 @@ function generateDashboard(){
   document.getElementById('dash').style.display = 'block';
 
   renderAll();
-  try{
-    if(typeof window.OrascomHubReportScore === 'function'){
-      var stats = computeStats();
-      window.OrascomHubReportScore(stats.resolutionRate, stats.open, {projectField: pname});
-    }
+  reportHubScore();
+}
   }catch(e){}
 }
 
 function computeStats(){
   var total = CLASH_ITEMS.length;
-  var open = CLASH_ITEMS.filter(function(c){return c.bucket==='Open';}).length;
+  // Hub-approved items count as closed for resolution math (reversible via undo).
+  var open = CLASH_ITEMS.filter(function(c){return c.bucket==='Open' && !c.auto;}).length;
   var closed = total - open;
   var byPriority = {High:0, Medium:0, Low:0, Unspecified:0};
   CLASH_ITEMS.forEach(function(c){ byPriority[c.priority] = (byPriority[c.priority]||0)+1; });
@@ -588,6 +738,7 @@ function renderAll(){
   renderCharts();
   populatePriorityFilter();
   populatePairFilter();
+  populateDisciplineFilter();
   renderClashTable();
   renderDisciplineChart();
 }
@@ -603,6 +754,39 @@ function populatePairFilter(){
   sel.innerHTML = '<option value="">All pairs ('+list.length+')</option>' +
     list.map(function(p){ return '<option value="'+escapeHtml(p)+'"'+(p===cur?' selected':'')+'>'+escapeHtml(p)+'</option>'; }).join('');
   if(list.indexOf(cur)===-1) sel.value = '';
+}
+
+var clashSort = {key:'', dir:1};
+function clashDistNum(c){
+  var v = parseFloat(String(c.distance||'').replace(/,/g,''));
+  return isNaN(v) ? null : Math.abs(v);
+}
+function populateDisciplineFilter(){
+  var sel = document.getElementById('cl-disc-f');
+  if(!sel) return;
+  var cur = sel.value || '';
+  var stats = {};
+  CLASH_ITEMS.forEach(function(c){
+    [c.aDisc, c.bDisc].forEach(function(d){
+      d = d || 'Unspecified';
+      stats[d] = stats[d] || {open:0, closed:0};
+      if(c.bucket==='Open') stats[d].open++;
+      else stats[d].closed++;
+    });
+  });
+  var list = Object.keys(stats).sort();
+  sel.innerHTML = '<option value="">All disciplines ('+list.length+')</option>' +
+    list.map(function(d){
+      var s = stats[d];
+      return '<option value="'+escapeHtml(d)+'"'+(d===cur?' selected':'')+'>'+
+        escapeHtml(d)+' — '+s.open+' open / '+s.closed+' closed</option>';
+    }).join('');
+  if(list.indexOf(cur)===-1) sel.value = '';
+}
+function setClashSort(key){
+  if(clashSort.key===key){ clashSort.dir = -clashSort.dir; }
+  else { clashSort.key = key; clashSort.dir = 1; }
+  renderClashTable();
 }
 
 function renderKPIs(){
@@ -670,10 +854,12 @@ function renderClashTable(){
   var pf = document.getElementById('cl-priority-f').value;
   var sf = document.getElementById('cl-status-f').value;
   var pairF = document.getElementById('cl-pair-f').value;
+  var discF = document.getElementById('cl-disc-f').value;
   var list = CLASH_ITEMS.filter(function(c){
     if(pf && c.priority!==pf) return false;
     if(sf && c.bucket!==sf) return false;
     if(pairF && clashPair(c)!==pairF) return false;
+    if(discF && c.aDisc!==discF && c.bDisc!==discF) return false;
     if(q){
       var hay=(c.test+' '+c.aName+' '+c.bName+' '+c.aDisc+' '+c.bDisc).toLowerCase();
       if(hay.indexOf(q)===-1) return false;
@@ -681,11 +867,21 @@ function renderClashTable(){
     return true;
   });
   lastFiltered = list;
+  if(clashSort.key==='distance'){
+    list = list.slice().sort(function(x, y){
+      var a = clashDistNum(x), b = clashDistNum(y);
+      if(a===null && b===null) return 0;
+      if(a===null) return 1;
+      if(b===null) return -1;
+      return (a-b)*clashSort.dir;
+    });
+  }
   document.getElementById('cl-count').textContent = list.length+' / '+CLASH_ITEMS.length;
-  var html = '<tr><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th>Distance</th><th>Priority</th><th>Status</th><th>Date</th></tr>';
+  var distArrow = clashSort.key==='distance' ? (clashSort.dir===1 ? ' ▲' : ' ▼') : '';
+  var html = '<tr><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th><a href="#" onclick="setClashSort(\'distance\');return false;" style="color:inherit;text-decoration:none;" title="Sort by overlap distance">Distance'+distArrow+'</a></th><th>Priority</th><th>Status</th><th>Date</th></tr>';
   list.slice(0,800).forEach(function(c){
     html += '<tr><td>'+escapeHtml(c.test)+'</td>'+
-      '<td>'+escapeHtml(c.clash||'\u2014')+(c.grid?'<br><small style="color:var(--muted)">'+escapeHtml(c.grid)+'</small>':'')+'</td>'+
+      '<td>'+escapeHtml(c.clash||'\u2014')+(c.auto?'<br><small class="badge badge-closed">Auto \u2713'+escapeHtml(c.auto.rule)+'</small>':'')+(c.grid?'<br><small style="color:var(--muted)">'+escapeHtml(c.grid)+'</small>':'')+'</td>'+
       '<td>'+escapeHtml(c.aName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.aDisc)+(c.aId?' \u00b7 ID '+escapeHtml(c.aId):'')+'</small></td>'+
       '<td>'+escapeHtml(c.bName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.bDisc)+(c.bId?' \u00b7 ID '+escapeHtml(c.bId):'')+'</small></td>'+
       '<td>'+escapeHtml(c.distance)+'</td>'+
@@ -709,6 +905,263 @@ function copyVisibleClashes(){
   } else {
     toast('Clipboard not available in this browser');
   }
+}
+
+function copyVisibleClashes(){
+  if(lastFiltered.length===0){ toast('Nothing to copy'); return; }
+  var text = lastFiltered.map(function(c){
+    return [c.test, (c.clash||''), c.aName+' ('+c.aDisc+(c.aId?'; ID '+c.aId:'')+')', c.bName+' ('+c.bDisc+(c.bId?'; ID '+c.bId:'')+')', c.priority, c.bucket, c.date].join('\t');
+  }).join('\n');
+  var full = 'Test\tClash\tItem A\tItem B\tPriority\tStatus\tDate\n' + text;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(full).then(function(){ toast('Copied '+lastFiltered.length+' clashes to clipboard'); },
+      function(){ toast('Could not access clipboard'); });
+  } else {
+    toast('Clipboard not available in this browser');
+  }
+}
+
+/* ═══ AUTO-APPROVAL UI (dry-run panel; mirrors ClashAutoApprove add-in) ═══ */
+var AUTO_PROG = null;
+function autoSetProg(t){ var el = document.getElementById('auto-prog'); if(el) el.textContent = t||''; }
+function autoDownload(filename, text){
+  var blob = new Blob([text], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+function autoCsvCell(s){
+  s = s==null ? '' : String(s);
+  return /[",\r\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function autoRuleById(id){ return (AUTO.rules||[]).filter(function(r){ return r.id===id; })[0] || null; }
+function autoRunEvaluate(){
+  if(!CLASH_ITEMS.length){ toast('Import data first'); return; }
+  AUTO.rules = clashLoadRules();
+  if(!AUTO.drill){ var f = AUTO.rules.filter(function(r){ return r.tier==='A'; })[0]; AUTO.drill = f ? f.id : (AUTO.rules[0]||{}).id; }
+  var recs = clashBuildRecords(CLASH_ITEMS);
+  var statuses = ["New", "Active"];
+  var open = {};
+  statuses.forEach(function(s){ open[String(s).toLowerCase()] = true; });
+  var act = AUTO.rules.filter(function(r){ return r.enabled && r.type !== "duplicate"; });
+  var dup = null;
+  AUTO.rules.forEach(function(r){ if(r.enabled && r.type === "duplicate" && !dup) dup = r; });
+  AUTO.decisions = [];
+  var i = 0, CH = 4000;
+  autoSetProg('Evaluating 0 / ' + recs.length + '…');
+  function step(){
+    var end = Math.min(i + CH, recs.length);
+    for(; i<end; i++){
+      (function(c){
+        if(!open[String(c.status||"").toLowerCase()]) return;
+        var hit = null;
+        for(var k=0;k<act.length;k++){ if(clashRuleMatches(act[k], c)){ hit = act[k]; break; } }
+        AUTO.decisions.push({rec:c, rule:hit?hit.id:null, tier:hit?hit.tier:null, note:""});
+      })(recs[i]);
+    }
+    autoSetProg('Evaluating ' + i + ' / ' + recs.length + '…');
+    if(i < recs.length){ setTimeout(step, 0); return; }
+    if(dup){ // duplicate pass over the whole set (first occurrence keeps its result)
+      var first = {};
+      AUTO.decisions.forEach(function(d){
+        var c = d.rec;
+        if(!c.keyA || !c.keyB) return;
+        var k = c.keyA <= c.keyB ? c.keyA+"|"+c.keyB : c.keyB+"|"+c.keyA;
+        if(!first[k]){ first[k] = c; return; }
+        if(d.rule === null){
+          d.rule = dup.id; d.tier = dup.tier;
+          d.note = "duplicate of " + first[k].clash + " in " + String(first[k].test||"").trim();
+        }
+      });
+    }
+    AUTO.counts = {};
+    AUTO.decisions.forEach(function(d){
+      var k = d.rule || 'MANUAL';
+      AUTO.counts[k] = (AUTO.counts[k]||0)+1;
+    });
+    AUTO.ranAt = Date.now();
+    autoSetProg(AUTO.decisions.length + ' open clashes evaluated.');
+    autoRenderAll();
+  }
+  setTimeout(step, 30);
+}
+function autoTierBadge(t){ return t==='A' ? '<span class="badge badge-high">Tier A · auto</span>' : '<span class="badge badge-medium">Tier B · suggest</span>'; }
+function autoRenderAll(){
+  var dec = AUTO.decisions || [];
+  var nA = 0, nB = 0;
+  dec.forEach(function(d){ if(d.tier==='A') nA++; else if(d.tier==='B') nB++; });
+  var nM = dec.length - nA - nB;
+  function kpi(cls, lbl, val, sub){
+    return '<div class="kpi '+cls+'"><div class="kpi-lbl">'+lbl+'</div><div class="kpi-val">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';
+  }
+  document.getElementById('auto-kpis').innerHTML =
+    kpi('c-blue','Open evaluated', dec.length, 'New / Active only') +
+    kpi('c-green','Tier A · auto-approve', nA, 'ticked by default') +
+    kpi('c-gold','Tier B · suggest', nB, 'unticked by default') +
+    kpi('c-red','Manual review', nM, 'no rule matched');
+  var html = '<tr><th>Apply ✓</th><th>On</th><th>Rule</th><th>Tier</th><th>Matched</th><th>Max mm</th><th>Min mm</th><th></th></tr>';
+  (AUTO.rules||[]).forEach(function(r){
+    var n = AUTO.counts[r.id] || 0;
+    var applied = CLASH_ITEMS.filter(function(c){ return c.auto && c.auto.rule===r.id; }).length;
+    html += '<tr><td><input type="checkbox" '+(AUTO.selected[r.id]?'checked':'')+' onchange="autoToggleSelected(\''+r.id+'\',this.checked)"></td>'+
+      '<td><input type="checkbox" '+(r.enabled?'checked':'')+' onchange="autoToggleEnabled(\''+r.id+'\',this.checked)"></td>'+
+      '<td><strong>'+escapeHtml(r.id)+'</strong> — '+escapeHtml(r.name)+
+        (r.type==='duplicate' ? ' <small style="color:var(--muted)">(element-pair pass)</small>' : '')+'</td>'+
+      '<td>'+autoTierBadge(r.tier)+'</td>'+
+      '<td><a href="#" onclick="AUTO.drill=\''+r.id+'\';autoRenderAll();return false;">'+n+'</a></td>'+
+      '<td><input type="number" step="0.001" min="0" value="'+(Number(r.maxDistance)||0)+'" onchange="autoSetMax(\''+r.id+'\',this.value)" style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;"></td>'+
+      '<td><input type="number" step="0.001" min="0" value="'+(Number(r.minDistance)||0)+'" onchange="autoSetMin(\''+r.id+'\',this.value)" style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;"></td>'+
+      '<td style="white-space:nowrap;"><button class="hbtn" style="padding:4px 10px;font-size:.7rem;" onclick="AUTO.drill=\''+r.id+'\';autoRenderAll();">Drill ↓</button> '+
+      (applied ? '<button class="hbtn pdf" style="padding:4px 10px;font-size:.7rem;" onclick="autoUndoRule(\''+r.id+'\')">Undo ('+applied+')</button>' : '')+'</td></tr>';
+  });
+  document.getElementById('auto-rules').innerHTML = html;
+  autoRenderDrill();
+  autoRenderManual();
+}
+function autoToggleEnabled(id, on){
+  var r = autoRuleById(id); if(!r) return;
+  r.enabled = !!on; clashSaveRules(AUTO.rules);
+  toast('Rule '+id+(on?' enabled — re-run evaluation':' disabled'));
+}
+function autoToggleSelected(id, on){ AUTO.selected[id] = !!on; }
+function autoSetMax(id, v){
+  var r = autoRuleById(id); if(!r) return;
+  var n = parseFloat(v);
+  r.maxDistance = (!isNaN(n) && n>=0) ? n : 0;
+  clashSaveRules(AUTO.rules); toast('Threshold saved — re-run evaluation');
+}
+function autoSetMin(id, v){
+  var r = autoRuleById(id); if(!r) return;
+  var n = parseFloat(v);
+  r.minDistance = (!isNaN(n) && n>=0) ? n : 0;
+  clashSaveRules(AUTO.rules); toast('Threshold saved — re-run evaluation');
+}
+function autoRenderDrill(){
+  var host = document.getElementById('auto-drill');
+  var q = ((document.getElementById('auto-search')||{}).value||'').toLowerCase();
+  var list = (AUTO.decisions||[]).filter(function(d){ return d.rule===AUTO.drill; });
+  if(q){
+    list = list.filter(function(d){
+      var hay = (d.rec.test+' '+d.rec.clash+' '+d.rec.nameA+' '+d.rec.nameB+' '+(d.rec.grid||'')).toLowerCase();
+      return hay.indexOf(q)>-1;
+    });
+  }
+  document.getElementById('auto-drill-count').textContent = list.length ? list.length+' clashes' : '';
+  var html = '<tr><th>Test</th><th>Clash</th><th>mm</th><th>Item A</th><th>Item B</th><th>Grid</th></tr>';
+  list.slice(0,500).forEach(function(d){
+    var mm = isNaN(d.rec.dist) ? '—' : (d.rec.dist*1000).toFixed(1);
+    html += '<tr><td>'+escapeHtml(d.rec.test)+'</td><td>'+escapeHtml(d.rec.clash)+'</td><td>'+mm+'</td>'+
+      '<td>'+escapeHtml(d.rec.nameA)+'</td><td>'+escapeHtml(d.rec.nameB)+'</td><td>'+escapeHtml(d.rec.grid||'—')+'</td></tr>';
+  });
+  if(list.length>500) html += '<tr><td colspan="6" style="text-align:center;color:var(--muted);">Showing 500 of '+list.length+' — refine search or export.</td></tr>';
+  if(!list.length) html += '<tr><td colspan="6" style="text-align:center;color:var(--muted);">No matches — run evaluation first, then pick a rule.</td></tr>';
+  host.innerHTML = html;
+}
+function autoRenderManual(){
+  var groups = {};
+  (AUTO.decisions||[]).forEach(function(d){
+    if(d.rule!==null) return;
+    var t = String(d.rec.test||'(no test)').trim() || '(no test)';
+    groups[t] = (groups[t]||0)+1;
+  });
+  var rows = Object.keys(groups).map(function(t){ return {t:t, n:groups[t]}; })
+    .sort(function(a,b){ return b.n-a.n; });
+  var html = '<tr><th>Test</th><th>Manual clashes</th><th></th></tr>';
+  rows.slice(0,200).forEach(function(r){
+    html += '<tr><td>'+escapeHtml(r.t)+'</td><td>'+r.n+'</td>'+
+      '<td><button class="hbtn" style="padding:4px 10px;font-size:.7rem;" onclick="autoFocusTest(\''+escapeHtml(r.t).replace(/'/g,"\\'")+'\')">Open in table</button></td></tr>';
+  });
+  if(!rows.length) html += '<tr><td colspan="3" style="text-align:center;color:var(--muted);">Nothing left for manual review — run evaluation first.</td></tr>';
+  document.getElementById('auto-manual').innerHTML = html;
+}
+function autoFocusTest(t){
+  document.getElementById('cl-search').value = t;
+  switchTab('t-clashes');
+  renderClashTable();
+}
+function autoSelectedDecisions(){
+  return (AUTO.decisions||[]).filter(function(d){ return d.rule!==null && AUTO.selected[d.rule]; });
+}
+function autoApplySelected(){
+  var list = autoSelectedDecisions();
+  if(!list.length){ toast('Nothing selected — tick rules first'); return; }
+  var byRule = {};
+  list.forEach(function(d){ byRule[d.rule] = (byRule[d.rule]||0)+1; });
+  var summary = Object.keys(byRule).map(function(id){ return id+': '+byRule[id]; }).join(', ');
+  if(!confirm('Apply auto-approval to '+list.length+' clashes ('+summary+')?\n\nMarks them Auto-approved in this dashboard only — Navisworks itself is never changed.')) return;
+  var batch = 'B' + Date.now().toString(36).toUpperCase();
+  var by = ((document.getElementById('project-name-input')||{}).value||'').trim() || 'analyst';
+  var at = new Date().toISOString();
+  var n = 0;
+  list.forEach(function(d){
+    var it = d.rec.ref;
+    if(!it || it.auto) return;
+    it.auto = {rule:d.rule, tier:d.tier||'', note:d.note||'', batch:batch, at:at, by:by};
+    n++;
+  });
+  AUTO.batches.push({id:batch, at:at, by:by, count:n,
+    rules:Object.keys(byRule).map(function(id){ return {id:id, count:byRule[id]}; })});
+  renderAll(); autoRenderAll(); reportHubScore();
+  toast('Applied '+n+' approval(s) in batch '+batch+' — undo available per rule or batch');
+}
+function autoUndoLast(){
+  var b = AUTO.batches[AUTO.batches.length-1];
+  if(!b){ toast('Nothing to undo'); return; }
+  autoUndoBatch(b.id);
+}
+function autoUndoBatch(batchId){
+  var n = 0;
+  CLASH_ITEMS.forEach(function(c){ if(c.auto && c.auto.batch===batchId){ delete c.auto; n++; } });
+  AUTO.batches = AUTO.batches.filter(function(b){ return b.id!==batchId; });
+  renderAll(); autoRenderAll(); reportHubScore();
+  toast('Undid batch '+batchId+' ('+n+' clashes back to open)');
+}
+function autoUndoRule(ruleId){
+  var n = 0;
+  CLASH_ITEMS.forEach(function(c){ if(c.auto && c.auto.rule===ruleId){ delete c.auto; n++; } });
+  AUTO.batches.forEach(function(b){
+    b.rules = b.rules.filter(function(r){ return r.id!==ruleId; });
+    b.count = Math.max(0, b.count - 0);
+  });
+  AUTO.batches = AUTO.batches.filter(function(b){
+    return CLASH_ITEMS.some(function(c){ return c.auto && c.auto.batch===b.id; });
+  });
+  renderAll(); autoRenderAll(); reportHubScore();
+  toast('Undid rule '+ruleId+' ('+n+' clashes back to open)');
+}
+function autoPlanRows(){
+  return (AUTO.decisions||[]).map(function(d){
+    var c = d.rec;
+    return [c.test.trim(), c.clash, c.status, d.rule||'MANUAL', d.tier||'',
+      isNaN(c.dist)?'':(c.dist*1000).toFixed(1), c.nameA, c.nameB, d.note||''];
+  });
+}
+function autoExportPlan(){
+  if(!(AUTO.decisions||[]).length){ toast('Run evaluation first'); return; }
+  var rows = [['Test','Clash','Status','Rule','Tier','Distance_mm','Item1','Item2','Note']].concat(autoPlanRows());
+  autoDownload('clash-auto-plan.csv', rows.map(function(r){ return r.map(autoCsvCell).join(','); }).join('\r\n'));
+  toast('Plan CSV downloaded');
+}
+function autoExportAudit(){
+  var rows = [['Test','Clash','Rule','Tier','Distance_mm','Item1','Item2','Note','Batch','By','At','Result']];
+  CLASH_ITEMS.forEach(function(c){
+    if(!c.auto) return;
+    rows.push([c.test.trim(), c.clash, c.auto.rule, c.auto.tier||'',
+      (function(){ var n = clashParseDist(c.distance); return isNaN(n)?'':(n*1000).toFixed(1); })(),
+      c.aName, c.bName, c.auto.note||'', c.auto.batch, c.auto.by, c.auto.at, 'OK']);
+  });
+  if(rows.length===1){ toast('Nothing applied yet'); return; }
+  autoDownload('clash-auto-audit.csv', rows.map(function(r){ return r.map(autoCsvCell).join(','); }).join('\r\n'));
+  toast('Audit CSV downloaded ('+(rows.length-1)+' approvals)');
+}
+function reportHubScore(){
+  try{
+    if(typeof window.OrascomHubReportScore==='function'){
+      var stats = computeStats();
+      window.OrascomHubReportScore(stats.resolutionRate, stats.open, {projectField:(document.getElementById('project-name-input')||{}).value||''});
+    }
+  }catch(e){}
 }
 
 

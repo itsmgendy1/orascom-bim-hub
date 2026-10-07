@@ -374,7 +374,10 @@ function navisItemId(el){
 function ingestNavisHtmlText(text, name){
   var rows = [];
   try{
-    var doc = new DOMParser().parseFromString(text, "text/html");
+    // Strip viewpoint thumbnails first: ~50k <img> tags carry no clash data
+    // and only bloat parsing on 50MB+ reports.
+    var doc = new DOMParser().parseFromString(
+      String(text).replace(/<img\b[^>]*>/gi, ""), "text/html");
     var mains = doc.querySelectorAll("table.mainTable");
     if(!mains.length) throw new Error("no Navisworks clash tables found");
     var summaries = doc.querySelectorAll("table.testSummaryTable");
@@ -400,7 +403,10 @@ function ingestNavisHtmlText(text, name){
         var g = tr.querySelectorAll("td.contentCell");
         var a = tr.querySelectorAll("td.item1Content");
         var b = tr.querySelectorAll("td.item2Content");
-        if((!g.length || g.length<6) && !a.length) return;
+        // A real clash row always carries BOTH item groups. Summary/count
+        // rows (tolerance, totals) have none — without this they import as
+        // bogus clashes named "0" and flood the dashboard.
+        if(!a.length || !b.length) return;
         rows.push({
           "Test": testName,
           "Clash": navisCellText(g[1]),

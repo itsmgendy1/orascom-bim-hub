@@ -167,8 +167,8 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
 
     <input type="file" id="fi-csv" accept=".csv,.txt,.xlsx,.xls,.xlsm,.xml,.html,.htm" style="position:absolute;width:1px;height:1px;opacity:0" onchange="handleFile(this.files[0])">
     <div class="dropzone" id="dz-csv" onclick="document.getElementById('fi-csv').click()"
-         ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
-         ondrop="event.preventDefault();this.classList.remove('over');handleFile(event.dataTransfer.files[0])">
+         ondragover="event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';this.classList.add('over')" ondragleave="this.classList.remove('over')"
+         ondrop="event.preventDefault();this.classList.remove('over');clashDropFiles(event)">
       <div class="dz-icon">💥</div>
       <p>Drop your clash export here (CSV, Excel, Navisworks XML or HTML report)</p>
       <small>any column layout &mdash; you'll map fields in the next step</small>
@@ -298,6 +298,26 @@ var CHARTS = {};
 
 function handleFile(file){
   if(!file) return;
+  try{ clashHandleFileInner(file); }
+  catch(err){ toast('Could not start import: '+(err && err.message ? err.message : err)); }
+}
+// Drop entry point: validates the drop, blocks stray page navigations,
+// and surfaces empty/virtual drops instead of dying silently.
+function clashDropFiles(ev){
+  try{
+    var dt = ev && ev.dataTransfer;
+    var f = dt && dt.files && dt.files[0];
+    if(!f){
+      toast('No file detected in that drop — use Browse, or drag from File Explorer');
+      return;
+    }
+    handleFile(f);
+  }catch(err){ toast('Drop failed: '+(err && err.message ? err.message : err)); }
+}
+// Never let a missed dropzone navigate the page away to the raw file.
+document.addEventListener('dragover', function(e){ e.preventDefault(); });
+document.addEventListener('drop', function(e){ e.preventDefault(); });
+function clashHandleFileInner(file){
   document.getElementById('io-file-name').textContent = '\u2713 ' + file.name;
   if(/\.xlsx?$|\.xlsm$/i.test(file.name)){
     if(typeof XLSX==='undefined'){ toast('Excel library did not load (offline?) \u2014 use CSV'); return; }
@@ -322,7 +342,15 @@ function handleFile(file){
     };
   }
   if(/\.html?$/i.test(file.name)){
-    reader.onload = function(e){ ingestNavisHtmlText(e.target.result, file.name); };
+    reader.onload = function(e){
+      var txt = e.target.result, fname = file.name;
+      document.getElementById('io-file-name').textContent = '✓ ' + fname + ' — parsing…';
+      toast('Parsing large report — one moment…');
+      setTimeout(function(){
+        try{ ingestNavisHtmlText(txt, fname); }
+        catch(err){ toast('Could not parse report: '+(err && err.message ? err.message : err)); }
+      }, 80);
+    };
   } else if(/\.xml$/i.test(file.name)){
     reader.onload = function(e){ ingestXmlText(e.target.result, file.name); };
   } else {

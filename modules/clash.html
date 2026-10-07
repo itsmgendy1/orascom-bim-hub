@@ -508,41 +508,46 @@ function ingestNavisHtmlText(text, name){
 }
 function ingestNavisHtmlChunked(text, name){
   var rows = [];
+  function status(t){
+    try{ document.getElementById('io-file-name').textContent = '✓ ' + name + ' — ' + t; }catch(e){}
+  }
   try{
-    var names = [];
-    var reT = /<table class="testSummaryTable"[\s\S]*?<td[^>]*class="testName"[^>]*>([\s\S]*?)<\/td>/gi, m;
-    while((m = reT.exec(text)) !== null){ names.push(navisStripTags(m[1])); }
-    var chunks = String(text).split(/(?=<table class="mainTable")/i).filter(function(s){
-      return /^<table class="mainTable"/i.test(s);
-    });
-    if(!chunks.length) throw new Error("no Navisworks clash tables found");
-    if(names.length && names.length !== chunks.length){
-      toast("Report layout looks unusual — falling back to full parse…");
-      ingestNavisHtmlFull(text, name);
-      return;
+    // Single sequential pass: summary and main tables strictly alternate
+    // (verified on real exports), so each main table inherits the pending
+    // test name. No giant DOM, no index guessing, progress every 120 tables.
+    var jobs = [];
+    var re = /<table class="(testSummaryTable|mainTable)"[\s\S]*?<\/table>/gi, m;
+    var pendTest = "";
+    while((m = re.exec(text)) !== null){
+      if(m[1] === "testSummaryTable"){
+        var t = /<td[^>]*class="testName"[^>]*>([\s\S]*?)<\/td>/i.exec(m[0]);
+        if(t) pendTest = navisStripTags(t[1]);
+      } else {
+        jobs.push({html:m[0], test:pendTest});
+      }
     }
+    if(!jobs.length) throw new Error("no Navisworks clash tables found");
     var i = 0;
-    document.getElementById('io-file-name').textContent = '✓ ' + name + ' — parsing 0 / ' + chunks.length + ' tests…';
+    status('parsing 0 / ' + jobs.length + ' tests…');
     (function step(){
       try{
-        var end = Math.min(i + 60, chunks.length);
+        var end = Math.min(i + 120, jobs.length);
         for(; i<end; i++){
           var doc = new DOMParser().parseFromString(
-            chunks[i].replace(/<img\b[^>]*>/gi, ""), "text/html");
+            jobs[i].html.replace(/<img\b[^>]*>/gi, ""), "text/html");
           var tbl = doc.querySelector("table.mainTable");
-          if(tbl) navisRowsFromTable(tbl, names[i] || "", rows);
-          chunks[i] = "";
+          if(tbl) navisRowsFromTable(tbl, jobs[i].test, rows);
+          jobs[i].html = "";
         }
-        if(i < chunks.length){
-          document.getElementById('io-file-name').textContent =
-            '✓ ' + name + ' — parsing ' + i + ' / ' + chunks.length + ' tests…';
+        if(i < jobs.length){
+          status('parsing ' + i + ' / ' + jobs.length + ' tests…');
           setTimeout(step, 0);
           return;
         }
         navisFinishRows(rows, name);
-      }catch(err){ toast("Could not read HTML report: "+(err.message||err)); }
+      }catch(err){ toast("Could not read HTML report: "+(err && err.message ? err.message : err)); }
     })();
-  }catch(err){ toast("Could not read HTML report: "+(err.message||err)); }
+  }catch(err){ toast("Could not read HTML report: "+(err && err.message ? err.message : err)); }
 }
 function ingestNavisHtmlFull(text, name){
   var rows = [];

@@ -431,8 +431,51 @@ function navisItemId(el){
   var m = s.match(/(\d[\d,]*)\s*$/);
   return m ? m[1].replace(/,/g,"") : s;
 }
+function navisStripTags(s){
+  return String(s||"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
+}
+function navisRowsFromTable(tbl, testName, rows){
+  var trs = tbl.querySelectorAll("tr.contentRow");
+  trs.forEach(function(tr){
+    var g = tr.querySelectorAll("td.contentCell");
+    var a = tr.querySelectorAll("td.item1Content");
+    var b = tr.querySelectorAll("td.item2Content");
+    // A real clash row always carries BOTH item groups. Summary/count
+    // rows (tolerance, totals) have none — without this they import as
+    // bogus clashes named "0" and flood the dashboard.
+    if(!a.length || !b.length) return;
+    rows.push({
+      "Test": testName,
+      "Clash": navisCellText(g[1]),
+      "Status": navisCellText(g[2]),
+      "Distance": navisCellText(g[3]),
+      "Grid": navisCellText(g[4]),
+      "Item A": navisCellText(a[1]),
+      "Item A ID": navisItemId(a[0]),
+      "Item B": navisCellText(b[1]),
+      "Item B ID": navisItemId(b[0])
+    });
+  });
+}
+function navisFinishRows(rows, name){
+  rows = rows.filter(function(r){ return r["Clash"] || r["Item A"] || r["Item B"]; });
+  if(!rows.length){ toast("No clash rows found in that HTML report"); return; }
+  toast("Parsing "+rows.length+" listed clashes — report summaries may claim more (the HTML lists a subset)");
+  // Direct handoff (no CSV round-trip): rows already carry the exact column
+  // shape ingestCsvText would produce — halves work on 50MB+ reports.
+  RAW_ROWS = rows;
+  HEADERS = ["Test","Clash","Status","Distance","Grid","Item A","Item A ID","Item B","Item B ID"];
+  buildMappingUI();
+  document.getElementById('map-panel').classList.add('show');
+  document.getElementById('gen-btn').style.display = 'inline-flex';
+  document.getElementById('dz-csv').classList.add('done');
+}
 function ingestNavisHtmlText(text, name){
   var rows = [];
+  // Large reports (15MB+): parse table-by-table with progress instead of one
+  // giant DOM that can stall or OOM the tab. Verified 1:1 pairing of
+  // testSummaryTable[i] -> mainTable[i] on real Navisworks exports.
+  if(String(text).length > 15000000){ ingestNavisHtmlChunked(text, name); return; }
   try{
     // Strip viewpoint thumbnails first: ~50k <img> tags carry no clash data
     // and only bloat parsing on 50MB+ reports.
@@ -458,40 +501,67 @@ function ingestNavisHtmlText(text, name){
           sib = sib.previousElementSibling;
         }
       }
-      var trs = tbl.querySelectorAll("tr.contentRow");
-      trs.forEach(function(tr){
-        var g = tr.querySelectorAll("td.contentCell");
-        var a = tr.querySelectorAll("td.item1Content");
-        var b = tr.querySelectorAll("td.item2Content");
-        // A real clash row always carries BOTH item groups. Summary/count
-        // rows (tolerance, totals) have none — without this they import as
-        // bogus clashes named "0" and flood the dashboard.
-        if(!a.length || !b.length) return;
-        rows.push({
-          "Test": testName,
-          "Clash": navisCellText(g[1]),
-          "Status": navisCellText(g[2]),
-          "Distance": navisCellText(g[3]),
-          "Grid": navisCellText(g[4]),
-          "Item A": navisCellText(a[1]),
-          "Item A ID": navisItemId(a[0]),
-          "Item B": navisCellText(b[1]),
-          "Item B ID": navisItemId(b[0])
-        });
-      });
+      navisRowsFromTable(tbl, testName, rows);
     });
   }catch(err){ toast("Could not read HTML report: "+(err.message||err)); return; }
-  rows = rows.filter(function(r){ return r["Clash"] || r["Item A"] || r["Item B"]; });
-  if(!rows.length){ toast("No clash rows found in that HTML report"); return; }
-  toast("Parsing "+rows.length+" listed clashes — report summaries may claim more (the HTML lists a subset)");
-  // Direct handoff (no CSV round-trip): rows already carry the exact column
-  // shape ingestCsvText would produce — halves work on 50MB+ reports.
-  RAW_ROWS = rows;
-  HEADERS = ["Test","Clash","Status","Distance","Grid","Item A","Item A ID","Item B","Item B ID"];
-  buildMappingUI();
-  document.getElementById('map-panel').classList.add('show');
-  document.getElementById('gen-btn').style.display = 'inline-flex';
-  document.getElementById('dz-csv').classList.add('done');
+  navisFinishRows(rows, name);
+}
+function ingestNavisHtmlChunked(text, name){
+  var rows = [];
+  try{
+    var names = [];
+    var reT = /<table class="testSummaryTable"[\s\S]*?<td[^>]*class="testName"[^>]*>([\s\S]*?)<\/td>/gi, m;
+    while((m = reT.exec(text)) !== null){ names.push(navisStripTags(m[1])); }
+    var chunks = String(text).split(/(?=<table class="mainTable")/i).filter(function(s){
+      return /^<table class="mainTable"/i.test(s);
+    });
+    if(!chunks.length) throw new Error("no Navisworks clash tables found");
+    if(names.length && names.length !== chunks.length){
+      toast("Report layout looks unusual — falling back to full parse…");
+      ingestNavisHtmlFull(text, name);
+      return;
+    }
+    var i = 0;
+    document.getElementById('io-file-name').textContent = '✓ ' + name + ' — parsing 0 / ' + chunks.length + ' tests…';
+    (function step(){
+      try{
+        var end = Math.min(i + 60, chunks.length);
+        for(; i<end; i++){
+          var doc = new DOMParser().parseFromString(
+            chunks[i].replace(/<img\b[^>]*>/gi, ""), "text/html");
+          var tbl = doc.querySelector("table.mainTable");
+          if(tbl) navisRowsFromTable(tbl, names[i] || "", rows);
+          chunks[i] = "";
+        }
+        if(i < chunks.length){
+          document.getElementById('io-file-name').textContent =
+            '✓ ' + name + ' — parsing ' + i + ' / ' + chunks.length + ' tests…';
+          setTimeout(step, 0);
+          return;
+        }
+        navisFinishRows(rows, name);
+      }catch(err){ toast("Could not read HTML report: "+(err.message||err)); }
+    })();
+  }catch(err){ toast("Could not read HTML report: "+(err.message||err)); }
+}
+function ingestNavisHtmlFull(text, name){
+  var rows = [];
+  try{
+    var doc = new DOMParser().parseFromString(
+      String(text).replace(/<img\b[^>]*>/gi, ""), "text/html");
+    var mains = doc.querySelectorAll("table.mainTable");
+    if(!mains.length) throw new Error("no Navisworks clash tables found");
+    var summaries = doc.querySelectorAll("table.testSummaryTable");
+    mains.forEach(function(tbl, ti){
+      var testName = "";
+      if(summaries[ti]){
+        var tn = summaries[ti].querySelector(".testName");
+        if(tn) testName = navisCellText(tn);
+      }
+      navisRowsFromTable(tbl, testName, rows);
+    });
+  }catch(err){ toast("Could not read HTML report: "+(err.message||err)); return; }
+  navisFinishRows(rows, name);
 }
 
 function ingestCsvText(text, name){

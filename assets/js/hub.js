@@ -33,7 +33,7 @@
     {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=669bdcf0',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=9583d06a',     weightKey:'workset'},
     {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=a83f1a41',   weightKey:'parameters'},
-    {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=b0f455c3',                 weightKey:'clash'}
+    {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=ee6006bd',                 weightKey:'clash'}
   ];
 
   var DEFAULT_WEIGHTS = {midp:20, naming:15, qaqc:25, workset:15, parameters:15, clash:10};

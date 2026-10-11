@@ -165,6 +165,7 @@
     if(part==='cloud') writeLS(LS.cloud, state.cloud);
     if(part==='authuid') writeLS('ohub_authuid', state.authuid);
     try{ refreshNavBadges(); }catch(e){}
+    try{ authwScheduleAutoPush(); }catch(e){}
   }
   function toggleDark(){
     state.dark = !state.dark;
@@ -3973,6 +3974,47 @@
       try{ location.reload(); }catch(e){}
     });
   }
+  /* ----- Team auto-preserve: while signed in with a cloud account, every
+     persist() marks the dataset dirty; 60 s of quiet pushes it silently to
+     the team server (D1, keyed to the session user). pagehide flushes with
+     keepalive so closing the tab still preserves work. Failures stay silent
+     and retry on the next window — never a toast storm. ----- */
+  var authwAutoT = null, authwAutoDirty = false, authwSyncBusy = false;
+  function authwScheduleAutoPush(){
+    try{ if(!authwSession()) return; }catch(e){ return; }
+    if(authwSyncBusy) return;
+    authwAutoDirty = true;
+    if(authwAutoT) return;
+    authwAutoT = setTimeout(function(){
+      authwAutoT = null;
+      if(!authwAutoDirty || authwSyncBusy) return;
+      try{ if(!authwSession()){ authwAutoDirty = false; return; } }catch(e){ authwAutoDirty = false; return; }
+      authwSyncBusy = true;
+      authwPushAll(function(){}).then(function(){
+        authwSyncBusy = false; authwAutoDirty = false;
+        try{ var el = document.getElementById('ua-sync-status'); if(el) el.textContent = 'Auto-saved ' + new Date().toLocaleTimeString(); }catch(e){}
+      }, function(){ authwSyncBusy = false; });
+    }, 60000);
+  }
+  try{
+    window.addEventListener('pagehide', function(){
+      if(!authwAutoDirty || authwSyncBusy) return;
+      var base = '';
+      try{
+        if(!authwSession() || !window.OHubAuth || !window.OHubAuth.authWorker) return;
+        base = window.OHubAuth.authWorker();
+      }catch(e){ return; }
+      if(!base) return;
+      var snap = {};
+      try{ snap = authwReadLocal(); }catch(e){ return; }
+      Object.keys(snap).forEach(function(k){
+        try{
+          fetch(base + '/api/data/' + k, {method:'PUT', credentials:'include', keepalive:true,
+            headers:{'Content-Type':'application/json'}, body: JSON.stringify({snapshot: snap[k]})});
+        }catch(e){}
+      });
+    });
+  }catch(e){}
   function authwGentleSync(){
     // Returning user, same browser: pull only onto an empty local dataset.
     if(authwLocalHasData()) return;
@@ -4058,6 +4100,7 @@
       '<span class="badge badge-' + (me && me.role === 'ADMIN' ? 'ok' : 'info') + '">' + escapeHtml((me && me.role) || '?') + '</span>' +
       '<button class="btn btn-outline btn-sm" onclick="OHub.authwPushBtn()">Push my data now</button>' +
       '<button class="btn btn-outline btn-sm" onclick="OHub.authwPullBtn()">Pull my data</button>' +
+      '<span class="hint">Auto-save is on — changes preserve to the team server.</span>' +
       '<span id="ua-sync-status" style="color:var(--muted);"></span></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:flex-end;">' +
       '<div class="field" style="margin:0;"><label>Current password</label><input type="password" id="ua-pw-cur" autocomplete="current-password"></div>' +
@@ -4554,7 +4597,7 @@
     cloudPull: cloudPull,
     toggleAccountMenu: toggleAccountMenu,
     accountGo: accountGo,
-    authwPushBtn: function(){ var el = document.getElementById('ua-sync-status'); authwPushAll(function(m){ if(el) el.textContent = m; }); },
+    authwPushBtn: function(){ var el = document.getElementById('ua-sync-status'); authwPushAll(function(m){ if(el) el.textContent = m; }).then(function(){ authwAutoDirty = false; }); },
     authwPullBtn: function(){ if(!confirm('Replace ALL Hub data in this browser with your cloud dataset?')) return; var el = document.getElementById('ua-sync-status'); authwPullAll(function(m){ if(el) el.textContent = m; }); },
     authwPasswordBtn: function(){
       var st = document.getElementById('ua-pw-status');

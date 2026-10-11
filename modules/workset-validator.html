@@ -1568,6 +1568,8 @@ async function loadDemoData(){
 }
 
 // ===== Exports =====
+// OWASP CSV-injection guard: neutralise formula-leading cells in downloads.
+function csvSafe(v){ const s=String(v??""); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; }
 function exportElementsCsv(){
   const q=(document.getElementById("elem-search").value||"").toLowerCase();
   const catF=document.getElementById("elem-cat-filter").value;
@@ -1582,7 +1584,7 @@ function exportElementsCsv(){
     if(q){ const hay=(e.family+" "+e.category+" "+e.workset_name+" "+e.expected_workset+" "+e.discipline).toLowerCase(); if(!hay.includes(q)) return false; }
     return true;
   });
-  const rows=[["#","Discipline","Family and Type","Category","Workset","Expected","Status","Reason"]].concat(list.map((e,i)=>[i+1,e.discipline,e.family,e.category,e.workset_name,e.expected_workset,e.status,e.failure_reason]));
+  const rows=[["#","Discipline","Family and Type","Category","Workset","Expected","Status","Reason"]].concat(list.map((e,i)=>[i+1,e.discipline,e.family,e.category,e.workset_name,e.expected_workset,e.status,e.failure_reason].map(csvSafe)));
   const csv=Papa.unparse(rows);
   downloadBlob(new Blob([csv],{type:"text/csv"}), "WorksetValidator_Elements_"+timestamp()+".csv");
 }

@@ -115,7 +115,25 @@
       return self.wapi('/api/auth/login', {
         method: 'POST', body: { username: username, password: password },
       }).then(function (j) {
+        if (j && j.mfaRequired && j.ticket) {
+          var e = new Error('Two-step code required.');
+          e.mfaTicket = j.ticket;
+          throw e;
+        }
         if (!j.ok || !j.user) throw new Error('Login failed.');
+        try {
+          sessionStorage.setItem(SS_SESSION, JSON.stringify(
+            { u: j.user.username, id: j.user.id, role: j.user.role, v2: self.authWorker() }));
+        } catch (e) { throw new Error('Browser storage blocked.'); }
+        return j.user;
+      });
+    },
+    authMfa: function (ticket, code) {
+      var self = this;
+      return self.wapi('/api/auth/mfa', {
+        method: 'POST', body: { ticket: ticket, code: code },
+      }).then(function (j) {
+        if (!j.ok || !j.user) throw new Error('Wrong code — try again.');
         try {
           sessionStorage.setItem(SS_SESSION, JSON.stringify(
             { u: j.user.username, id: j.user.id, role: j.user.role, v2: self.authWorker() }));

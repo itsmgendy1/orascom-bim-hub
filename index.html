@@ -253,10 +253,16 @@
       <a href="#" id="loginRequestToggle" onclick="return toggleRequest()"
       style="font-size:11px;color:var(--cyan);text-decoration:none;">No account? Request one →</a></div>
     <form id="loginForm" onsubmit="return submitLogin(event)">
+      <div id="loginCredWrap">
       <label>USERNAME</label>
       <input id="loginUser" type="text" autocomplete="username" placeholder="e.g. bim.admin" />
       <label>PASSWORD</label>
       <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••" />
+      </div>
+      <div id="loginMfaWrap" style="display:none">
+        <label>AUTHENTICATOR CODE</label>
+        <input id="loginCode" type="text" inputmode="text" autocomplete="one-time-code" placeholder="123456 (or XXXX-XXXX backup code)" />
+      </div>
       <div id="loginRequestWrap" style="display:none">
         <label>DISPLAY NAME</label>
         <input id="loginDisplay" type="text" autocomplete="nickname" placeholder="e.g. Ahmed Hassan" />
@@ -294,19 +300,45 @@
     document.getElementById('loginTitle').textContent = 'HUB LOGIN';
     document.getElementById('loginGo').textContent = 'ENTER →';
     document.getElementById('loginErr').style.display = 'none';
-    paintTeamMode();
+    mfaTicket = null;
+    paintCredMode();
     document.getElementById('teamUrl').value = teamUrl;
     document.getElementById('loginModal').classList.add('on');
     setTimeout(function(){ document.getElementById('loginUser').focus(); }, 60);
   }
-  function paintTeamMode(){
-    document.getElementById('loginTeamWrap').style.display = teamOn ? 'block' : 'none';
+  function closeLogin(){ document.getElementById('loginModal').classList.remove('on'); mfaTicket = null; paintCredMode(); }
+  var mfaTicket = null;
+  function paintCredMode(){
+    var mfa = !!mfaTicket;
+    document.getElementById('loginCredWrap').style.display = mfa ? 'none' : 'block';
+    document.getElementById('loginMfaWrap').style.display = mfa ? 'block' : 'none';
+    document.getElementById('loginTeamWrap').style.display = (!mfa && teamOn) ? 'block' : 'none';
     document.getElementById('loginTeamToggle').textContent = teamOn ? 'Use this browser offline instead →' : 'Use team server instead →';
-    document.getElementById('loginSub').textContent = teamOn
-      ? 'Team sign-in — one admin, works in any browser.'
-      : 'Offline browser account — stays on this machine only, not the team.';
+    document.getElementById('loginTitle').textContent = mfa ? 'TWO-STEP CHECK' : 'HUB LOGIN';
+    document.getElementById('loginGo').textContent = mfa ? 'VERIFY →' : 'ENTER →';
+    document.getElementById('loginSub').textContent = mfa
+      ? 'Enter the 6-digit code from your authenticator app (or a backup code).'
+      : (teamOn ? 'Team sign-in — one admin, works in any browser.' : 'Offline browser account — stays on this machine only, not the team.');
   }
-  function closeLogin(){ document.getElementById('loginModal').classList.remove('on'); }
+  function showMfaStep(ticket){
+    mfaTicket = ticket;
+    document.getElementById('loginErr').style.display = 'none';
+    document.getElementById('loginCode').value = '';
+    paintCredMode();
+    setTimeout(function(){ document.getElementById('loginCode').focus(); }, 60);
+  }
+  function submitMfa(ev){
+    if(ev) ev.preventDefault();
+    var c = document.getElementById('loginCode').value || '';
+    document.getElementById('loginGo').textContent = 'CHECKING…';
+    window.OHubAuth.authMfa(mfaTicket, c).then(function(){
+      mfaTicket = null; paintCredMode(); window.OHubAuth.enterHub();
+    }).catch(function(err){
+      loginFail((err && err.message) || 'Wrong code — try again.');
+      document.getElementById('loginGo').textContent = 'VERIFY →';
+    });
+    return false;
+  }
   var requestMode = false;
   function toggleRequest(){
     requestMode = !requestMode;
@@ -363,7 +395,8 @@
         if(t && !t.value.trim() && window.OHubAuth && window.OHubAuth.authDefaultUrl) t.value = window.OHubAuth.authDefaultUrl();
       }
     }catch(e){}
-    paintTeamMode();
+    document.getElementById('loginTeamToggle').textContent = teamOn ? 'Use this browser offline instead →' : 'Use team server instead →';
+    paintCredMode();
     setTimeout(function(){
       var el = teamOn ? document.getElementById('teamUrl') : document.getElementById('loginUser');
       if(el) el.focus();
@@ -373,6 +406,7 @@
   function submitLogin(ev){
     if(ev) ev.preventDefault();
     if(requestMode) return submitRequest();
+    if(mfaTicket) return submitMfa(ev);
     var u = document.getElementById('loginUser').value;
     var p = document.getElementById('loginPass').value;
     if(!window.OHubAuth){ loginFail('Auth library failed to load (offline?).'); return false; }
@@ -390,6 +424,9 @@
         // Cloud accounts (new auth Worker) first; legacy team sync second.
         // Either success enters the Hub — dataset switch happens on hub load.
         OHubAuth.authLogin(team, u, p).then(function(){ OHubAuth.enterHub(); }).catch(function(v2err){
+          // Two-step challenge: park the ticket and show the code step —
+          // never fall through to the legacy login with an MFA ticket.
+          if(v2err && v2err.mfaTicket){ showMfaStep(v2err.mfaTicket); return; }
           var v2msg = (v2err && v2err.message) || '';
           var v2real = /pending|disabled|wrong password|signed out/i.test(v2msg);
           OHubAuth.cloudLogin(team, u, p).then(function(name){

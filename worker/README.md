@@ -1,5 +1,15 @@
 # Hub Auth+Data Worker (D1 + sessions + RBAC + audit)
 
+## Two-step (TOTP)
+
+Optional per user, off by default. Users enroll in Hub → Users & Access →
+My account (secret + confirm code + 8 one-time backup codes, shown once).
+Login with an enrolled account returns `{mfaRequired, ticket}` (5 min);
+`POST /api/auth/mfa {ticket, code}` completes the session. Tickets die on
+use/expiry; codes are throttled like passwords; backup codes are hashed and
+single-use. Admins: per-row 2FA badge + Reset; `require_totp_admin` setting
+(0/1, default 0) blocks non-enrolled ADMIN logins when enabled — enroll first.
+
 Live: `https://orascom-hub-auth.mohamedyasserelgendy2015.workers.dev`
 D1: `orascom-hub-db`. Verified 2026-10-03: **35/35 API tests pass**
 (request→approve→login, per-user isolation, tamper→403/401, admin view

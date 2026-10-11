@@ -4107,7 +4107,8 @@
       '<div class="field" style="margin:0;"><label>Current password</label><input type="password" id="ua-pw-cur" autocomplete="current-password"></div>' +
       '<div class="field" style="margin:0;"><label>New password (12+)</label><input type="password" id="ua-pw-next" autocomplete="new-password"></div>' +
       '<div><button class="btn btn-outline btn-sm" onclick="OHub.authwPasswordBtn()">Change password</button></div>' +
-      '<span id="ua-pw-status" style="font-size:.78rem;color:var(--muted);"></span></div></div>' +
+      '<span id="ua-pw-status" style="font-size:.78rem;color:var(--muted);"></span></div>' +
+      '<div id="ua-mfa-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;font-size:.83rem;"><span class="hint">Two-step: checking…</span></div></div>' +
       (admin ? '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>Account requests & users</h3><span class="hint" id="ua-count"></span></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' +
       '<input type="text" id="ua-q" placeholder="Search name / email…" value="' + escapeHtml(uaQ) + '" oninput="OHub.uaFilter(this.value)" style="flex:2;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);">' +
@@ -4127,7 +4128,69 @@
       '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>User data inspector</h3><span class="hint">audited</span></div><div id="ua-data"><p style="font-size:.83rem;color:var(--muted);">Pick “Data” on a user row to inspect their cloud stores (read-only).</p></div></div>' +
       '<div class="card"><div class="card-head"><h3>Audit log</h3><button class="btn btn-ghost btn-sm" onclick="OHub.uaAudit()">Refresh</button></div><div class="tbl-wrap" id="ua-audit"><p style="font-size:.83rem;color:var(--muted);">Loading…</p></div></div>'
       : '<div class="card"><p style="font-size:.85rem;color:var(--muted);">User management is restricted to administrators. Your data syncs to your private cloud dataset on push.</p></div>');
-    if(admin){ uaLoad(); uaLoadReg(); uaAudit(); uaPollStart(); }
+    if(admin){ uaLoad(); uaLoadReg(); uaAudit(); uaPollStart(); uaMfaPaint(); }
+  }
+  /* ----- Two-step self-service (TOTP + backup codes) ----- */
+  function uaMfaPaint(){
+    var host = document.getElementById('ua-mfa-row');
+    if(!host) return;
+    authwApi('/api/auth/me').then(function(j){
+      var on = !!(j && j.user && j.user.totp);
+      host.innerHTML = '<span class="hint">Two-step:</span>' +
+        '<span class="badge badge-' + (on ? 'ok' : 'muted') + '">' + (on ? 'ON' : 'OFF') + '</span>' +
+        (on
+          ? '<button class="btn btn-ghost btn-sm" onclick="OHub.uaMfaDisable()">Turn off</button>'
+          : '<button class="btn btn-outline btn-sm" onclick="OHub.uaMfaEnroll()">Turn on</button>') +
+        '<span id="ua-mfa-status" style="color:var(--muted);font-size:.78rem;"></span>';
+    }).catch(function(){ host.innerHTML = '<span class="hint">Two-step: unavailable (old team server?).</span>'; });
+  }
+  function uaMfaMsg(m){ var el = document.getElementById('ua-mfa-status'); if(el) el.textContent = m || ''; }
+  function uaMfaEnroll(){
+    var host = document.getElementById('ua-mfa-row');
+    uaMfaMsg('Preparing…');
+    authwApi('/api/auth/totp/enroll', {method:'POST'}).then(function(j){
+      if(host) host.innerHTML =
+        '<span class="hint">1) Add this key to your authenticator app:</span>' +
+        '<code id="ua-mfa-secret" style="font-size:.8rem;user-select:all;">' + escapeHtml(j.secret) + '</code>' +
+        '<span class="hint">2) Enter the 6-digit code:</span>' +
+        '<input type="text" id="ua-mfa-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" style="width:110px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);">' +
+        '<button class="btn btn-primary btn-sm" onclick="OHub.uaMfaConfirm()">Confirm</button>' +
+        '<span id="ua-mfa-status" style="color:var(--muted);font-size:.78rem;"></span>';
+    }).catch(function(err){ uaMfaMsg('Failed: ' + err.message); });
+  }
+  function uaMfaConfirm(){
+    var inp = document.getElementById('ua-mfa-code');
+    var code = inp ? inp.value : '';
+    uaMfaMsg('Checking…');
+    authwApi('/api/auth/totp/confirm', {method:'POST', body:{code: code}}).then(function(j){
+      var host = document.getElementById('ua-mfa-row');
+      var codes = (j && j.backupCodes) || [];
+      if(host) host.innerHTML = '<span class="badge badge-ok">ON</span>' +
+        '<span class="hint">Save these one-time backup codes now (shown once):</span>' +
+        '<code style="font-size:.78rem;user-select:all;">' + escapeHtml(codes.join('  ')) + '</code>' +
+        '<button class="btn btn-outline btn-sm" onclick="OHub.uaMfaPaintRefresh()">Done</button>';
+      try{ toast('Two-step enabled.'); }catch(e){}
+    }).catch(function(err){ uaMfaMsg('Failed: ' + (err.message || 'wrong code')); });
+  }
+  function uaMfaDisable(){
+    var cur = (document.getElementById('ua-pw-cur') || {}).value || '';
+    var pw = cur || prompt('Enter your current password to turn off two-step:') || '';
+    if(!pw) return;
+    uaMfaMsg('Saving…');
+    authwApi('/api/auth/totp/disable', {method:'POST', body:{password: pw}}).then(function(){
+      try{ toast('Two-step disabled.'); }catch(e){}
+      uaMfaPaint();
+    }).catch(function(err){ uaMfaMsg('Failed: ' + err.message); });
+  }
+  function uaMfaReset(id){
+    var name = id;
+    uaUsers.forEach(function(x){ if(x.id === id) name = x.username; });
+    if(!confirm('Reset two-step for ' + name + '? They sign in with password only until they enroll again.')) return;
+    uaStatusMsg('Resetting…');
+    authwApi('/api/admin/users/reset-mfa', {method:'POST', body:{id: id}}).then(function(){
+      try{ toast('Two-step reset for ' + name + '.'); }catch(e){}
+      uaLoad();
+    }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
   }
   /* Live approvals: quiet 5 s poll while the view is visible + refresh on
      window focus. New PENDING arrivals raise a toast + the sidebar badge.
@@ -4155,6 +4218,7 @@
     if(r.status === 'PENDING'){ b.push('<button class="btn btn-primary btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'ACTIVE\')">Approve</button>'); b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'REJECTED\')">Reject</button>'); }
     if(r.status === 'ACTIVE') b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'DISABLED\')">Disable</button>');
     if(r.status === 'DISABLED' || r.status === 'REJECTED') b.push('<button class="btn btn-outline btn-sm" onclick="OHub.uaSetStatus(\'' + r.id + '\',\'ACTIVE\')">Enable</button>');
+    if(r.totp) b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaMfaReset(\'' + r.id + '\')">Reset 2FA</button>');
     b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaViewData(\'' + r.id + '\')">Data</button>');
     b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaDelete(\'' + r.id + '\')">Delete</button>');
     return b.join(' ');
@@ -4176,7 +4240,8 @@
           '<td style="font-size:.78rem;">' + escapeHtml(r.email || '—') + '</td>' +
           '<td><select onchange="OHub.uaSetRole(\'' + r.id + '\',this.value)" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);font-size:.76rem;">' +
           ['ADMIN', 'MANAGER', 'COORDINATOR', 'QA', 'VIEWER', 'USER'].map(function(x){ return '<option' + (r.role === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></td>' +
-          '<td><span class="badge badge-' + (r.status === 'ACTIVE' ? 'ok' : r.status === 'PENDING' ? 'warn' : 'muted') + '">' + r.status + '</span></td>' +
+          '<td><span class="badge badge-' + (r.status === 'ACTIVE' ? 'ok' : r.status === 'PENDING' ? 'warn' : 'muted') + '">' + r.status + '</span>' +
+          (r.totp ? ' <span class="badge badge-info" title="Two-step on">2FA</span>' : '') + '</td>' +
           '<td style="font-size:.76rem;">' + fmtDate(r.created_at * 1000) + '</td>' +
           '<td style="font-size:.76rem;">' + (r.last_login_at ? fmtDate(r.last_login_at * 1000) : '—') + '</td>' +
           '<td style="white-space:nowrap;">' + uaRowActions(r) + '</td></tr>';
@@ -4705,6 +4770,11 @@
     uaSetStatus: uaSetStatus,
     uaSetRole: uaSetRole,
     uaDelete: uaDelete,
+    uaMfaEnroll: uaMfaEnroll,
+    uaMfaConfirm: uaMfaConfirm,
+    uaMfaDisable: uaMfaDisable,
+    uaMfaReset: uaMfaReset,
+    uaMfaPaintRefresh: uaMfaPaint,
     uaCreate: uaCreate,
     uaRegToggle: uaRegToggle,
     uaViewData: uaViewData,

@@ -88,6 +88,61 @@ function approvalMail(user) {
   return { subject, html, text };
 }
 
+/* ---------- TOTP two-step (RFC 6238, SHA-1, 30 s, 6 digits) ----------
+ * Secrets live in users.totp_secret (random, revocable); codes are verified
+ * with a ±1-step window and per-user last-step replay protection. */
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function b32dec(s) {
+  const t = String(s || '').toUpperCase().replace(/=+$/, '').replace(/[^A-Z2-7]/g, '');
+  const out = [];
+  let bits = 0, acc = 0;
+  for (const ch of t) {
+    acc = (acc << 5) | B32.indexOf(ch); bits += 5;
+    if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 255); }
+  }
+  return new Uint8Array(out);
+}
+async function totpCode(secretB32, step) {
+  const key = b32dec(secretB32);
+  const msg = new Uint8Array(8);
+  let n = step;
+  for (let i = 7; i >= 0; i--) { msg[i] = n & 255; n = Math.floor(n / 256); }
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC',
+    await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']), msg));
+  const o = mac[mac.length - 1] & 15;
+  const v = ((mac[o] & 127) << 24) | (mac[o + 1] << 16) | (mac[o + 2] << 8) | mac[o + 3];
+  return String(v % 1000000).padStart(6, '0');
+}
+async function totpVerify(env, user, code) {
+  const c = String(code || '').replace(/[\s-]/g, '');
+  if (!/^\d{6}$/.test(c) || !user.totp_secret) return -1;
+  // Window ±1 step. Deliberately no intra-window replay tracking: tickets are
+  // single-use (deleted on read) and every attempt needs a fresh password
+  // login, so a second login inside the same 30 s window must keep working.
+  const step = Math.floor(Date.now() / 30000);
+  for (let s = step - 1; s <= step + 1; s++) {
+    if (await totpCode(user.totp_secret, s) === c) return s;
+  }
+  return -1;
+}
+function newTotpSecret() {
+  const a = rand(20);
+  let s = '', bits = 0, acc = 0;
+  for (const b of a) {
+    acc = (acc << 8) | b; bits += 8;
+    while (bits >= 5) { bits -= 5; s += B32[(acc >> bits) & 31]; }
+  }
+  if (bits > 0) s += B32[(acc << (5 - bits)) & 31];
+  return s;
+}
+const BCODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function newBackupCode() {
+  const a = rand(5);
+  let s = '';
+  for (let i = 0; i < 8; i++) { s += BCODE_CHARS[a[i % 5] % BCODE_CHARS.length]; if (i === 3) s += '-'; }
+  return s;
+}
+
 /* ---------- CORS (Pages origins + localhost dev) ---------- */
 const ORIGIN_RES = [/^https:\/\/orascom-bim-hub\.pages\.dev$/,
   /^https:\/\/[a-z0-9-]+\.orascom-bim-hub\.pages\.dev$/,
@@ -219,6 +274,24 @@ export default {
       if (u.status !== 'ACTIVE') return fail('account disabled', 403);
       if (!safeEq(await pbkdf2(password, u.pass_salt), u.pass_hash)) return fail('wrong username or password');
       await env.DB.prepare('DELETE FROM login_attempts WHERE username=?').bind(username).run();
+      // Two-step enrolled? Password is verified — hand out a short-lived
+      // ticket; the session cookie only comes after the code (see /api/auth/mfa).
+      if (u.totp_enabled) {
+        const ticket = hex(rand(32));
+        await env.DB.prepare('INSERT INTO mfa_tickets(ticket_hash,user_id,expires_at) VALUES (?,?,?)')
+          .bind(await sha256hex(ticket), u.id, t + 300).run();
+        ctx.waitUntil(audit(env, ctx, { action: 'MFA_CHALLENGED', actor_id: u.id, actor_username: u.username, ip: ipOf(req) }));
+        return json(req, { ok: false, mfaRequired: true, ticket });
+      }
+      // Optional hard rule: admins must enroll (off by default; enroll first!).
+      // Policy block, not a credential failure: no attempt counted.
+      if (u.role === 'ADMIN' && !u.totp_enabled) {
+        const req2 = await env.DB.prepare("SELECT value FROM settings WHERE key='require_totp_admin'").first();
+        if (req2 && req2.value === '1') {
+          ctx.waitUntil(audit(env, ctx, { action: 'MFA_POLICY_BLOCK', actor_id: u.id, actor_username: u.username, ip: ipOf(req) }));
+          return json(req, { ok: false, error: 'two-step required for admins — enroll first (Users & Access → My account)' }, 403);
+        }
+      }
       const tok = b64u(rand(32));
       await env.DB.prepare('INSERT INTO sessions(token_hash,user_id,expires_at,created_at,ip) VALUES (?,?,?,?,?)')
         .bind(await sha256hex(tok), u.id, t + SESSION_TTL, t, ipOf(req)).run();
@@ -243,7 +316,7 @@ export default {
       if (err) return err;
       return json(req, {
         ok: true,
-        user: { id: u.id, username: u.username, email: u.email, displayName: u.display_name, role: u.role, perms: PERMS[u.role] || [] },
+        user: { id: u.id, username: u.username, email: u.email, displayName: u.display_name, role: u.role, perms: PERMS[u.role] || [], totp: !!u.totp_enabled },
       });
     }
     if (path === '/api/auth/password' && req.method === 'POST') {
@@ -259,6 +332,112 @@ export default {
         .bind(salt, await pbkdf2(String(body.next), salt), u.id).run();
       await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(u.id).run();
       ctx.waitUntil(audit(env, ctx, { action: 'PASSWORD_CHANGED', actor_id: u.id, actor_username: u.username }));
+      return json(req, { ok: true });
+    }
+
+    /* ----- two-step: verify ticket + code -> session ----- */
+    if (path === '/api/auth/mfa' && req.method === 'POST') {
+      const ticket = String(body.ticket || '');
+      const t = now();
+      const row = ticket
+        ? await env.DB.prepare('SELECT * FROM mfa_tickets WHERE ticket_hash=?').bind(await sha256hex(ticket)).first()
+        : null;
+      // Sweep expired tickets; the presented one survives failed attempts
+      // (throttle still counts them) and dies only on success or expiry.
+      await env.DB.prepare('DELETE FROM mfa_tickets WHERE expires_at<?').bind(t).run();
+      if (!row || row.expires_at < t) return json(req, { ok: false, error: 'challenge expired — sign in again' }, 401);
+      const u = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(row.user_id).first();
+      if (!u || u.status !== 'ACTIVE') return json(req, { ok: false, error: 'unauthorized' }, 401);
+      const failM = async () => {
+        await env.DB.prepare('INSERT INTO login_attempts(ts,username,ip) VALUES (?,?,?)')
+          .bind(t, u.username, ipOf(req)).run();
+        const n = await env.DB.prepare('SELECT COUNT(*) c FROM login_attempts WHERE username=? AND ts>?')
+          .bind(u.username, t - 600).first();
+        ctx.waitUntil(audit(env, ctx, { action: 'FAILED_MFA', actor_id: u.id, actor_username: u.username, ip: ipOf(req) }));
+        return json(req, { ok: false, error: n && n.c >= 10 ? 'too many attempts — try later' : 'wrong code' }, n && n.c >= 10 ? 429 : 401);
+      };
+      const code = String(body.code || '');
+      let viaBackup = false;
+      if (u.totp_enabled) {
+        if (await totpVerify(env, u, code) < 0) {
+          // Single-use backup codes (stored hashed).
+          const bc = await env.DB.prepare('SELECT rowid AS rid, code_hash FROM backup_codes WHERE user_id=? AND used=0')
+            .bind(u.id).all();
+          let hit = null;
+          for (const r2 of (bc.results || [])) {
+            if (safeEq(await sha256hex(code.replace(/[\s-]/g, '').toUpperCase()), r2.code_hash)) { hit = r2; break; }
+          }
+          if (!hit) return failM();
+          await env.DB.prepare('UPDATE backup_codes SET used=1 WHERE rowid=?').bind(hit.rid).run();
+          viaBackup = true;
+        }
+      }
+      const tok = b64u(rand(32));
+      await env.DB.prepare('INSERT INTO sessions(token_hash,user_id,expires_at,created_at,ip) VALUES (?,?,?,?,?)')
+        .bind(await sha256hex(tok), u.id, t + SESSION_TTL, t, ipOf(req)).run();
+      await env.DB.prepare('DELETE FROM mfa_tickets WHERE ticket_hash=?').bind(await sha256hex(ticket)).run();
+      await env.DB.prepare('UPDATE users SET last_login_at=? WHERE id=?').bind(t, u.id).run();
+      await env.DB.prepare('DELETE FROM login_attempts WHERE username=?').bind(u.username).run();
+      ctx.waitUntil(audit(env, ctx, { action: viaBackup ? 'BACKUP_CODE_USED' : 'MFA_LOGIN', actor_id: u.id, actor_username: u.username, ip: ipOf(req) }));
+      return json(req, {
+        ok: true,
+        user: { id: u.id, username: u.username, email: u.email, displayName: u.display_name, role: u.role },
+      }, 200, { 'Set-Cookie': sessionCookie(tok) });
+    }
+
+    /* ----- two-step: enrollment (authed) ----- */
+    if (path === '/api/auth/totp/enroll' && req.method === 'POST') {
+      const { err, u } = await need(null);
+      if (err) return err;
+      const full = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(u.id).first();
+      if (full.totp_enabled) return json(req, { ok: false, error: 'already enabled' }, 400);
+      const secret = newTotpSecret();
+      await env.DB.prepare('UPDATE users SET totp_secret=?,totp_last_step=0 WHERE id=?').bind(secret, u.id).run();
+      const label = encodeURIComponent('OrascomHub:' + full.username);
+      return json(req, {
+        ok: true, secret,
+        otpauth_url: 'otpauth://totp/' + label + '?secret=' + secret + '&issuer=OrascomHub&digits=6&period=30',
+      });
+    }
+    if (path === '/api/auth/totp/confirm' && req.method === 'POST') {
+      const { err, u } = await need(null);
+      if (err) return err;
+      const full = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(u.id).first();
+      if (full.totp_enabled) return json(req, { ok: false, error: 'already enabled' }, 400);
+      if (await totpVerify(env, full, String(body.code || '')) < 0)
+        return json(req, { ok: false, error: 'wrong code' }, 401);
+      const codes = [];
+      for (let i = 0; i < 8; i++) codes.push(newBackupCode());
+      await env.DB.prepare('UPDATE users SET totp_enabled=1 WHERE id=?').bind(u.id).run();
+      await env.DB.prepare('DELETE FROM backup_codes WHERE user_id=?').bind(u.id).run();
+      for (const c of codes) {
+        await env.DB.prepare('INSERT INTO backup_codes(user_id,code_hash,used) VALUES (?,?,0)')
+          .bind(u.id, await sha256hex(c.replace(/-/g, ''))).run();
+      }
+      ctx.waitUntil(audit(env, ctx, { action: 'MFA_ENABLED', actor_id: u.id, actor_username: u.username, ip: ipOf(req) }));
+      return json(req, { ok: true, backupCodes: codes });
+    }
+    if (path === '/api/auth/totp/disable' && req.method === 'POST') {
+      const { err, u } = await need(null);
+      if (err) return err;
+      const full = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(u.id).first();
+      if (!safeEq(await pbkdf2(String(body.password || ''), full.pass_salt), full.pass_hash))
+        return json(req, { ok: false, error: 'password wrong' }, 401);
+      await env.DB.prepare('UPDATE users SET totp_secret=NULL,totp_enabled=0,totp_last_step=0 WHERE id=?').bind(u.id).run();
+      await env.DB.prepare('DELETE FROM backup_codes WHERE user_id=?').bind(u.id).run();
+      ctx.waitUntil(audit(env, ctx, { action: 'MFA_DISABLED', actor_id: u.id, actor_username: u.username, ip: ipOf(req) }));
+      return json(req, { ok: true });
+    }
+    if (path === '/api/admin/users/reset-mfa' && req.method === 'POST') {
+      const { err, u } = await need('MANAGE_USERS');
+      if (err) return err;
+      const target = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(String(body.id || '')).first();
+      if (!target) return json(req, { ok: false, error: 'not found' }, 404);
+      if (target.id === u.id) return json(req, { ok: false, error: 'use disable for your own account' }, 400);
+      await env.DB.prepare('UPDATE users SET totp_secret=NULL,totp_enabled=0,totp_last_step=0 WHERE id=?').bind(target.id).run();
+      await env.DB.prepare('DELETE FROM backup_codes WHERE user_id=?').bind(target.id).run();
+      await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id).run();
+      ctx.waitUntil(audit(env, ctx, { action: 'MFA_RESET', actor_id: u.id, actor_username: u.username, target_id: target.username }));
       return json(req, { ok: true });
     }
 
@@ -301,7 +480,7 @@ export default {
       const st = String(url.searchParams.get('status') || '');
       const role = String(url.searchParams.get('role') || '');
       let rows = (await env.DB.prepare(
-        'SELECT id,username,email,display_name,role,status,created_at,last_login_at FROM users ORDER BY created_at DESC LIMIT 500').all()).results || [];
+        'SELECT id,username,email,display_name,role,status,created_at,last_login_at,(totp_enabled=1) AS totp FROM users ORDER BY created_at DESC LIMIT 500').all()).results || [];
       if (q) rows = rows.filter((r) => (r.username + ' ' + (r.email || '') + ' ' + (r.display_name || '')).toLowerCase().includes(q));
       if (st && STATUSES.includes(st)) rows = rows.filter((r) => r.status === st);
       if (role && ROLES.includes(role)) rows = rows.filter((r) => r.role === role);
@@ -412,11 +591,24 @@ export default {
     if (path === '/api/admin/settings' && req.method === 'PUT') {
       const { err, u } = await need('MANAGE_SETTINGS');
       if (err) return err;
-      if (!['0', '1'].includes(String(body.registration_open)))
-        return json(req, { ok: false, error: 'registration_open must be 0/1' }, 400);
-      await env.DB.prepare("UPDATE settings SET value=? WHERE key='registration_open'")
-        .bind(String(body.registration_open)).run();
-      ctx.waitUntil(audit(env, ctx, { action: 'SETTINGS_CHANGED', actor_id: u.id, actor_username: u.username, detail: 'registration_open=' + body.registration_open }));
+      const changed = [];
+      if (body.registration_open !== undefined) {
+        if (!['0', '1'].includes(String(body.registration_open)))
+          return json(req, { ok: false, error: 'registration_open must be 0/1' }, 400);
+        await env.DB.prepare("UPDATE settings SET value=? WHERE key='registration_open'")
+          .bind(String(body.registration_open)).run();
+        changed.push('registration_open=' + body.registration_open);
+      }
+      if (body.require_totp_admin !== undefined) {
+        if (!['0', '1'].includes(String(body.require_totp_admin)))
+          return json(req, { ok: false, error: 'require_totp_admin must be 0/1' }, 400);
+        await env.DB.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES ('require_totp_admin','0')").run();
+        await env.DB.prepare("UPDATE settings SET value=? WHERE key='require_totp_admin'")
+          .bind(String(body.require_totp_admin)).run();
+        changed.push('require_totp_admin=' + body.require_totp_admin);
+      }
+      if (!changed.length) return json(req, { ok: false, error: 'nothing to change' }, 400);
+      ctx.waitUntil(audit(env, ctx, { action: 'SETTINGS_CHANGED', actor_id: u.id, actor_username: u.username, detail: changed.join(',') }));
       return json(req, { ok: true });
     }
 

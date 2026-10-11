@@ -606,6 +606,29 @@ body.dark .cnt-wrapper::-webkit-scrollbar-thumb{background:#58A6FF}
       </div>
       <div id="qaqc-status" style="font-size:.7rem;color:rgba(245,166,35,.7);margin-top:4px;min-height:16px"></div>
     </div>
+
+    <!-- QAQC Checklist fill (template + health HTMLs -> filled copy) -->
+    <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:.72rem;font-weight:800;color:rgba(255,255,255,.45);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">
+        📝 QA/QC Checklist Fill <span style="font-weight:400;font-size:.65rem;opacity:.7">(template + model-health HTMLs → filled copy)</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <label class="hbtn" style="cursor:pointer;">1 · Template .xlsx
+          <input type="file" id="qaqc-tpl-fi" accept=".xlsx" style="display:none" onchange="qaqcFillPickTemplate(this.files)">
+        </label>
+        <label class="hbtn" style="cursor:pointer;">2 · Health HTMLs
+          <input type="file" id="qaqc-html-fi" accept=".html,.htm" multiple style="display:none" onchange="qaqcFillAddHealth(this.files)">
+        </label>
+        <input type="text" id="qaqc-fill-date" title="Issue date (D6)" style="width:110px;padding:7px 10px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78rem;">
+        <input type="text" id="qaqc-fill-rev" placeholder="Rev (D7)" title="Revision (D7)" style="width:90px;padding:7px 10px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78rem;">
+      </div>
+      <div id="qaqc-fill-status" style="font-size:.7rem;color:rgba(255,255,255,.55);margin-top:6px;min-height:16px">Rules: green rows → 100 · red rows → 0 · cyan rows → 0/100 from health tests · yellow left blank. Formulas and styling are never touched.</div>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <button type="button" class="hbtn" onclick="qaqcFillPreview()">Preview</button>
+        <button type="button" class="btn-gold" onclick="qaqcFillGenerate()">⬇ Generate filled copy</button>
+      </div>
+      <div id="qaqc-fill-preview" style="max-height:300px;overflow:auto;margin-top:8px;font-size:.72rem;"></div>
+    </div>
     <div class="io-prog" id="io-prog"><div class="prog-bar"><div class="prog-fill" id="pf"></div></div>
       <p style="color:rgba(255,255,255,.45);font-size:.76rem;margin-top:6px">Processing…</p></div>
     <div style="text-align:center;margin-top:10px;margin-bottom:-8px">
@@ -2842,6 +2865,277 @@ function getQAQCFailsForDisc(discCode,sheetType){
     }
   }
   return results;
+}
+
+/* ═══ QAQC CHECKLIST FILL (template + health HTMLs → filled copy) ═══
+   Rules (locked with the owner): C-fill GREEN → always 100, RED → always 0,
+   CYAN → 0/100 from mapped health tests (ANY mapped fail → 0), YELLOW →
+   untouched. Formula cells and all styling are never modified. */
+var QAQC_FILL_MAP = {
+  'QA-GE-004': ['File Size'],
+  'QA-GE-008': ['Project Base Point - Angle to True North', 'Project Base Point - Elev', 'Project Base Point - N/S', 'Project Base Point - E/W', 'Survey Point - N/S', 'Survey Point - E/W', 'Survey Point - Elev', 'Survey Point - Latitude', 'Survey Point - Longitude'],
+  'QA-GE-009': ['Project Base Point - Angle to True North', 'Project Base Point - Elev', 'Project Base Point - N/S', 'Project Base Point - E/W', 'Survey Point - N/S', 'Survey Point - E/W', 'Survey Point - Elev', 'Survey Point - Latitude', 'Survey Point - Longitude'],
+  'QA-GE-011': ['Project Base Point - Angle to True North', 'Project Base Point - Elev', 'Project Base Point - N/S', 'Project Base Point - E/W', 'Survey Point - N/S', 'Survey Point - E/W', 'Survey Point - Elev', 'Survey Point - Latitude', 'Survey Point - Longitude'],
+  'QA-GE-013': ['Linked Revit Files Not Pinned in Place'],
+  'QA-GE-014': ['Imported CAD files', 'Linked CAD Files'],
+  'QA-GE-024': ['Navisworks Export View'],
+  'QA-GE-036': ['Rooms', 'Spaces'],
+  'QA-GE-037': ['Redundant and Unenclosed Rooms', 'Redundant and Unenclosed Spaces'],
+  'QA-GE-038': ['Unplaced Rooms', 'Unplaced Spaces'],
+  'QA-GE-051': ['__COUNTS_GENERIC_INPLACE__'],
+  'QA-GE-060': ['Purgeable Elements'],
+  'QA-GE-061': ['Warnings'],
+  'QA-GE-062': ['Duplicate Modeled Elements'],
+  'QA-GE-064': ['Duplicate Modeled Elements'],
+  'QA-AR-029': ['Purgeable Elements'],
+  'QA-AR-030': ['Warnings'],
+  'QA-AR-031': ['Duplicate Modeled Elements'],
+  'QA-AR-001': ['Rooms'],
+  'QA-AR-002': ['Redundant and Unenclosed Rooms'],
+  'QA-AR-003': ['Unplaced Rooms'],
+  'QA-ST-006': ['Duplicate Modeled Elements']
+};
+var QAQC_FILL = { tplBuf: null, tplName: '', health: [], plan: null };
+function qaqcFillStatus(m){ var el = document.getElementById('qaqc-fill-status'); if(el) el.textContent = m; }
+// Pure core (unit-tested): rule from C-fill ARGB, score from mapped fails.
+function qaqcRuleFromArgb(argb){
+  var a = String(argb || '').toUpperCase();
+  if(a === 'FF92D050') return 'green';
+  if(a === 'FFFF0000') return 'red';
+  if(a === 'FF00B0F0') return 'cyan';
+  if(a === 'FFFFFF00') return 'yellow';
+  return 'plain';
+}
+function qaqcScoreFor(mapped, failArr, counts){
+  if(!mapped || !mapped.length) return null;
+  // Categories rule: zero tolerance on Generic Models + In-Place Families.
+  if(mapped.length === 1 && mapped[0] === '__COUNTS_GENERIC_INPLACE__'){
+    if(!counts) return null;
+    return (counts.generic === 0 && counts.inplace === 0) ? 100 : 0;
+  }
+  var fails = {};
+  (failArr || []).forEach(function(f){ fails[String(f).toLowerCase()] = 1; });
+  for(var i = 0; i < mapped.length; i++){
+    if(fails[String(mapped[i]).toLowerCase()]) return 0;
+  }
+  return 100;
+}
+function qaqcDiscFromName(fname){
+  var m = String(fname || '').match(/M3-([A-Z]{2})-/i);
+  return m ? m[1].toUpperCase() : '';
+}
+function qaqcFillPickTemplate(files){
+  if(!files || !files.length) return;
+  var f = files[0];
+  var rd = new FileReader();
+  rd.onload = function(){
+    QAQC_FILL.tplBuf = rd.result; QAQC_FILL.tplName = f.name; QAQC_FILL.plan = null;
+    qaqcFillStatus('Template: ' + f.name + ' loaded. Add health HTMLs, then Preview.');
+  };
+  rd.readAsArrayBuffer(f);
+}
+function qaqcFillAddHealth(files){
+  if(!files || !files.length) return;
+  var list = Array.prototype.slice.call(files);
+  var pending = list.length;
+  list.forEach(function(f){
+    var rd = new FileReader();
+    rd.onload = function(){
+      try{
+        var d = parseOne(String(rd.result || ''), f.name);
+        if(!d) throw new Error('no metrics');
+        var code = d.code || qaqcDiscFromName(f.name);
+        QAQC_FILL.health = QAQC_FILL.health.filter(function(h){ return h.fname !== f.name; });
+        QAQC_FILL.health.push({ fname: f.name, code: code, fails: d.fail_checks || [], passes: d.pass_checks || [],
+          counts: { generic: d.generic_models || 0, inplace: d.in_place || 0 } });
+      }catch(e){ showToast('Skipped ' + f.name + ' (not a health export)', 'error'); }
+      if(--pending === 0){
+        var codes = QAQC_FILL.health.map(function(h){ return h.code; }).filter(Boolean);
+        qaqcFillStatus('Health files: ' + QAQC_FILL.health.length + ' (' + codes.join(', ') + '). Preview when ready.');
+      }
+    };
+    rd.readAsText(f);
+  });
+}
+function qaqcFillHealthByCode(code){
+  code = String(code || '').toUpperCase();
+  var out = { fails: [], passes: [], files: [], counts: null };
+  QAQC_FILL.health.forEach(function(h){
+    if(String(h.code || '').toUpperCase() !== code) return;
+    out.files.push(h.fname);
+    (h.fails || []).forEach(function(f){ if(out.fails.indexOf(f) < 0) out.fails.push(f); });
+    (h.passes || []).forEach(function(p){ if(out.passes.indexOf(p) < 0) out.passes.push(p); });
+    // Worst model wins when several files share a discipline.
+    if(h.counts){
+      if(!out.counts) out.counts = { generic: 0, inplace: 0 };
+      out.counts.generic = Math.max(out.counts.generic, h.counts.generic || 0);
+      out.counts.inplace = Math.max(out.counts.inplace, h.counts.inplace || 0);
+    }
+  });
+  return out;
+}
+async function qaqcFillBuildPlan(){
+  if(!QAQC_FILL.tplBuf){ qaqcFillStatus('Drop the QAQC template .xlsx first.'); return null; }
+  if(typeof ExcelJS === 'undefined'){ qaqcFillStatus('Excel library did not load (offline?)'); return null; }
+  var wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(QAQC_FILL.tplBuf);
+  var plan = { sheets: [], meta: [], unmapped: [] };
+  wb.eachSheet(function(ws){
+    var isGeneral = /general/i.test(ws.name);
+    // Header row: A == 'Item ID'.
+    var headerRow = null, modelRow = null;
+    ws.eachRow(function(row){
+      var a = row.getCell(1).value;
+      if(String(a || '').trim() === 'Item ID' && !headerRow) headerRow = row.number;
+    });
+    if(!headerRow) return;
+    // Score columns: GENERAL → model-code row below header; discipline → Evaluation Level column.
+    var cols = [];
+    if(isGeneral){
+      var mr = ws.getRow(headerRow + 1);
+      mr.eachCell(function(cell, col){
+        if(col <= 8) return;
+        var code = String(cell.value || '').trim().toUpperCase();
+        if(!code || /REMARKS/i.test(code)) return;
+        cols.push({ col: col, code: code });
+      });
+    } else {
+      var hr = ws.getRow(headerRow), scoreCol = 0;
+      hr.eachCell(function(cell, col){
+        var t = String(cell.value || '').trim().toUpperCase();
+        if(t === 'EVALUATION LEVEL' || t === 'VALIDATION SCORE') scoreCol = col;
+      });
+      if(!scoreCol) return;
+      var sheetCode = ws.name.replace(/QAQC Checklist\s*-\s*/i, '').trim().toUpperCase();
+      cols.push({ col: scoreCol, code: sheetCode, single: true });
+    }
+    if(!cols.length) return;
+    var sheetPlan = { name: ws.name, general: isGeneral, rows: [] };
+    ws.eachRow(function(row){
+      var id = String(row.getCell(1).value || '').trim();
+      if(!/^QA-/.test(id)) return;
+      var cCell = row.getCell(3);
+      var argb = (cCell.fill && cCell.fill.fgColor && cCell.fill.fgColor.argb) || '';
+      var rule = qaqcRuleFromArgb(argb);
+      var desc = String(row.getCell(3).value || '');
+      var mapped = QAQC_FILL_MAP[id] || null;
+      var entry = { id: id, rule: rule, mapped: mapped, cells: [] };
+      cols.forEach(function(mc){
+        var codes = mc.single ? [mc.code, 'ID'] : [mc.code];
+        if(mc.single && mc.code === 'FF') codes.push('ID');
+        var hb = null;
+        for(var i = 0; i < codes.length; i++){
+          var cand = qaqcFillHealthByCode(codes[i]);
+          if(cand.files.length){ hb = cand; break; }
+        }
+        var val = null, src = '';
+        if(rule === 'green') src = 'always 100';
+        else if(rule === 'red') src = 'always 0';
+        else if(rule === 'cyan'){
+          if(!mapped){ src = 'unmapped — left blank'; }
+          else if(!hb){ src = 'no ' + mc.code + ' HTML — left blank'; }
+          else if(mapped.length === 1 && mapped[0] === '__COUNTS_GENERIC_INPLACE__'){
+            val = qaqcScoreFor(mapped, hb.fails, hb.counts);
+            src = val === null ? 'no counts — left blank' : 'counts: generic=' + hb.counts.generic + ' inplace=' + hb.counts.inplace + ' → ' + val;
+          }
+          else { val = qaqcScoreFor(mapped, hb.fails); src = 'health: ' + val; }
+        } else src = 'manual — left blank';
+        if(rule === 'green' && hb) val = 100;
+        if(rule === 'red' && hb) val = 0;
+        entry.cells.push({ col: mc.col, code: mc.code, value: val, src: src });
+      });
+      sheetPlan.rows.push(entry);
+      if(rule === 'cyan' && !mapped) plan.unmapped.push(ws.name + ' ' + id);
+    });
+    plan.sheets.push(sheetPlan);
+    // Meta cells: C == 'Date :' / 'Revision :' → D column same row.
+    ws.eachRow(function(row){
+      var c = String(row.getCell(3).value || '').trim();
+      if(/^Date/i.test(c) || /^Revision/i.test(c)) plan.meta.push({ sheet: ws.name, row: row.number, label: c });
+    });
+  });
+  QAQC_FILL.plan = plan;
+  return plan;
+}
+async function qaqcFillPreview(){
+  qaqcFillStatus('Building preview…');
+  var plan;
+  try{ plan = await qaqcFillBuildPlan(); }catch(e){ qaqcFillStatus('Preview failed: ' + (e && e.message)); return; }
+  if(!plan){ return; }
+  var host = document.getElementById('qaqc-fill-preview');
+  var h = '<table class="tbl"><thead><tr><th>Row</th><th>Rule</th><th>Source</th><th>Scores</th></tr></thead><tbody>';
+  plan.sheets.forEach(function(sh){
+    h += '<tr><td colspan="4" style="font-weight:800;">' + escapeHtml(sh.name) + '</td></tr>';
+    sh.rows.forEach(function(r){
+      var badge = r.rule === 'green' ? 'ok' : r.rule === 'red' ? 'bad' : r.rule === 'cyan' ? 'info' : 'muted';
+      var srcTxt = (r.mapped || []).join(' + ') || '—';
+      if(r.mapped && r.mapped.length === 1 && r.mapped[0] === '__COUNTS_GENERIC_INPLACE__') srcTxt = 'counts: Generic Models + In-Place Families = 0';
+      h += '<tr><td><strong>' + escapeHtml(r.id) + '</strong></td>' +
+        '<td><span class="badge badge-' + badge + '">' + r.rule + '</span></td>' +
+        '<td style="font-size:.72rem;">' + escapeHtml(srcTxt) + '</td>' +
+        '<td style="font-size:.72rem;">' + r.cells.map(function(c){
+          return escapeHtml(c.code) + ':' + (c.value === null ? '<i>' + escapeHtml(c.src) + '</i>' : '<b>' + c.value + '</b>');
+        }).join(' · ') + '</td></tr>';
+    });
+  });
+  h += '</tbody></table>';
+  if(plan.unmapped.length) h += '<p style="font-size:.74rem;color:var(--muted);">Unmapped cyan rows left blank (' + plan.unmapped.length + '): ' + escapeHtml(plan.unmapped.slice(0, 12).join(', ')) + (plan.unmapped.length > 12 ? '…' : '') + '</p>';
+  if(host) host.innerHTML = h;
+  var n = 0;
+  plan.sheets.forEach(function(sh){ sh.rows.forEach(function(r){ r.cells.forEach(function(c){ if(c.value !== null) n++; }); }); });
+  qaqcFillStatus('Preview ready: ' + n + ' cells will be written. Review, set date/rev, then Generate.');
+}
+async function qaqcFillGenerate(){
+  var plan = QAQC_FILL.plan;
+  if(!plan){ await qaqcFillPreview(); plan = QAQC_FILL.plan; }
+  if(!plan){ return; }
+  qaqcFillStatus('Generating…');
+  try{
+    var wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(QAQC_FILL.tplBuf);
+    var dateVal = (document.getElementById('qaqc-fill-date') || {}).value || '';
+    var revVal = (document.getElementById('qaqc-fill-rev') || {}).value || '';
+    plan.meta.forEach(function(m){
+      var ws = wb.getWorksheet(m.sheet);
+      if(!ws) return;
+      var v = /^Date/i.test(m.label) ? dateVal : revVal;
+      if(!v) return;
+      var cell = ws.getRow(m.row).getCell(4);
+      if(cell.value && typeof cell.value === 'object' && cell.value.formula) return;
+      cell.value = v;
+    });
+    var bySheet = {};
+    plan.sheets.forEach(function(sh){ bySheet[sh.name] = sh; });
+    wb.eachSheet(function(ws){
+      var sh = bySheet[ws.name];
+      if(!sh) return;
+      var byRow = {};
+      sh.rows.forEach(function(r){
+        ws.eachRow(function(row){
+          if(String(row.getCell(1).value || '').trim() === r.id) byRow[r.id] = row.number;
+        });
+      });
+      sh.rows.forEach(function(r){
+        var rn = byRow[r.id];
+        if(!rn) return;
+        r.cells.forEach(function(c){
+          if(c.value === null) return;
+          var cell = ws.getRow(rn).getCell(c.col);
+          if(cell.value && typeof cell.value === 'object' && cell.value.formula) return; // never break mirrors/totals
+          cell.value = c.value;
+        });
+      });
+    });
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = QAQC_FILL.tplName.replace(/\.xlsx$/i, '') + '-FILLED-' + (dateVal || new Date().toISOString().slice(0, 10)).replace(/[^0-9A-Za-z]/g, '') + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    qaqcFillStatus('Downloaded. Template untouched — verify totals in Excel (formulas recalculate on open).');
+  }catch(e){ qaqcFillStatus('Generate failed: ' + (e && e.message)); }
 }
 
 let CMP_BASE = null;   // baseline dataset (defaults to current DATA)

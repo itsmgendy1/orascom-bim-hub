@@ -4273,7 +4273,13 @@
   function uaSetStatus(id, st){
     uaStatusMsg('Saving…');
     authwApi('/api/admin/users/' + encodeURIComponent(id), {method:'PATCH', body:{status: st}})
-      .then(function(){ try{ toast(st === 'ACTIVE' ? 'Account approved.' : 'Account marked ' + st + '.'); }catch(e){} uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); try{ toast('Failed: ' + err.message); }catch(e){} });
+      .then(function(j){
+        try{
+          if(st === 'ACTIVE') toast((j && j.emailed) ? 'Account approved — email sent.' : 'Account approved' + ((j && j.emailed === false) ? ' (no email sent).' : '.'));
+          else toast('Account marked ' + st + '.');
+        }catch(e){}
+        uaLoad();
+      }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); try{ toast('Failed: ' + err.message); }catch(e){} });
   }
   function uaSetRole(id, role){
     if(!confirm('Change role to ' + role + '?')){ uaLoad(); return; }

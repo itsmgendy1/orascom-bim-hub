@@ -50,6 +50,44 @@ function safeEq(a, b) {
   return d === 0;
 }
 
+/* ---------- approval emails (Resend HTTP API; fail-open) ----------
+ * Secrets: EMAIL_API_KEY (re_...), EMAIL_FROM ("Hub <accounts@domain>").
+ * Unset => approvals work exactly as before, responses carry emailed:false.
+ * Never throws: a dead mail service must not block an approval. */
+const HUB_URL = 'https://orascom-bim-hub.pages.dev';
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+async function sendMail(env, to, subject, html, text) {
+  const key = env.EMAIL_API_KEY || '';
+  const from = env.EMAIL_FROM || '';
+  if (!key || !from || !to) return false;
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject, html, text }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return r.ok;
+  } catch (_) { return false; }
+}
+function approvalMail(user) {
+  const name = user.display_name || user.username;
+  const subject = 'Your Orascom BIM Hub account is approved';
+  const text =
+    `Hello ${name},\n\nYour Orascom BIM Hub account (${user.username}) has been approved.\n\n` +
+    `Open the Hub and sign in with your team account:\n${HUB_URL}\n\n` +
+    `The team-server address is prefilled on the login screen.\n\nOrascom BIM Digital Delivery Hub`;
+  const html =
+    `<p>Hello ${esc(name)},</p>` +
+    `<p>Your <strong>Orascom BIM Hub</strong> account (<strong>${esc(user.username)}</strong>) has been approved.</p>` +
+    `<p><a href="${HUB_URL}">${HUB_URL}</a> — sign in with your team account (the team-server address is prefilled).</p>` +
+    `<p style="color:#888;font-size:12px;">Orascom BIM Digital Delivery Hub</p>`;
+  return { subject, html, text };
+}
+
 /* ---------- CORS (Pages origins + localhost dev) ---------- */
 const ORIGIN_RES = [/^https:\/\/orascom-bim-hub\.pages\.dev$/,
   /^https:\/\/[a-z0-9-]+\.orascom-bim-hub\.pages\.dev$/,
@@ -289,7 +327,13 @@ export default {
             salt, await pbkdf2(password, salt), role, 'ACTIVE', now()).run();
       } catch (_) { return json(req, { ok: false, error: 'username taken' }, 409); }
       ctx.waitUntil(audit(env, ctx, { action: 'ACCOUNT_CREATED', actor_id: u.id, actor_username: u.username, target_id: username, detail: role }));
-      return json(req, { ok: true, id });
+      let emailed = false;
+      const mailTo = String(body.email || '').trim();
+      if (mailTo) {
+        const m = approvalMail({ username, display_name: String(body.displayName || username).trim() });
+        emailed = await sendMail(env, mailTo, 'Your Orascom BIM Hub account is ready', m.html, m.text);
+      }
+      return json(req, { ok: true, id, emailed });
     }
     const um = path.match(/^\/api\/admin\/users\/([^/]+)$/);
     if (um) {
@@ -319,7 +363,13 @@ export default {
         if (!sets.length) return json(req, { ok: false, error: 'nothing to change' }, 400);
         args.push(target.id);
         await env.DB.prepare(`UPDATE users SET ${sets.join(',')} WHERE id=?`).bind(...args).run();
-        return json(req, { ok: true });
+        let emailed = false;
+        if (body.status === 'ACTIVE' && target.status !== 'ACTIVE' && target.email) {
+          const m = approvalMail(target);
+          emailed = await sendMail(env, target.email, m.subject, m.html, m.text);
+          if (emailed) ctx.waitUntil(audit(env, ctx, { action: 'APPROVAL_EMAILED', actor_id: u.id, actor_username: u.username, target_id: target.username, detail: target.email }));
+        }
+        return json(req, { ok: true, emailed });
       }
       if (req.method === 'DELETE') {
         if (target.id === u.id) return json(req, { ok: false, error: 'cannot delete yourself' }, 400);

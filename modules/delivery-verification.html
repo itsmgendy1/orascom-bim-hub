@@ -3561,7 +3561,7 @@ function axMatchOurFile(our, idx){
     if(same.length===1) return {level:'L1', conf:'HIGH', cands:same, altFormats:hits.filter(function(c){ return !axSameExt(c, our); }), dupNote:hits.length+' same-name client files'};
     const sf = preferSameFolder(same.length?same:hits);
     if(sf) return {level:'L1', conf:'HIGH', cands:sf.pick, altFormats:[], folderNote:sf.note};
-    return {level:'L1', conf:'HIGH', cands:hits, dup:true};
+    return {level:'L1', conf:'LOW', cands:hits, dup:true};
   }
   hits = idx.base[axNormBase(our.name)] || [];
   if(hits.length===1) return {level:'L2', conf:'HIGH', cands:hits, altFormats:[]};
@@ -3570,7 +3570,7 @@ function axMatchOurFile(our, idx){
     if(same.length===1) return {level:'L2', conf:'HIGH', cands:same, altFormats:hits.filter(function(c){ return !axSameExt(c, our); })};
     const sf = preferSameFolder(same.length?same:hits);
     if(sf) return {level:'L2', conf:'HIGH', cands:sf.pick, altFormats:[], folderNote:sf.note};
-    return {level:'L2', conf:'HIGH', cands:hits, dup:true};
+    return {level:'L2', conf:'LOW', cands:hits, dup:true};
   }
   const k = axDecompKey(axDecompose(our.name));
   if(k){
@@ -3590,7 +3590,7 @@ function axCompareVersions(our, cli){
   const revMismatch = (orev && crev && orev!==crev);
   const od = our.lastUpdatedDate || our.uploadedDate || null;
   const cd = cli.lastUpdatedDate || cli.uploadedDate || null;
-  const dayDelay = (od && cd) ? axDayDiff(cd, od) : null;
+  const dayDelay = (od && cd) ? axDayDiff(od, cd) : null;
   let verdict = 'SAME', note = '';
   if(ov!==null && cv!==null){
     if(cv<ov){ verdict='CLIENT OUTDATED'; note='Client V'+cv+' < our V'+ov; }

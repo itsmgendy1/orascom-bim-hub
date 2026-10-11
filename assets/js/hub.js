@@ -28,7 +28,7 @@
   };
 
   var MODULES = [
-    {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=e9a3b857', weightKey:'midp'},
+    {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=103bc43c', weightKey:'midp'},
     {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=af8f05f3',      weightKey:'naming'},
     {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=669bdcf0',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},

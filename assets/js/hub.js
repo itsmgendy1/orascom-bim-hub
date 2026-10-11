@@ -4128,7 +4128,12 @@
       '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>User data inspector</h3><span class="hint">audited</span></div><div id="ua-data"><p style="font-size:.83rem;color:var(--muted);">Pick “Data” on a user row to inspect their cloud stores (read-only).</p></div></div>' +
       '<div class="card"><div class="card-head"><h3>Audit log</h3><button class="btn btn-ghost btn-sm" onclick="OHub.uaAudit()">Refresh</button></div><div class="tbl-wrap" id="ua-audit"><p style="font-size:.83rem;color:var(--muted);">Loading…</p></div></div>'
       : '<div class="card"><p style="font-size:.85rem;color:var(--muted);">User management is restricted to administrators. Your data syncs to your private cloud dataset on push.</p></div>');
-    if(admin){ uaLoad(); uaLoadReg(); uaAudit(); uaPollStart(); uaMfaPaint(); }
+    // Each admin init is isolated: one throwing must never wedge the others.
+    // Failures surface in the status line so they are diagnosable, not silent.
+    function uaSafe(fn, label){
+      try{ fn(); }catch(e){ try{ uaStatusMsg(label + ' failed: ' + (e && e.message)); }catch(_){} }
+    }
+    if(admin){ uaSafe(uaLoad, 'users'); uaSafe(uaLoadReg, 'settings'); uaSafe(uaAudit, 'audit'); uaSafe(uaPollStart, 'live refresh'); uaSafe(uaMfaPaint, 'two-step'); }
   }
   /* ----- Two-step self-service (TOTP + backup codes) ----- */
   function uaMfaPaint(){

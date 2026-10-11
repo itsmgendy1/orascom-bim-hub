@@ -4052,9 +4052,10 @@
     });
   }
   function paintAuthwNav(){
-    var show = !!authwMe();
+    // Users & Access is always visible: the view itself explains sign-in
+    // state and gates admin tables by role. Hiding it confused local users.
     Array.prototype.forEach.call(document.querySelectorAll('.nav-item[data-view="useradmin"]'), function(n){
-      n.style.display = show ? '' : 'none';
+      n.style.display = '';
     });
     try{ renderAccountBtn(); }catch(e){}
   }

@@ -1,0 +1,19 @@
+name: smoke
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check Hub scripts
+        run: node --check assets/js/hub.js && node --check assets/js/ohub-auth.js && node --check assets/js/site-plots.js && node --check assets/js/forma.js
+      - name: Headless view smoke suite
+        run: node tests/smoke_views.js
+      - name: Validator fixture suite
+        run: node tests/validators_ws.js

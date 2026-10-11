@@ -4172,7 +4172,7 @@
       });
       var tb = document.getElementById('ua-rows');
       if(tb) tb.innerHTML = rows.map(function(r){
-        return '<tr><td><strong>' + escapeHtml(r.username) + '</strong><br><span style="color:var(--muted);font-size:.74rem;">' + escapeHtml(r.display_name || '') + '</span></td>' +
+        return '<tr id="ua-row-' + r.id + '"><td><strong>' + escapeHtml(r.username) + '</strong><br><span style="color:var(--muted);font-size:.74rem;">' + escapeHtml(r.display_name || '') + '</span></td>' +
           '<td style="font-size:.78rem;">' + escapeHtml(r.email || '—') + '</td>' +
           '<td><select onchange="OHub.uaSetRole(\'' + r.id + '\',this.value)" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);font-size:.76rem;">' +
           ['ADMIN', 'MANAGER', 'COORDINATOR', 'QA', 'VIEWER', 'USER'].map(function(x){ return '<option' + (r.role === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></td>' +
@@ -4189,6 +4189,7 @@
         try{ toast('New account request waiting for approval (' + nPending + ' pending).'); }catch(e){}
       }
       uaPrevPending = nPending;
+      try{ uaCheckNew(uaUsers); }catch(e){}
       uaStatusMsg('');
     }).catch(function(err){
       var msg = 'Load failed: ' + err.message;
@@ -4220,6 +4221,54 @@
             '<td style="font-size:.76rem;color:var(--muted);">' + escapeHtml(a.detail || '') + '</td></tr>';
         }).join('') + '</tbody></table>';
     }).catch(function(err){ if(host) host.innerHTML = '<p style="color:var(--muted);">Audit unavailable: ' + escapeHtml(err.message) + '</p>'; });
+  }
+  /* Approval popups (bottom-right): any PENDING user never seen before gets
+     its own card with the name, Approve in one click, and View to jump to
+     the row. First load only memorizes — it never spams. */
+  var uaKnownIds = null;
+  function uaCheckNew(users){
+    var ids = {}, fresh = [];
+    (users || []).forEach(function(r){
+      ids[r.id] = 1;
+      if(r.status === 'PENDING' && uaKnownIds && !uaKnownIds[r.id]) fresh.push(r);
+    });
+    uaKnownIds = ids;
+    fresh.slice(0, 3).forEach(function(r){ uaPop(r); });
+    if(fresh.length > 3){
+      try{ toast((fresh.length - 3) + ' more account requests waiting.'); }catch(e){}
+    }
+  }
+  function uaPop(r){
+    var host = document.getElementById('toast-host');
+    if(!host) return;
+    var who = r.display_name && r.display_name !== r.username
+      ? r.display_name + ' (' + r.username + ')' : r.username;
+    var d = document.createElement('div');
+    d.className = 'toast ua-pop';
+    var html = '<div class="ua-pop-title">New account request</div>' +
+      '<div class="ua-pop-who">' + escapeHtml(who) + '</div>' +
+      (r.email ? '<div class="ua-pop-sub">' + escapeHtml(r.email) + '</div>' : '') +
+      '<div class="ua-pop-actions"><button class="btn btn-primary btn-sm" data-act="ok">Approve</button>' +
+      '<button class="btn btn-ghost btn-sm" data-act="view">View</button></div>';
+    d.innerHTML = html;
+    var kill = function(){
+      d.style.opacity = '0'; d.style.transition = 'opacity .3s';
+      setTimeout(function(){ if(d.parentNode) host.removeChild(d); }, 320);
+    };
+    var okBtn = d.querySelector('[data-act="ok"]'), viewBtn = d.querySelector('[data-act="view"]');
+    if(okBtn) okBtn.onclick = function(){ try{ uaSetStatus(r.id, 'ACTIVE'); }catch(e){} kill(); };
+    if(viewBtn) viewBtn.onclick = function(){
+      kill();
+      try{
+        if(currentView !== 'useradmin') switchView('useradmin');
+        setTimeout(function(){
+          var row = document.getElementById('ua-row-' + r.id);
+          if(row){ row.scrollIntoView({block:'center'}); row.classList.add('ua-flash'); setTimeout(function(){ row.classList.remove('ua-flash'); }, 2600); }
+        }, 350);
+      }catch(e){}
+    };
+    host.appendChild(d);
+    setTimeout(kill, 14000);
   }
   function uaSetStatus(id, st){
     uaStatusMsg('Saving…');

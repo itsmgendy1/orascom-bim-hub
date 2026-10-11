@@ -364,6 +364,14 @@ body.dark .leaflet-tooltip.plot-label{background:rgba(10,18,36,.85);}
   background:var(--b1);color:#fff;padding:11px 16px;border-radius:var(--radius-sm);font-size:.83rem;
   box-shadow:var(--shadow-lift);border-left:3px solid var(--g1);min-width:220px;
 }
+/* Approval popup card (bottom-right, above plain toasts) */
+.toast.ua-pop{min-width:270px;max-width:330px;border-left-color:#F5A623;background:var(--b1);}
+.ua-pop-title{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:#F5A623;font-weight:700;margin-bottom:2px;}
+.ua-pop-who{font-size:.95rem;font-weight:700;}
+.ua-pop-sub{font-size:.76rem;opacity:.75;margin-top:1px;}
+.ua-pop-actions{display:flex;gap:6px;margin-top:9px;}
+.ua-flash{animation:uaFlash 1.3s ease-in-out 2;}
+@keyframes uaFlash{0%,100%{background:transparent;}50%{background:rgba(245,166,35,.28);}}
 
 /* scrollbars for dark sidebar */
 .nav::-webkit-scrollbar{width:6px;}

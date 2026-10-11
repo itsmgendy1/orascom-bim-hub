@@ -29,3 +29,7 @@ jobs:
         run: node tests/validators_mq.js
       - name: Hub shell suite
         run: node tests/hub_shell.js
+      - name: Scoring and persistence suite
+        run: node tests/validators_mq2.js
+      - name: Perf gates
+        run: node tests/perf_gates.js

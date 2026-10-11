@@ -17,3 +17,15 @@ jobs:
         run: node tests/smoke_views.js
       - name: Validator fixture suite
         run: node tests/validators_ws.js
+      - name: Parameter kernel suite
+        run: node tests/validators_pm.js
+      - name: Naming segment suite
+        run: node tests/validators_naming.js
+      - name: Clash engine suite
+        run: node tests/validators_clash.js
+      - name: Delivery kernel suite
+        run: node tests/validators_dv.js
+      - name: Model-quality kernel suite
+        run: node tests/validators_mq.js
+      - name: Hub shell suite
+        run: node tests/hub_shell.js

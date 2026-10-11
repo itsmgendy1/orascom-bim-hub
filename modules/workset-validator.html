@@ -1016,6 +1016,18 @@ function validateRows(rows){
     }
     results.push({ ...elem, expected_workset:expected, status:status, failure_reason:reason });
   });
+  // Duplicate Element Ids: the 2nd+ occurrence of a non-blank id is a data
+  // error even when the row itself validates (the All.csv "20x3" shape).
+  const idSeen = {};
+  results.forEach((o) => {
+    const id = (o.real_id === null || o.real_id === undefined) ? '' : String(o.real_id).trim();
+    if(!id) return;
+    idSeen[id] = (idSeen[id] || 0) + 1;
+    if(idSeen[id] > 1){
+      o.status = ValidationStatus.INVALID;
+      o.failure_reason = "Duplicate Element Id '" + id + "' (occurrence " + idSeen[id] + ")" + (o.failure_reason ? " — was: " + o.failure_reason : "");
+    }
+  });
   return results;
 }
 

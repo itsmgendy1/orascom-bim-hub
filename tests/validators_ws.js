@@ -92,7 +92,7 @@ const EXPECT_DIST = {
   'all-000': {}, 'all-001': { Valid: 1 }, 'all-010': { Valid: 10 },
   'all-100': { Valid: 73, Invalid: 18, Skipped: 5, Missing: 4 },
   'all-1000': { Valid: 766, Invalid: 205, Skipped: 29 },
-  'all-dup': { Valid: 39, Invalid: 6, Missing: 9, Skipped: 6 },
+  'all-dup': { Valid: 13, Invalid: 42, Missing: 3, Skipped: 2 },
   'all-extra-cols': { Valid: 19, Missing: 3, Skipped: 1, Invalid: 2 },
   'all-missing-fields': { Valid: 8, Skipped: 14, Missing: 5, Invalid: 2 },
   'all-xss': { Skipped: 2, Valid: 2 },
@@ -111,6 +111,12 @@ for (const f of Object.keys(EXPECT_COUNT)) {
   ok(sameDist(dist(res), EXPECT_DIST[f]), f + ' distribution locked', 'got ' + JSON.stringify(dist(res)));
   ok(res.every((r) => typeof r.status === 'string' && typeof r.failure_reason === 'string'), f + ' result shape');
 }
+
+// Duplicate Element Ids are flagged, never silently valid.
+const dupRows = M.validateRows(M.parseAllCsv(fs.readFileSync(path.join(FX, 'all-dup.csv'), 'utf8')));
+const dupFlagged = dupRows.filter((r) => (r.failure_reason || '').indexOf('Duplicate Element Id') === 0);
+ok(dupFlagged.length === 40, 'all-dup flags all 40 repeat occurrences', 'got ' + dupFlagged.length);
+ok(dupFlagged.every((r) => r.status === 'Invalid'), 'duplicate rows are Invalid');
 
 // XSS: adversarial cells must render as text in the elements table.
 const xssRows = M.parseAllCsv(fs.readFileSync(path.join(FX, 'all-xss.csv'), 'utf8'));

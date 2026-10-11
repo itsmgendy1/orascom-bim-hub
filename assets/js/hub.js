@@ -31,7 +31,7 @@
     {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=e9a3b857', weightKey:'midp'},
     {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=af8f05f3',      weightKey:'naming'},
     {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=669bdcf0',          weightKey:'qaqc'},
-    {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=62bb278d',     weightKey:'workset'},
+    {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},
     {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=a83f1a41',   weightKey:'parameters'},
     {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=76b61d93',                 weightKey:'clash'}
   ];

@@ -691,7 +691,9 @@ function clashRuleSide(rSet, rName, set, name, path){
 }
 function clashRuleMatches(r, c){
   if(!r.enabled || r.type === "duplicate") return false;
-  // Exact C# semantics: NaN distances never trip a distance gate.
+  // Exact C# semantics: NaN distances never trip a distance gate — a clash
+  // with unknown penetration must stay manual, never auto-approve.
+  if((r.maxDistance > 0 || r.minDistance > 0) && !(c.dist >= 0)) return false;
   if(r.maxDistance > 0 && c.dist > r.maxDistance + 1e-9) return false;
   if(r.minDistance > 0 && c.dist < r.minDistance - 1e-9) return false;
   if(r.sameDiscipline && clashDiscipline(c.setA) !== clashDiscipline(c.setB)) return false;
@@ -832,8 +834,6 @@ function generateDashboard(){
 
   renderAll();
   reportHubScore();
-}
-  }catch(e){}
 }
 
 function computeStats(){

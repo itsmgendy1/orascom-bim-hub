@@ -4127,7 +4127,28 @@
       '<div class="card" style="margin-bottom:14px;"><div class="card-head"><h3>User data inspector</h3><span class="hint">audited</span></div><div id="ua-data"><p style="font-size:.83rem;color:var(--muted);">Pick “Data” on a user row to inspect their cloud stores (read-only).</p></div></div>' +
       '<div class="card"><div class="card-head"><h3>Audit log</h3><button class="btn btn-ghost btn-sm" onclick="OHub.uaAudit()">Refresh</button></div><div class="tbl-wrap" id="ua-audit"><p style="font-size:.83rem;color:var(--muted);">Loading…</p></div></div>'
       : '<div class="card"><p style="font-size:.85rem;color:var(--muted);">User management is restricted to administrators. Your data syncs to your private cloud dataset on push.</p></div>');
-    if(admin){ uaLoad(); uaLoadReg(); uaAudit(); }
+    if(admin){ uaLoad(); uaLoadReg(); uaAudit(); uaPollStart(); }
+  }
+  /* Live approvals: quiet 25 s poll while the view is visible + refresh on
+     window focus. New PENDING arrivals raise a toast + the sidebar badge.
+     Poll failures stay silent (a loud toast only on manual actions). */
+  var uaPollT = null, uaFocusBound = false, uaPrevPending = -1;
+  function uaPollStart(){
+    if(uaPollT) return;
+    uaPollT = setInterval(function(){
+      try{
+        if(currentView !== 'useradmin' || document.hidden || !authwSession()) return;
+        uaLoad(true);
+      }catch(e){}
+    }, 25000);
+    if(!uaFocusBound){
+      uaFocusBound = true;
+      try{
+        window.addEventListener('focus', function(){
+          try{ if(currentView === 'useradmin' && !document.hidden && authwSession()) uaLoad(true); }catch(e){}
+        });
+      }catch(e){}
+    }
   }
   function uaRowActions(r){
     var b = [];
@@ -4138,8 +4159,8 @@
     b.push('<button class="btn btn-ghost btn-sm" onclick="OHub.uaDelete(\'' + r.id + '\')">Delete</button>');
     return b.join(' ');
   }
-  function uaLoad(){
-    uaStatusMsg('Loading…');
+  function uaLoad(quiet){
+    if(!quiet) uaStatusMsg('Loading…');
     authwApi('/api/admin/users').then(function(j){
       uaUsers = j.users || [];
       var q = uaQ.toLowerCase();
@@ -4164,8 +4185,22 @@
       var nPending = uaUsers.filter(function(r){ return r.status === 'PENDING'; }).length;
       if(cc) cc.textContent = rows.length + ' shown · ' + nPending + ' pending';
       try{ setNavBadge('useradmin', nPending); }catch(e){}
+      if(uaPrevPending >= 0 && nPending > uaPrevPending){
+        try{ toast('New account request waiting for approval (' + nPending + ' pending).'); }catch(e){}
+      }
+      uaPrevPending = nPending;
       uaStatusMsg('');
-    }).catch(function(err){ uaStatusMsg('Load failed: ' + err.message); });
+    }).catch(function(err){
+      var msg = 'Load failed: ' + err.message;
+      if(!quiet){
+        var tb = document.getElementById('ua-rows');
+        if(tb) tb.innerHTML = '<tr><td colspan="7">' + escapeHtml(msg) + ' <button class="btn btn-outline btn-sm" onclick="OHub.uaLoad()">Retry</button></td></tr>';
+      }
+      uaStatusMsg(msg);
+      if(!quiet){
+        try{ toast(/signed out/i.test(err.message || '') ? 'Team session expired — sign in again via the team server.' : msg); }catch(e){}
+      }
+    });
   }
   function uaLoadReg(){
     authwApi('/api/admin/settings').then(function(j){
@@ -4189,13 +4224,13 @@
   function uaSetStatus(id, st){
     uaStatusMsg('Saving…');
     authwApi('/api/admin/users/' + encodeURIComponent(id), {method:'PATCH', body:{status: st}})
-      .then(function(){ uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+      .then(function(){ try{ toast(st === 'ACTIVE' ? 'Account approved.' : 'Account marked ' + st + '.'); }catch(e){} uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); try{ toast('Failed: ' + err.message); }catch(e){} });
   }
   function uaSetRole(id, role){
     if(!confirm('Change role to ' + role + '?')){ uaLoad(); return; }
     uaStatusMsg('Saving…');
     authwApi('/api/admin/users/' + encodeURIComponent(id), {method:'PATCH', body:{role: role}})
-      .then(function(){ uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+      .then(function(){ try{ toast('Role updated to ' + role + '.'); }catch(e){} uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); try{ toast('Failed: ' + err.message); }catch(e){} });
   }
   function uaDelete(id){
     var r = null;
@@ -4203,7 +4238,7 @@
     if(!confirm('Delete account ' + (r ? r.username : id) + ' and ALL its cloud data? This cannot be undone.')) return;
     uaStatusMsg('Deleting…');
     authwApi('/api/admin/users/' + encodeURIComponent(id), {method:'DELETE'})
-      .then(function(){ uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+      .then(function(){ try{ toast('Account deleted.'); }catch(e){} uaLoad(); }).catch(function(err){ uaStatusMsg('Failed: ' + err.message); try{ toast('Failed: ' + err.message); }catch(e){} });
   }
   function uaCreate(){
     var u = (document.getElementById('ua-new-u').value || '').trim();
@@ -4211,8 +4246,8 @@
     var r = document.getElementById('ua-new-r').value || 'USER';
     uaStatusMsg('Creating…');
     authwApi('/api/admin/users', {method:'POST', body:{username: u, password: p, role: r}})
-      .then(function(){ document.getElementById('ua-new-u').value = ''; document.getElementById('ua-new-p').value = ''; uaLoad(); })
-      .catch(function(err){ uaStatusMsg('Failed: ' + err.message); });
+      .then(function(){ document.getElementById('ua-new-u').value = ''; document.getElementById('ua-new-p').value = ''; try{ toast('Account created.'); }catch(e){} uaLoad(); })
+      .catch(function(err){ uaStatusMsg('Failed: ' + err.message); try{ toast('Failed: ' + err.message); }catch(e){} });
   }
   function uaRegToggle(on){
     uaStatusMsg('Saving…');

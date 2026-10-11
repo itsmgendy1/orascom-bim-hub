@@ -4134,7 +4134,15 @@
   function uaMfaPaint(){
     var host = document.getElementById('ua-mfa-row');
     if(!host) return;
+    var done = false;
+    var timer = setTimeout(function(){
+      if(done || !document.getElementById('ua-mfa-row')) return;
+      host.innerHTML = '<span class="hint">Two-step: check timed out.</span>' +
+        '<button class="btn btn-outline btn-sm" onclick="OHub.uaMfaPaintRefresh()">Retry</button>';
+    }, 8000);
     authwApi('/api/auth/me').then(function(j){
+      done = true; clearTimeout(timer);
+      if(!document.getElementById('ua-mfa-row')) return;
       var on = !!(j && j.user && j.user.totp);
       host.innerHTML = '<span class="hint">Two-step:</span>' +
         '<span class="badge badge-' + (on ? 'ok' : 'muted') + '">' + (on ? 'ON' : 'OFF') + '</span>' +
@@ -4142,7 +4150,11 @@
           ? '<button class="btn btn-ghost btn-sm" onclick="OHub.uaMfaDisable()">Turn off</button>'
           : '<button class="btn btn-outline btn-sm" onclick="OHub.uaMfaEnroll()">Turn on</button>') +
         '<span id="ua-mfa-status" style="color:var(--muted);font-size:.78rem;"></span>';
-    }).catch(function(){ host.innerHTML = '<span class="hint">Two-step: unavailable (old team server?).</span>'; });
+    }).catch(function(){
+      done = true; clearTimeout(timer);
+      if(!document.getElementById('ua-mfa-row')) return;
+      host.innerHTML = '<span class="hint">Two-step: unavailable (old team server?).</span>';
+    });
   }
   function uaMfaMsg(m){ var el = document.getElementById('ua-mfa-status'); if(el) el.textContent = m || ''; }
   function uaMfaEnroll(){

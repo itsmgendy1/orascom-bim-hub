@@ -72,6 +72,10 @@ ok(M.qaqcScoreFor(['__COUNTS_GENERIC_INPLACE__'], [], { generic: 0, inplace: 0 }
 ok(M.qaqcScoreFor(['__COUNTS_GENERIC_INPLACE__'], [], { generic: 3, inplace: 0 }) === 0, 'counts generic -> 0');
 ok(M.qaqcScoreFor(['__COUNTS_GENERIC_INPLACE__'], [], { generic: 0, inplace: 2 }) === 0, 'counts inplace -> 0');
 ok(M.qaqcScoreFor(['__COUNTS_GENERIC_INPLACE__'], [], null) === null, 'counts absent -> null');
+ok(M.qaqcScoreFor(['__COUNTS_VIEWS_OFF_SHEET__'], [], { viewsOff: 0 }) === 100, 'views 0 off -> 100');
+ok(M.qaqcScoreFor(['__COUNTS_VIEWS_OFF_SHEET__'], [], { viewsOff: 1 }) === 100, 'views 1 off -> 100');
+ok(M.qaqcScoreFor(['__COUNTS_VIEWS_OFF_SHEET__'], [], { viewsOff: 2 }) === 0, 'views 2 off -> 0');
+ok(M.qaqcScoreFor(['__COUNTS_VIEWS_OFF_SHEET__'], [], null) === null, 'views absent -> null');
 
 // 3. Discipline from health filename.
 ok(M.qaqcDiscFromName('P0152-K00146-OCC-SF01-ZZ-M3-AR-000001.html') === 'AR', 'disc AR');

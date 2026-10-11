@@ -2879,6 +2879,8 @@ var QAQC_FILL_MAP = {
   'QA-GE-013': ['Linked Revit Files Not Pinned in Place'],
   'QA-GE-014': ['Imported CAD files', 'Linked CAD Files'],
   'QA-GE-024': ['Navisworks Export View'],
+  'QA-GE-025': ['__COUNTS_VIEWS_OFF_SHEET__'],
+  'QA-GE-026': ['__COUNTS_VIEWS_OFF_SHEET__'],
   'QA-GE-036': ['Rooms', 'Spaces'],
   'QA-GE-037': ['Redundant and Unenclosed Rooms', 'Redundant and Unenclosed Spaces'],
   'QA-GE-038': ['Unplaced Rooms', 'Unplaced Spaces'],
@@ -2912,6 +2914,11 @@ function qaqcScoreFor(mapped, failArr, counts){
   if(mapped.length === 1 && mapped[0] === '__COUNTS_GENERIC_INPLACE__'){
     if(!counts) return null;
     return (counts.generic === 0 && counts.inplace === 0) ? 100 : 0;
+  }
+  // Browser/views rules: fail when more than 1 view sits off sheets.
+  if(mapped.length === 1 && mapped[0] === '__COUNTS_VIEWS_OFF_SHEET__'){
+    if(!counts || counts.viewsOff === undefined) return null;
+    return counts.viewsOff > 1 ? 0 : 100;
   }
   var fails = {};
   (failArr || []).forEach(function(f){ fails[String(f).toLowerCase()] = 1; });
@@ -2947,7 +2954,7 @@ function qaqcFillAddHealth(files){
         var code = d.code || qaqcDiscFromName(f.name);
         QAQC_FILL.health = QAQC_FILL.health.filter(function(h){ return h.fname !== f.name; });
         QAQC_FILL.health.push({ fname: f.name, code: code, fails: d.fail_checks || [], passes: d.pass_checks || [],
-          counts: { generic: d.generic_models || 0, inplace: d.in_place || 0 } });
+          counts: { generic: d.generic_models || 0, inplace: d.in_place || 0, viewsOff: d.views_not_on_sheets || 0 } });
       }catch(e){ showToast('Skipped ' + f.name + ' (not a health export)', 'error'); }
       if(--pending === 0){
         var codes = QAQC_FILL.health.map(function(h){ return h.code; }).filter(Boolean);
@@ -2967,9 +2974,10 @@ function qaqcFillHealthByCode(code){
     (h.passes || []).forEach(function(p){ if(out.passes.indexOf(p) < 0) out.passes.push(p); });
     // Worst model wins when several files share a discipline.
     if(h.counts){
-      if(!out.counts) out.counts = { generic: 0, inplace: 0 };
+      if(!out.counts) out.counts = { generic: 0, inplace: 0, viewsOff: 0 };
       out.counts.generic = Math.max(out.counts.generic, h.counts.generic || 0);
       out.counts.inplace = Math.max(out.counts.inplace, h.counts.inplace || 0);
+      out.counts.viewsOff = Math.max(out.counts.viewsOff, h.counts.viewsOff || 0);
     }
   });
   return out;
@@ -3038,6 +3046,10 @@ async function qaqcFillBuildPlan(){
             val = qaqcScoreFor(mapped, hb.fails, hb.counts);
             src = val === null ? 'no counts — left blank' : 'counts: generic=' + hb.counts.generic + ' inplace=' + hb.counts.inplace + ' → ' + val;
           }
+          else if(mapped.length === 1 && mapped[0] === '__COUNTS_VIEWS_OFF_SHEET__'){
+            val = qaqcScoreFor(mapped, hb.fails, hb.counts);
+            src = val === null ? 'no counts — left blank' : 'counts: views-off-sheet=' + hb.counts.viewsOff + ' → ' + val;
+          }
           else { val = qaqcScoreFor(mapped, hb.fails); src = 'health: ' + val; }
         } else src = 'manual — left blank';
         if(rule === 'green' && hb) val = 100;
@@ -3070,6 +3082,7 @@ async function qaqcFillPreview(){
       var badge = r.rule === 'green' ? 'ok' : r.rule === 'red' ? 'bad' : r.rule === 'cyan' ? 'info' : 'muted';
       var srcTxt = (r.mapped || []).join(' + ') || '—';
       if(r.mapped && r.mapped.length === 1 && r.mapped[0] === '__COUNTS_GENERIC_INPLACE__') srcTxt = 'counts: Generic Models + In-Place Families = 0';
+      if(r.mapped && r.mapped.length === 1 && r.mapped[0] === '__COUNTS_VIEWS_OFF_SHEET__') srcTxt = 'counts: Views Not On Sheets ≤ 1';
       h += '<tr><td><strong>' + escapeHtml(r.id) + '</strong></td>' +
         '<td><span class="badge badge-' + badge + '">' + r.rule + '</span></td>' +
         '<td style="font-size:.72rem;">' + escapeHtml(srcTxt) + '</td>' +

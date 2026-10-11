@@ -106,5 +106,29 @@ const out = M.clashEvaluate(recs, rules, ['New', 'Active']);
 ok(out.length === 2, 'evaluate filters statuses', 'got ' + out.length);
 ok(out.every((o) => o.rec.status !== 'Resolved'), 'resolved excluded');
 
+// B2: same element pair in another test, order-insensitive, manual only.
+const dupRecs = M.clashBuildRecords([
+  { test: 'T1', aName: 'Wall', clash: 'CL-1', statusRaw: 'Active', distance: '5', aId: 'A1', bId: 'B1' },
+  { test: 'T2', aName: 'Wall', clash: 'CL-2', statusRaw: 'Active', distance: '5', aId: 'B1', bId: 'A1' },
+  { test: 'T3', aName: 'Wall', clash: 'CL-3', statusRaw: 'Active', distance: '5', aId: 'A1', bId: 'B1' },
+  { test: 'T4', aName: 'Slab', clash: 'CL-4', statusRaw: 'Active', distance: '5', aId: '', bId: '' },
+]);
+const dout = M.clashEvaluate(dupRecs, rules, ['New', 'Active']);
+ok(dout[0].rule === null, 'first occurrence stays manual');
+ok(dout[1].rule === 'B2' && dout[1].tier === 'B' && /duplicate of CL-1 in T1/.test(dout[1].note), 'second occurrence marked duplicate', dout[1].rule + '|' + dout[1].note);
+ok(dout[2].rule === 'B2', 'third occurrence also duplicate');
+ok(dout[3].rule === null, 'keyless rows skipped');
+// B2 never overrides a direct rule hit.
+const mixRecs = M.clashBuildRecords([
+  { test: 'X', aName: 'Tray', clash: 'CL-9', statusRaw: 'Active', distance: '0.005', aId: 'E1', bId: 'E2' },
+  { test: 'Y', aName: 'Tray', clash: 'CL-10', statusRaw: 'Active', distance: '0.005', aId: 'E2', bId: 'E1' },
+]);
+const mout = M.clashEvaluate(mixRecs, [{ id: 'R1', tier: 'A', enabled: true, maxDistance: 0.01 }].map(M.clashRuleCompile), ['Active']);
+ok(mout[0].rule === 'R1' && mout[1].rule === 'R1', 'direct hits keep priority over B2');
+// Disabled B2 disables duplicate marking.
+const noDup = rules.map((r) => Object.assign({}, r, { enabled: r.id === 'B2' ? false : r.enabled }));
+const nout = M.clashEvaluate(dupRecs, noDup, ['Active']);
+ok(nout[1].rule === null, 'disabled B2 marks nothing');
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

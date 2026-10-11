@@ -52,7 +52,7 @@ global.Chart = function () { return { destroy() {}, resize() {}, update() {} }; 
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml};');
+eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,axReconcileOne,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml};');
 const M = module.exports;
 
 // Mirror shipped rule defaults.
@@ -127,6 +127,30 @@ m = M.axMatchOurFile(F('B-AR-0002-P02.dwg', '/Our', 'dwg'), idx);
 ok((m.level === 'L2' || m.level === 'L3') && m.conf !== 'NO MATCH', 'revision step matches below L1', m.level);
 m = M.axMatchOurFile(F('ZZ-404.pdf', '/Our', 'pdf'), idx);
 ok(m.level === 'NONE' && m.conf === 'NO MATCH', 'missing file');
+
+// 7. Full reconciliation verdicts.
+const D = (s) => new Date(2026, 9, s);
+const cliFiles = [
+  F('A-EL-0001.pdf', '/Our', 'pdf', { versionNumber: 'V2', revision: 'P01', lastUpdatedDate: D(5) }),
+  F('TWIN.pdf', '/A', 'pdf', { versionNumber: 'V1' }),
+  F('TWIN.pdf', '/B', 'pdf', { versionNumber: 'V1' }),
+];
+const cidx = M.axBuildFileIndex(cliFiles);
+function O(name, folder, extra) {
+  return Object.assign({ name, folderPath: folder, ext: 'pdf', isDrawing: true, versionNumber: 'V2', revision: 'P01', lastUpdatedDate: D(5) }, extra || {});
+}
+let rec = M.axReconcileOne(O('A-EL-0001.pdf', '/Our'), cidx, 'test');
+ok(rec.bridge === 'BRIDGED — CONFIRMED' && rec.versionStatus === 'SAME', 'identical copy confirmed');
+rec = M.axReconcileOne(O('A-EL-0001.pdf', '/Our', { versionNumber: 'V3' }), cidx, 'test');
+ok(rec.bridge === 'OUTDATED CLIENT COPY', 'ours newer -> client outdated');
+rec = M.axReconcileOne(O('A-EL-0001.pdf', '/Our', { versionNumber: 'V1' }), cidx, 'test');
+ok(rec.bridge === 'CLIENT NEWER', 'ours older -> client newer');
+rec = M.axReconcileOne(O('A-EL-0001.pdf', '/Our', { revision: 'P02' }), cidx, 'test');
+ok(rec.versionStatus === 'REVISION MISMATCH' && /Revision differs/.test(rec.notes), 'revision mismatch noted');
+rec = M.axReconcileOne(O('ZZ-404.pdf', '/Our'), cidx, 'test');
+ok(rec.bridge === 'MISSING FROM CLIENT' && rec.client === null, 'missing verdict');
+rec = M.axReconcileOne(O('TWIN.pdf', '/C'), cidx, 'test');
+ok(rec.bridge === 'DUPLICATE', 'twin tie duplicates');
 
 // 7. provenance rendering stays escaped
 ok(M.axBridgePill('MISSING FROM CLIENT').indexOf('MISSING') >= 0, 'pill known');

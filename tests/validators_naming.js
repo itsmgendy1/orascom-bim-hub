@@ -45,7 +45,7 @@ global.fetch = () => Promise.reject(new Error('offline'));
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={baseHygiene,validateFamilySeg,validateViewTemplateSeg,validateWorksetSeg};');
+eval(scripts + '\n;module.exports={baseHygiene,validateFamilySeg,validateViewTemplateSeg,validateWorksetSeg,validateViewsSeg,validateDatumSeg,validateAnnotativeSeg,validateBrowserSeg,validateSheetsSeg,validateOccSegments};');
 const M = module.exports;
 
 // baseHygiene
@@ -97,6 +97,91 @@ r = M.validateWorksetSeg('XX - Something');
 ok(r.pass === false && /discipline/i.test(r.reason), 'workset unknown discipline');
 r = M.validateWorksetSeg('ST - ');
 ok(r.pass === false, 'workset missing category');
+
+// Views segments
+r = M.validateViewsSeg('3D View - OCC-FLOOR-PLAN');
+ok(r.pass === true, 'views 3d occ pass');
+r = M.validateViewsSeg('3D View - My Plan');
+ok(r.pass === false && /OCC-/.test(r.reason), 'views 3d missing occ');
+r = M.validateViewsSeg('My Level {user}');
+ok(r.pass === false && /personal/i.test(r.reason), 'views personal braces');
+r = M.validateViewsSeg('Floor Plan Copy 2');
+ok(r.pass === false && /Copy/i.test(r.reason), 'views copy suffix');
+r = M.validateViewsSeg('Sections - lower level');
+ok(r.pass === false && /UPPERCASE/.test(r.reason), 'views lowercase desc');
+r = M.validateViewsSeg('OCC-KEYPLAN');
+ok(r.pass === true, 'views occ pass');
+
+// Datum segments
+r = M.validateDatumSeg('OCC-SCB-01');
+ok(r.pass === true, 'datum pass');
+r = M.validateDatumSeg('Scope Boxes : Mine');
+ok(r.pass === false && /Scope Boxes/.test(r.reason), 'datum scope boxes');
+r = M.validateDatumSeg('Level 1');
+ok(r.pass === false && /prefix/.test(r.reason), 'datum level missing prefix');
+r = M.validateDatumSeg('GRID-A');
+ok(r.pass === false && /prefix/.test(r.reason), 'datum grid missing prefix');
+r = M.validateDatumSeg('OCC-SCB-01!');
+ok(r.pass === false && /characters/i.test(r.reason), 'datum invalid char');
+
+// Annotative segments
+r = M.validateAnnotativeSeg('OCC-TEXT-NOTES');
+ok(r.pass === true, 'annotative text pass');
+r = M.validateAnnotativeSeg('OCC-DIMN-100');
+ok(r.pass === true, 'annotative dimn pass');
+r = M.validateAnnotativeSeg('ARC-TEXT-X');
+ok(r.pass === false && /ARC-/.test(r.reason), 'annotative legacy arc');
+r = M.validateAnnotativeSeg('OCC_TEXT-X');
+ok(r.pass === false && /separator/.test(r.reason), 'annotative underscore');
+r = M.validateAnnotativeSeg('OCC-TEXT-A.B');
+ok(r.pass === false && /"\\."|hyphen/i.test(r.reason), 'annotative dot');
+r = M.validateAnnotativeSeg('OCC-TEXT-1.5MM');
+ok(r.pass === true, 'annotative decimal allowed');
+r = M.validateAnnotativeSeg('OCC-LINES-X');
+ok(r.pass === false && /TEXT/.test(r.reason), 'annotative wrong type');
+r = M.validateAnnotativeSeg('OCC-text-x');
+ok(r.pass === false && /UPPERCASE|pattern mismatch/i.test(r.reason), 'annotative lowercase');
+
+// Browser segments
+r = M.validateBrowserSeg('OCC-SHEETS-A101');
+ok(r.pass === true, 'browser occ pass');
+r = M.validateBrowserSeg('01 - Plans');
+ok(r.pass === true, 'browser numbered pass');
+r = M.validateBrowserSeg('Random Folder');
+ok(r.pass === false && /prefix/.test(r.reason), 'browser missing prefix');
+
+// Sheets segments
+r = M.validateSheetsSeg('OCC-HT01-AR-PLAN');
+ok(r.pass === true, 'sheets pass');
+r = M.validateSheetsSeg('HT01-AR-PLAN');
+ok(r.pass === false && /prefix/.test(r.reason), 'sheets missing prefix');
+r = M.validateSheetsSeg('OCC-HT01');
+ok(r.pass === false && /segments/i.test(r.reason), 'sheets too few');
+r = M.validateSheetsSeg('OCC-toolongcode-AR-X');
+ok(r.pass === false && /building/i.test(r.reason), 'sheets bad building');
+
+// Schedule dispatcher (PNG schedules)
+r = M.validateOccSegments('x', 'OCC-HT01-ST-ST-FRAMING', { fieldLabel: 'Schedule Name' });
+ok(r.pass === true, 'schedule 4seg pass');
+r = M.validateOccSegments('x', 'OCC-HT01-SUB-AR-WALLS', { fieldLabel: 'Schedule Name' });
+ok(r.pass === true, 'schedule 5seg pass');
+r = M.validateOccSegments('x', 'OCC-HT01-ST', { fieldLabel: 'Schedule Name' });
+ok(r.pass === false && /segments/i.test(r.reason), 'schedule too few');
+r = M.validateOccSegments('x', 'OCC-HT01-ST-X-Y-Z', { fieldLabel: 'Schedule Name' });
+ok(r.pass === false && /segments/i.test(r.reason), 'schedule too many');
+r = M.validateOccSegments('x', 'XX-ST-X', { fieldLabel: 'Schedule Name' });
+ok(r.pass === false && /prefix/.test(r.reason), 'schedule missing prefix');
+
+// Section dispatcher routing
+ok(M.validateOccSegments('arch', 'OCC-WALLS-BASIC-D').pass === true, 'dispatch arch');
+ok(M.validateOccSegments('viewtemplates', 'OCC-VTE-X').pass === true, 'dispatch vte');
+ok(M.validateOccSegments('views', 'OCC-KEYPLAN').pass === true, 'dispatch views');
+ok(M.validateOccSegments('datum', 'OCC-SCB-01').pass === true, 'dispatch datum');
+ok(M.validateOccSegments('annotative', 'OCC-TEXT-X').pass === true, 'dispatch annotative');
+ok(M.validateOccSegments('browser', 'OCC-X').pass === true, 'dispatch browser');
+ok(M.validateOccSegments('sheets', 'OCC-HT01-AR-X').pass === true, 'dispatch sheets');
+ok(M.validateOccSegments('unknown', 'OCC-WALLS-BASIC-D').pass === true, 'dispatch default family');
+ok(M.validateOccSegments('sheets', 'OCC-X', { fieldLabel: 'Workset Name' }).pass === false, 'dispatch workset label');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

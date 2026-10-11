@@ -257,10 +257,6 @@
       <input id="loginUser" type="text" autocomplete="username" placeholder="e.g. bim.admin" />
       <label>PASSWORD</label>
       <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••" />
-      <div id="loginConfirmWrap" style="display:none">
-        <label>CONFIRM PASSWORD</label>
-        <input id="loginConfirm" type="password" autocomplete="new-password" placeholder="Repeat password" />
-      </div>
       <div id="loginRequestWrap" style="display:none">
         <label>DISPLAY NAME</label>
         <input id="loginDisplay" type="text" autocomplete="nickname" placeholder="e.g. Ahmed Hassan" />
@@ -288,7 +284,6 @@
     try{ teamUrl = (JSON.parse(localStorage.getItem('ohub_cloud') || '{}').url || ''); }catch(e){}
     var teamOn = !!teamUrl;
     document.getElementById('loginTitle').textContent = setup ? 'CREATE ADMIN' : 'HUB LOGIN';
-    document.getElementById('loginConfirmWrap').style.display = setup ? 'block' : 'none';
     document.getElementById('loginGo').textContent = setup ? 'CREATE & ENTER →' : 'ENTER →';
     document.getElementById('loginErr').style.display = 'none';
     document.getElementById('teamUrl').value = teamUrl;
@@ -304,7 +299,6 @@
   function toggleRequest(){
     requestMode = !requestMode;
     document.getElementById('loginRequestWrap').style.display = requestMode ? 'block' : 'none';
-    document.getElementById('loginConfirmWrap').style.display = requestMode ? 'block' : 'none';
     document.getElementById('loginGo').textContent = requestMode ? 'SEND REQUEST →' : 'ENTER →';
     document.getElementById('loginTitle').textContent = requestMode ? 'REQUEST ACCOUNT' : 'HUB LOGIN';
     document.getElementById('loginRequestToggle').textContent = requestMode ? '← Back to sign in' : 'No account? Request one →';
@@ -318,8 +312,6 @@
   function submitRequest(){
     var u = document.getElementById('loginUser').value;
     var p = document.getElementById('loginPass').value;
-    var c = document.getElementById('loginConfirm').value;
-    if(p !== c){ loginFail('Passwords do not match.'); return false; }
     if(!p || p.length < 12){ loginFail('Password needs 12+ characters.'); return false; }
     var em = document.getElementById('loginEmail').value.trim();
     if(!/.+@.+\..+/.test(em)){ loginFail('A valid email is required.'); return false; }
@@ -360,8 +352,6 @@
     if(!window.OHubAuth){ loginFail('Auth library failed to load (offline?).'); return false; }
     if(!window.crypto || !window.crypto.subtle){ loginFail('This browser cannot do secure login (WebCrypto missing).'); return false; }
     if(setup){
-      var c = document.getElementById('loginConfirm').value;
-      if(p !== c){ loginFail('Passwords do not match.'); return false; }
       OHubAuth.setup(u, p).then(function(){
         return OHubAuth.login(u, p);
       }).then(function(){ OHubAuth.enterHub(); }).catch(function(err){ loginFail(err.message); });

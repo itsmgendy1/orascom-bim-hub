@@ -4117,7 +4117,9 @@
           '<td style="white-space:nowrap;">' + uaRowActions(r) + '</td></tr>';
       }).join('') || '<tr><td colspan="7" style="color:var(--muted);">No users match.</td></tr>';
       var cc = document.getElementById('ua-count');
-      if(cc) cc.textContent = rows.length + ' shown · ' + uaUsers.filter(function(r){ return r.status === 'PENDING'; }).length + ' pending';
+      var nPending = uaUsers.filter(function(r){ return r.status === 'PENDING'; }).length;
+      if(cc) cc.textContent = rows.length + ' shown · ' + nPending + ' pending';
+      try{ setNavBadge('useradmin', nPending); }catch(e){}
       uaStatusMsg('');
     }).catch(function(err){ uaStatusMsg('Load failed: ' + err.message); });
   }

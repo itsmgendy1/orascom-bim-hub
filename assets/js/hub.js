@@ -4129,7 +4129,7 @@
       : '<div class="card"><p style="font-size:.85rem;color:var(--muted);">User management is restricted to administrators. Your data syncs to your private cloud dataset on push.</p></div>');
     if(admin){ uaLoad(); uaLoadReg(); uaAudit(); uaPollStart(); }
   }
-  /* Live approvals: quiet 25 s poll while the view is visible + refresh on
+  /* Live approvals: quiet 5 s poll while the view is visible + refresh on
      window focus. New PENDING arrivals raise a toast + the sidebar badge.
      Poll failures stay silent (a loud toast only on manual actions). */
   var uaPollT = null, uaFocusBound = false, uaPrevPending = -1;
@@ -4140,7 +4140,7 @@
         if(currentView !== 'useradmin' || document.hidden || !authwSession()) return;
         uaLoad(true);
       }catch(e){}
-    }, 25000);
+    }, 5000);
     if(!uaFocusBound){
       uaFocusBound = true;
       try{

@@ -27,9 +27,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);min-
 
 /* ── IMPORT OVERLAY ─────────────────────────────────────── */
 #import-overlay{
-  position:fixed;inset:0;z-index:999;
+  position:fixed;inset:0;z-index:999;overflow-y:auto;
   background:linear-gradient(160deg,var(--b1) 0%,#0D2750 55%,#163F80 100%);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:22px;
+  padding:40px 20px;
 }
 .io-logo img{height:68px;filter:drop-shadow(0 4px 16px rgba(0,0,0,.4))}
 .io-card{

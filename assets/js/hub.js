@@ -992,7 +992,7 @@
       var pg = L.polygon(ll, {color:zoneColor(holder, sty.color), weight:2, fillOpacity:sty.fill, dashArray:sty.dash, className: al?'zone-alert':''}).addTo(gisMapObj);
       pg.bindTooltip(atag, {permanent:true, direction:'center', className:'plot-label'});
       var kpi = pl.kpi || null;
-      var kpiLine = kpi ? '<br>Units: '+numFmt(kpi.units)+' \u00b7 Pop: '+numFmt(kpi.population)+' \u00b7 Bldgs: '+numFmt(kpi.buildings) : '';
+      var kpiLine = (kpi && (kpi.units!=null || kpi.population!=null || kpi.buildings!=null)) ? '<br>Units: '+(kpi.units==null?'\u2014':numFmt(kpi.units))+' \u00b7 Pop: '+(kpi.population==null?'\u2014':numFmt(kpi.population))+' \u00b7 Bldgs: '+(kpi.buildings==null?'\u2014':numFmt(kpi.buildings)) : '';
       pg.bindPopup('<strong>'+escapeHtml(pl.code+' \u2014 '+pl.name)+'</strong><br>'+
         escapeHtml(pl.cluster||'')+'<br>'+
         'Site: \u2248 '+fmtArea(boundaryAreaKm2([pl.rings]))+kpiLine+'<br>'+
@@ -1059,7 +1059,7 @@
           var overdue = holder ? holderOverdue(holder.id) : 0;
           var kpi = pl.kpi || {};
           var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
-          var r = function(v){ return '<td style="text-align:right;">'+numFmt(v)+'</td>'; };
+          var r = function(v){ return '<td style="text-align:right;">'+(v==null?'\u2014':numFmt(v))+'</td>'; };
           return '<tr style="cursor:pointer;" onclick="OHub.gisFocusPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))">'+
             '<td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+zoneColor(holder,(DP_COLORS[pl.code]||'#8E9BB3'))+';margin-right:7px;"></span><strong>'+escapeHtml(pl.code)+'</strong> <span style="color:var(--muted);font-size:.76rem;">'+escapeHtml(pl.name)+'</span></td>'+
             '<td>'+bucketBadge(plotBucket(holder, g, overdue))+'</td>'+
@@ -1140,7 +1140,7 @@
             '<span style="flex:1;min-width:60px;height:5px;background:var(--light);border-radius:3px;overflow:hidden;">'+
               '<span style="display:block;height:100%;width:'+prog+'%;background:var(--b2);"></span></span>'+
             '<span style="color:var(--muted);">'+prog+'%</span></div>'+
-          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+numFmt(kpi.units)+'</strong> units \u00b7 <strong>'+numFmt(kpi.population)+'</strong> pop \u00b7 <strong>'+numFmt(kpi.buildings)+'</strong> bldgs</div>'+alertLine(holder?holder.id:null)+
+          '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+(kpi.units==null?'\u2014':numFmt(kpi.units))+'</strong> units \u00b7 <strong>'+(kpi.population==null?'\u2014':numFmt(kpi.population))+'</strong> pop \u00b7 <strong>'+(kpi.buildings==null?'\u2014':numFmt(kpi.buildings))+'</strong> bldgs</div>'+alertLine(holder?holder.id:null)+
           (holder
             ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
             : '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+

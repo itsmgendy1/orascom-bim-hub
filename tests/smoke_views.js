@@ -78,6 +78,11 @@ check('gis view renders (was: stageName ReferenceError)', () => {
   if (!modes.includes('Review Status')) throw new Error('mode buttons missing');
   const tbl = els['gis-table'].innerHTML;
   if (!tbl.includes('Design Package Information') && !tbl.includes('DP01')) throw new Error('table missing');
+  // Library KPI figures wiped (owner request): DP01/DP05 rows stay, numbers gone.
+  if (!tbl.includes('DP01') || !tbl.includes('DP05')) throw new Error('plot rows missing');
+  ['738,216', '914,102', '278,415', '104,647', '2,933', '12,025'].forEach(function (fig) {
+    if (tbl.includes(fig)) throw new Error('stale library figure in table: ' + fig);
+  });
 });
 check('stages view renders', () => {
   window.OHub.switchView('stages');

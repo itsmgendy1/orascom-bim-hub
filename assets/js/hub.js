@@ -1067,7 +1067,7 @@
             r(kpi.plots)+r(kpi.gsa)+r(kpi.gfa)+
             '<td style="text-align:right;">'+far(kpi)+'</td>'+
             r(kpi.gla)+r(kpi.units)+r(kpi.population)+r(kpi.buildings)+'</tr>';
-        })+ state.projects.filter(function(p){ return p.boundary && p.boundary.coordinates && !p.plotCode; }).map(function(p){
+        })+ state.projects.filter(function(p){ return p.boundary && p.boundary.coordinates && (!p.plotCode || plotBoundaryCustom(p)); }).map(function(p){
           var h = computeHealth(p.id);
           var k = p.kpi || {};
           var r = function(v){ return '<td style="text-align:right;">'+(v==null?'\u2014':numFmt(v))+'</td>'; };
@@ -1107,7 +1107,7 @@
       '<input id="gis-q" type="text" placeholder="Search package\u2026" value="'+escapeHtml(gisQuery)+'" oninput="OHub.gisSearch(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.8rem;background:var(--white);color:var(--text);margin-bottom:4px;">'+
       '<p style="font-size:.78rem;color:var(--muted);margin:6px 0 0;">'+(ap ? 'Assigning to active project: <strong>'+escapeHtml(ap.name)+'</strong>' : 'Select a project to enable assigning.')+'</p></div>' +
       (function(){
-        var customs = state.projects.filter(function(p){ return p.boundary && p.boundary.coordinates && !p.plotCode; });
+        var customs = state.projects.filter(function(p){ return p.boundary && p.boundary.coordinates && (!p.plotCode || plotBoundaryCustom(p)); });
         if(!customs.length) return '';
         return '<div class="card" style="margin-bottom:12px;"><div class="card-head"><h3>My zones</h3>'+
           '<span class="hint">'+customs.length+'</span></div>'+
@@ -1117,7 +1117,7 @@
             return '<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--light);">'+
               '<input type="color" value="'+col+'" title="Edit zone color" onchange="OHub.zoneColorSet(\''+p.id+'\',this.value)" style="width:26px;height:20px;padding:0;border:1px solid var(--border);border-radius:4px;background:var(--white);cursor:pointer;flex-shrink:0;">'+
               '<span style="flex:1;cursor:pointer;" onclick="OHub.gisFocusProject(\''+p.id+'\')"><strong>'+escapeHtml(p.code ? (p.code+' \u2014 '+p.name) : p.name)+'</strong><br>'+
-              '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+(zk ? '<br>'+zk : '')+alertLine(p.id)+'</span></span></div>';
+              '<span style="font-size:.74rem;color:var(--muted);">\u2248 '+fmtArea(boundaryAreaKm2(p.boundary.coordinates))+(zk ? '<br>'+zk : '')+(p.plotCode ? '<br>Assigned: <a href="#" onclick="event.stopPropagation();OHub.gisFocusPlot(\''+escapeHtml(p.plotCode)+'\');return false;">'+escapeHtml(p.plotCode)+'</a>' : '')+alertLine(p.id)+'</span></span></div>';
           }).join('')+'</div>';
       })() +
       shown.map(function(pl){
@@ -1416,6 +1416,16 @@
     if(el) el.textContent = msg || '';
   }
   function sitePlots(){ return (window.SITE_PLOTS && window.SITE_PLOTS.slice()) || []; }
+  // Linked plot with a kept (drawn/hand) shape: boundary differs from the
+  // library rings. Pure assignments match exactly (same construction path).
+  function plotBoundaryCustom(p){
+    if(!p || !p.plotCode || !p.boundary || !p.boundary.coordinates) return false;
+    var found = null;
+    sitePlots().forEach(function(pl){ if(pl.code===p.plotCode) found = pl; });
+    if(!found || !found.rings) return true;
+    try{ return JSON.stringify(p.boundary.coordinates) !== JSON.stringify([found.rings]); }
+    catch(e){ return true; }
+  }
   function refreshPlotOptions(){
     var sel = document.getElementById('pm-plot');
     if(!sel) return;
@@ -1434,11 +1444,19 @@
     sitePlots().forEach(function(pl){ if(pl.code===code) found = pl; });
     if(!found || !found.rings){ toast('Plot not found in library'); return; }
     if(!found.kpi){ toast('No data for '+code+' \u2014 Orascom holds DP01 and DP05'); return; }
+    plotCodeStaged = code; plotRevStaged = 2;
+    var cur = document.getElementById('pm-boundary').value.trim();
+    if(cur){
+      // Link-only: a boundary is already present (drawn/saved) — keep the
+      // shape, remember the plot link. plotRev 2 shields it from migration.
+      plotJsonStaged = '';
+      boundaryStatus('\u2713 Plot linked ('+code+') \u2014 saved boundary kept.');
+      return;
+    }
     // Stage the library shape as ordinary GeoJSON in the textarea so the
     // normal validate \u2192 save path handles it (no special-casing downstream).
     plotJsonStaged = JSON.stringify({type:'MultiPolygon', coordinates:[found.rings]});
     document.getElementById('pm-boundary').value = plotJsonStaged;
-    plotCodeStaged = code; plotRevStaged = 2;
     boundaryPreview();
   }
   function boundaryPreview(){
@@ -4644,6 +4662,7 @@
     boundaryFile: boundaryFile,
     boundaryClear: boundaryClear,
     plotAssign: plotAssign,
+    plotBoundaryCustom: plotBoundaryCustom,
     gisAssignPlot: gisAssignPlot,
     gisSetMode: gisSetMode,
     gisSetBase: gisSetBase,

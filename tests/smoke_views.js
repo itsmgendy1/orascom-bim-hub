@@ -103,6 +103,16 @@ check('gis draw wiring (no points -> toast, cancel clean)', () => {
   const seg = els['gis-draw'].innerHTML;
   if (!seg.includes('Draw new zone')) throw new Error('draw button not restored');
 });
+check('plot link keeps custom boundary (link-only assign)', () => {
+  var lib = window.SITE_PLOTS.filter(function (pl) { return pl.code === 'DP01'; })[0];
+  var pure = { plotCode: 'DP01', boundary: { type: 'MultiPolygon', coordinates: [lib.rings] } };
+  var kept = { plotCode: 'DP01', boundary: { type: 'MultiPolygon', coordinates: [[[[27.8, 31.2], [27.9, 31.2], [27.9, 31.3], [27.8, 31.2]]]] } };
+  if (!window.OHub.plotBoundaryCustom) throw new Error('helper not exported');
+  if (window.OHub.plotBoundaryCustom(pure) !== false) throw new Error('pure assignment flagged custom');
+  if (window.OHub.plotBoundaryCustom(kept) !== true) throw new Error('kept drawn shape not detected');
+  if (window.OHub.plotBoundaryCustom({ boundary: kept.boundary }) !== false) throw new Error('unlinked flagged');
+  if (window.OHub.plotBoundaryCustom({ plotCode: 'DP99', boundary: kept.boundary }) !== true) throw new Error('retired plot not custom');
+});
 check('drawGeoJson closes ring in [lng,lat] order', () => {
   const src = fs.readFileSync('assets/js/hub.js', 'utf8');
   eval(src.slice(src.indexOf('function drawGeoJson'), src.indexOf('function gisFinishDraw')));

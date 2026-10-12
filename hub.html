@@ -436,7 +436,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
             <label style="display:flex;gap:6px;align-items:center;font-size:.8rem;color:var(--muted);font-weight:400;"><input type="checkbox" id="pm-color-auto" checked onchange="document.getElementById('pm-color').disabled=this.checked" style="width:auto;"> Auto (health tone)</label>
           </div>
         </div>
-        <div class="field"><label>Assign plot <span style="font-weight:400;color:var(--muted);">(optional — built-in DP library; fills the boundary below)</span></label>
+        <div class="field"><label>Assign plot <span style="font-weight:400;color:var(--muted);">(optional — built-in DP library; fills an empty boundary, otherwise links and keeps your shape)</span></label>
           <select id="pm-plot" onchange="OHub.plotAssign()" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);width:100%;"><option value="">— No plot —</option></select>
         </div>
         <div class="field"><label>Site boundary <span style="font-weight:400;color:var(--muted);">(optional — paste GeoJSON or load a .geojson file; drawn as a shaded polygon on the Map view)</span></label>
@@ -545,6 +545,6 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
 <script src="assets/js/forma.js?v=70eecd5c"></script>
 <script src="assets/js/site-plots.js?v=49671cfb"></script>
 <script src="assets/js/ohub-auth.js?v=214d7ab7"></script>
-<script src="assets/js/hub.js?v=78d84e7b"></script>
+<script src="assets/js/hub.js?v=34e871ae"></script>
 </body>
 </html>

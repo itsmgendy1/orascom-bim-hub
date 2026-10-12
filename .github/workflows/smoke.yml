@@ -31,5 +31,7 @@ jobs:
         run: node tests/hub_shell.js
       - name: Scoring and persistence suite
         run: node tests/validators_mq2.js
+      - name: QAQC checklist fill suite
+        run: node tests/validators_qaqc.js
       - name: Perf gates
         run: node tests/perf_gates.js

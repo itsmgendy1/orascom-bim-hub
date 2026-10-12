@@ -94,5 +94,27 @@ ok(M.QAQC_FILL_MAP['QA-GE-004'].join() === 'File Size', 'map exact');
   ok(!M.QAQC_FILL_MAP[id], id + ' honestly unmapped (manual)');
 });
 
+// 5. Discipline-sheet mappings ship locked too (added with the filler).
+ok(M.QAQC_FILL_MAP['QA-GE-025'].join() === '__COUNTS_VIEWS_OFF_SHEET__', 'GE-025 views rule');
+ok(M.QAQC_FILL_MAP['QA-GE-026'].join() === '__COUNTS_VIEWS_OFF_SHEET__', 'GE-026 views rule');
+ok(M.QAQC_FILL_MAP['QA-AR-029'].join() === 'Purgeable Elements', 'AR-029 purge');
+ok(M.QAQC_FILL_MAP['QA-AR-030'].join() === 'Warnings', 'AR-030 warnings');
+ok(M.QAQC_FILL_MAP['QA-AR-031'].join() === 'Duplicate Modeled Elements', 'AR-031 dup');
+ok(M.QAQC_FILL_MAP['QA-AR-001'].join() === 'Rooms', 'AR-001 rooms');
+ok(M.QAQC_FILL_MAP['QA-AR-002'].join() === 'Redundant and Unenclosed Rooms', 'AR-002 redundant');
+ok(M.QAQC_FILL_MAP['QA-AR-003'].join() === 'Unplaced Rooms', 'AR-003 unplaced');
+ok(M.QAQC_FILL_MAP['QA-ST-006'].join() === 'Duplicate Modeled Elements', 'ST-006 dup');
+
+// 6. Exact key set: additions/removals must update this suite (owner-locked).
+const EXPECT_KEYS = ['QA-GE-004', 'QA-GE-008', 'QA-GE-009', 'QA-GE-011', 'QA-GE-013',
+  'QA-GE-014', 'QA-GE-024', 'QA-GE-025', 'QA-GE-026', 'QA-GE-036', 'QA-GE-037',
+  'QA-GE-038', 'QA-GE-051', 'QA-GE-060', 'QA-GE-061', 'QA-GE-062', 'QA-GE-064',
+  'QA-AR-029', 'QA-AR-030', 'QA-AR-031', 'QA-AR-001', 'QA-AR-002', 'QA-AR-003',
+  'QA-ST-006'].sort();
+const gotKeys = Object.keys(M.QAQC_FILL_MAP).sort();
+ok(gotKeys.join('|') === EXPECT_KEYS.join('|'), 'map key set exact',
+  'extra: ' + gotKeys.filter((k) => EXPECT_KEYS.indexOf(k) < 0).join(',') +
+  ' missing: ' + EXPECT_KEYS.filter((k) => gotKeys.indexOf(k) < 0).join(','));
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -243,14 +243,7 @@
   <div class="login-card">
     <h2 id="loginTitle">HUB LOGIN</h2>
     <p class="sub" id="loginSub">Sign in to enter the BIM Digital Delivery Hub.</p>
-    <div id="loginTeamWrap">
-      <label>TEAM SERVER</label>
-      <input id="teamUrl" type="text" placeholder="https://orascom-hub-auth.<account>.workers.dev" />
-    </div>
-    <div style="margin-top:8px;"><a href="#" id="loginTeamToggle" onclick="return toggleTeamServer()"
-      style="font-size:11px;color:var(--cyan);text-decoration:none;">Use this browser offline instead →</a>
-      <span style="color:rgba(207,238,255,.35);font-size:11px;"> · </span>
-      <a href="#" id="loginRequestToggle" onclick="return toggleRequest()"
+    <div style="margin-top:8px;"><a href="#" id="loginRequestToggle" onclick="return toggleRequest()"
       style="font-size:11px;color:var(--cyan);text-decoration:none;">No account? Request one →</a></div>
     <form id="loginForm" onsubmit="return submitLogin(event)">
       <div id="loginCredWrap">
@@ -283,26 +276,24 @@
     var e = document.getElementById('loginErr');
     e.style.display = 'block'; e.textContent = m;
   }
-  /* Team-first login: one cloud admin, works in any browser. No more
-     per-browser "first run create admin" — the team field is always on,
-     prefilled with the account server. The offline toggle is only for
-     no-internet use and creates a browser-local account, never a team one. */
-  var teamOn = true;
+  /* Team-only login: one cloud admin, works in any browser. No
+     per-browser "first run create admin", no offline toggle — the card is
+     username + password only. Saved team URL wins when set, else the
+     built-in account server. Server-down keeps a silent local fallback. */
+  function resolveTeamUrl(){
+    var saved = '';
+    try{ saved = (JSON.parse(localStorage.getItem('ohub_cloud') || '{}').url || ''); }catch(e){}
+    if(saved) return saved;
+    try{ return (window.OHubAuth && window.OHubAuth.authDefaultUrl) ? window.OHubAuth.authDefaultUrl() : ''; }catch(e){}
+    return '';
+  }
   function openLogin(){
     if(requestMode) toggleRequest();
-    var teamUrl = '';
-    try{ teamUrl = (JSON.parse(localStorage.getItem('ohub_cloud') || '{}').url || ''); }catch(e){}
-    if(!teamUrl && !localStorage.getItem('ohub_offline')){
-      try{ teamUrl = (window.OHubAuth && window.OHubAuth.authDefaultUrl) ? window.OHubAuth.authDefaultUrl() : teamUrl; }catch(e){}
-    } else if(localStorage.getItem('ohub_offline')){
-      teamOn = false;
-    }
     document.getElementById('loginTitle').textContent = 'HUB LOGIN';
     document.getElementById('loginGo').textContent = 'ENTER →';
     document.getElementById('loginErr').style.display = 'none';
     mfaTicket = null;
     paintCredMode();
-    document.getElementById('teamUrl').value = teamUrl;
     document.getElementById('loginModal').classList.add('on');
     setTimeout(function(){ document.getElementById('loginUser').focus(); }, 60);
   }
@@ -312,13 +303,11 @@
     var mfa = !!mfaTicket;
     document.getElementById('loginCredWrap').style.display = mfa ? 'none' : 'block';
     document.getElementById('loginMfaWrap').style.display = mfa ? 'block' : 'none';
-    document.getElementById('loginTeamWrap').style.display = (!mfa && teamOn) ? 'block' : 'none';
-    document.getElementById('loginTeamToggle').textContent = teamOn ? 'Use this browser offline instead →' : 'Use team server instead →';
     document.getElementById('loginTitle').textContent = mfa ? 'TWO-STEP CHECK' : 'HUB LOGIN';
     document.getElementById('loginGo').textContent = mfa ? 'VERIFY →' : 'ENTER →';
     document.getElementById('loginSub').textContent = mfa
       ? 'Enter the 6-digit code from your authenticator app (or a backup code).'
-      : (teamOn ? 'Team sign-in — one admin, works in any browser.' : 'Offline browser account — stays on this machine only, not the team.');
+      : 'Team sign-in — one admin, works in any browser.';
   }
   function showMfaStep(ticket){
     mfaTicket = ticket;
@@ -347,8 +336,8 @@
     document.getElementById('loginTitle').textContent = requestMode ? 'REQUEST ACCOUNT' : 'HUB LOGIN';
     document.getElementById('loginRequestToggle').textContent = requestMode ? '← Back to sign in' : 'No account? Request one →';
     if(requestMode){
-      var t = document.getElementById('teamUrl');
-      if(t && t.value.trim()) { try{ window.OHubAuth.authWorker(t.value.trim()); }catch(e){} }
+      var url = resolveTeamUrl();
+      if(url) { try{ window.OHubAuth.authWorker(url); }catch(e){} }
       setTimeout(function(){ document.getElementById('loginDisplay').focus(); }, 60);
     }
     return false;
@@ -359,8 +348,7 @@
     if(!p || p.length < 12){ loginFail('Password needs 12+ characters.'); return false; }
     var em = document.getElementById('loginEmail').value.trim();
     if(!/.+@.+\..+/.test(em)){ loginFail('A valid email is required.'); return false; }
-    var t = document.getElementById('teamUrl');
-    var url = (t && t.value.trim()) || '';
+    var url = resolveTeamUrl();
     document.getElementById('loginGo').textContent = 'SENDING…';
     window.OHubAuth.authRequest(url, {
       username: u,
@@ -385,24 +373,6 @@
     }
     openLogin();
   }
-  function toggleTeamServer(){
-    teamOn = !teamOn;
-    try{
-      if(!teamOn) localStorage.setItem('ohub_offline', '1');
-      else localStorage.removeItem('ohub_offline');
-      if(teamOn){
-        var t = document.getElementById('teamUrl');
-        if(t && !t.value.trim() && window.OHubAuth && window.OHubAuth.authDefaultUrl) t.value = window.OHubAuth.authDefaultUrl();
-      }
-    }catch(e){}
-    document.getElementById('loginTeamToggle').textContent = teamOn ? 'Use this browser offline instead →' : 'Use team server instead →';
-    paintCredMode();
-    setTimeout(function(){
-      var el = teamOn ? document.getElementById('teamUrl') : document.getElementById('loginUser');
-      if(el) el.focus();
-    }, 60);
-    return false;
-  }
   function submitLogin(ev){
     if(ev) ev.preventDefault();
     if(requestMode) return submitRequest();
@@ -411,11 +381,7 @@
     var p = document.getElementById('loginPass').value;
     if(!window.OHubAuth){ loginFail('Auth library failed to load (offline?).'); return false; }
     if(!window.crypto || !window.crypto.subtle){ loginFail('This browser cannot do secure login (WebCrypto missing).'); return false; }
-    var teamInput = document.getElementById('teamUrl');
-    var team = (teamOn && teamInput) ? teamInput.value.trim() : '';
-    if(teamOn && !team){
-      try{ team = (window.OHubAuth.authDefaultUrl) ? window.OHubAuth.authDefaultUrl() : ''; }catch(e){}
-    }
+    var team = resolveTeamUrl();
     if(team){
         try{
           var cc = JSON.parse(localStorage.getItem('ohub_cloud') || '{}');
@@ -447,7 +413,8 @@
           });
         });
       } else {
-        // Offline mode: browser-local account only (never a team admin).
+        // No team server configured: browser-local accounts only (never a team admin).
+        // Unreachable in practice — resolveTeamUrl always returns the built-in server.
         if(!(window.OHubAuth && window.OHubAuth.hasUsers())){
           OHubAuth.setup(u, p).then(function(){ return OHubAuth.login(u, p); })
             .then(function(){ OHubAuth.enterHub(); }).catch(function(err){ loginFail(err.message); });

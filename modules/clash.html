@@ -234,6 +234,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
   <button class="tab-btn active" data-tab="t-overview" onclick="switchTab('t-overview')">Overview</button>
   <button class="tab-btn" data-tab="t-clashes" onclick="switchTab('t-clashes')">Clashes</button>
   <button class="tab-btn" data-tab="t-disc" onclick="switchTab('t-disc')">Disciplines</button>
+  <button class="tab-btn" data-tab="t-det" onclick="switchTab('t-det')">Details</button>
   <button class="tab-btn" data-tab="t-auto" onclick="switchTab('t-auto')">Auto-Approval</button>
 </div>
 <main>
@@ -266,6 +267,20 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
     <div class="kpi-row" id="testdisc-kpis" style="margin-top:14px"></div>
     <div class="ccard"><h3>Open / closed per discipline — from test names (cross pairs count in both)</h3><div id="testdisc-note" style="font-size:.78rem;color:var(--muted);margin:0 0 8px;"></div><div class="tbl-wrap"><table class="dtbl" id="testdisc-table"></table></div></div>
     <div class="ccard"><h3>Trade rollup — Mechanical (AC·WS·DR·PS·FS) vs Electrical (TE·EL·BS·VT)</h3><div class="tbl-wrap"><table class="dtbl" id="trade-table"></table></div></div>
+  </div>
+
+  <div class="tab-content" id="t-det">
+    <div class="sec">Details</div>
+    <div class="ccard"><h3>Self clashes per discipline — same code both sides</h3>
+      <div class="filter-bar">
+        <select class="filter-select" id="det-disc-f" onchange="renderDetails()"><option value="">All disciplines</option></select>
+        <span class="filter-count" id="det-self-count"></span>
+      </div>
+      <div class="tbl-wrap"><table class="dtbl" id="det-self-table"></table></div>
+    </div>
+    <div class="ccard"><h3>Approved clashes — with approval details</h3>
+      <div class="tbl-wrap"><table class="dtbl" id="det-approved-table"></table></div>
+    </div>
   </div>
 
   <div class="tab-content" id="t-auto">
@@ -906,6 +921,7 @@ function renderAll(){
   populateDisciplineFilter();
   renderClashTable();
   renderTestDiscAnalysis();
+  renderDetails();
 }
 
 function clashPair(c){ return (c.aDisc||'Unspecified') + ' \u2194 ' + (c.bDisc||'Unspecified'); }
@@ -1104,18 +1120,74 @@ function renderClashTable(){
   document.getElementById('cl-count').textContent = list.length+' / '+CLASH_ITEMS.length;
   var distArrow = clashSort.key==='distance' ? (clashSort.dir===1 ? ' ▲' : ' ▼') : '';
   var html = '<tr><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th><a href="#" onclick="setClashSort(\'distance\');return false;" style="color:inherit;text-decoration:none;" title="Sort by overlap distance">Distance'+distArrow+'</a></th><th>Priority</th><th>Status</th><th>Date</th></tr>';
-  list.slice(0,800).forEach(function(c){
-    html += '<tr><td>'+escapeHtml(c.test)+'</td>'+
-      '<td>'+escapeHtml(c.clash||'\u2014')+(c.auto?'<br><small class="badge badge-closed">Auto \u2713'+escapeHtml(c.auto.rule)+'</small>':'')+(c.grid?'<br><small style="color:var(--muted)">'+escapeHtml(c.grid)+'</small>':'')+'</td>'+
-      '<td>'+escapeHtml(c.aName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.aDisc)+(c.aId?' \u00b7 ID '+escapeHtml(c.aId):'')+'</small></td>'+
-      '<td>'+escapeHtml(c.bName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.bDisc)+(c.bId?' \u00b7 ID '+escapeHtml(c.bId):'')+'</small></td>'+
-      '<td>'+escapeHtml(c.distance)+'</td>'+
-      '<td><span class="badge '+priorityBadgeClass(c.priority)+'">'+c.priority+'</span></td>'+
-      '<td><span class="badge '+(c.bucket==='Open'?'badge-open':'badge-closed')+'">'+escapeHtml(c.statusRaw||c.bucket)+'</span></td>'+
-      '<td>'+escapeHtml(c.date)+'</td></tr>';
-  });
+  list.slice(0,800).forEach(function(c){ html += clashRowHtml(c); });
   if(list.length>800) html += '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:10px">Showing first 800 of '+list.length+' \u2014 use filters or export to see all.</td></tr>';
   document.getElementById('cl-table').innerHTML = html;
+}
+
+/* Shared clash detail row (Clashes tab + Details tab stay identical).
+   Optional lead cell (e.g. discipline) is prepended when given. */
+function clashRowHtml(c, lead){
+  return '<tr>'+(lead||'')+'<td>'+escapeHtml(c.test)+'</td>'+
+    '<td>'+escapeHtml(c.clash||'\u2014')+(c.auto?'<br><small class="badge badge-closed">Auto \u2713'+escapeHtml(c.auto.rule)+'</small>':'')+(c.grid?'<br><small style="color:var(--muted)">'+escapeHtml(c.grid)+'</small>':'')+'</td>'+
+    '<td>'+escapeHtml(c.aName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.aDisc)+(c.aId?' \u00b7 ID '+escapeHtml(c.aId):'')+'</small></td>'+
+    '<td>'+escapeHtml(c.bName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.bDisc)+(c.bId?' \u00b7 ID '+escapeHtml(c.bId):'')+'</small></td>'+
+    '<td>'+escapeHtml(c.distance)+'</td>'+
+    '<td><span class="badge '+priorityBadgeClass(c.priority)+'">'+c.priority+'</span></td>'+
+    '<td><span class="badge '+(c.bucket==='Open'?'badge-open':'badge-closed')+'">'+escapeHtml(c.statusRaw||c.bucket)+'</span></td>'+
+    '<td>'+escapeHtml(c.date)+'</td></tr>';
+}
+/* Details-tab predicates (pure, unit-tested). */
+function clashSelfDisc(c){
+  var dd = clashTestDiscs(c);
+  var d1 = dd[0]||'Unspecified', d2 = dd[1]||'Unspecified';
+  return d1===d2 ? d1 : null;
+}
+function clashApproved(c){ return !!(c && c.auto); }
+function renderDetails(){
+  var a = clashDiscAnalysis(CLASH_ITEMS);
+  var sel = document.getElementById('det-disc-f');
+  if(sel){
+    var cur = sel.value || '';
+    sel.innerHTML = '<option value="">All disciplines ('+a.discs.length+')</option>' +
+      a.discs.map(function(d){ return '<option value="'+escapeHtml(d)+'"'+(d===cur?' selected':'')+'>'+escapeHtml(d)+'</option>'; }).join('');
+    if(a.discs.indexOf(cur)===-1) sel.value = '';
+  }
+  var df = sel ? sel.value : '';
+  var self = CLASH_ITEMS.filter(function(c){
+    var d = clashSelfDisc(c);
+    return d && (!df || d===df);
+  });
+  var cnt = document.getElementById('det-self-count');
+  if(cnt) cnt.textContent = self.length+' self of '+CLASH_ITEMS.length;
+  var host = document.getElementById('det-self-table');
+  if(host){
+    host.innerHTML = '<thead><tr><th>Discipline</th><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th>Distance</th><th>Priority</th><th>Status</th><th>Date</th></tr></thead><tbody>'+
+      (self.length ? self.slice(0,800).map(function(c){
+        return clashRowHtml(c, '<td><strong>'+escapeHtml(clashSelfDisc(c))+'</strong></td>');
+      }).join('') + (self.length>800 ? '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:10px">Showing first 800 of '+self.length+'.</td></tr>' : '')
+      : '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:14px;">'+(CLASH_ITEMS.length?'No self clashes'+(df?' for '+escapeHtml(df):'')+'.':'Import data first.')+'</td></tr>')+'</tbody>';
+  }
+  var appr = CLASH_ITEMS.filter(clashApproved);
+  var host2 = document.getElementById('det-approved-table');
+  if(host2){
+    host2.innerHTML = '<thead><tr><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th>Rule</th><th>Tier</th><th>Note</th><th>Batch</th><th>By</th><th>At</th><th>Status</th></tr></thead><tbody>'+
+      (appr.length ? appr.slice(0,800).map(function(c){
+        var au = c.auto||{};
+        return '<tr><td>'+escapeHtml(c.test)+'</td>'+
+          '<td>'+escapeHtml(c.clash||'\u2014')+'</td>'+
+          '<td>'+escapeHtml(c.aName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.aDisc)+(c.aId?' \u00b7 ID '+escapeHtml(c.aId):'')+'</small></td>'+
+          '<td>'+escapeHtml(c.bName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.bDisc)+(c.bId?' \u00b7 ID '+escapeHtml(c.bId):'')+'</small></td>'+
+          '<td><strong>'+escapeHtml(au.rule||'\u2014')+'</strong></td>'+
+          '<td>'+escapeHtml(au.tier||'\u2014')+'</td>'+
+          '<td style="font-size:.76rem;">'+escapeHtml(au.note||'\u2014')+'</td>'+
+          '<td>'+escapeHtml(au.batch||'\u2014')+'</td>'+
+          '<td>'+escapeHtml(au.by||'\u2014')+'</td>'+
+          '<td>'+escapeHtml(au.at||'\u2014')+'</td>'+
+          '<td><span class="badge badge-closed">'+escapeHtml(c.statusRaw||c.bucket)+'</span></td></tr>';
+      }).join('') + (appr.length>800 ? '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:10px">Showing first 800 of '+appr.length+'.</td></tr>' : '')
+      : '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:14px;">'+(CLASH_ITEMS.length?'Nothing approved yet — run an evaluation on the Auto-Approval tab.':'Import data first.')+'</td></tr>')+'</tbody>';
+  }
 }
 
 function copyVisibleClashes(){

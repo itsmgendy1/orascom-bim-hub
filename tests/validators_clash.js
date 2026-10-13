@@ -47,7 +47,7 @@ global.fetch = () => Promise.reject(new Error('offline'));
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*(?:src=|type="application\/ld\+json"|type="application\/json"))[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,clashDiscUnmapped,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
+eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,clashDiscUnmapped,clashSelfDisc,clashApproved,clashRowHtml,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
 const M = module.exports;
 const rules = JSON.parse(JSON.stringify(M.CLASH_RULES_DEFAULT.rules)).map(M.clashRuleCompile);
 const byId = (id) => rules.filter((r) => r.id === id)[0];
@@ -175,6 +175,14 @@ ok(dt.per.AR.open === 2 && dt.per.PS.open === 1, 'fallback per-disc');
 ok(JSON.stringify(dt.per.AR.mates) === '{"PS":1}', 'mates counted', JSON.stringify(dt.per.AR.mates));
 ok(dt.per.TE.mates && dt.per.TE.mates.AC === 1, 'cross mates mirrored');
 ok(dt.per.AR.cross === 1 && dt.per.PS.cross === 1, 'cross split');
+
+// Details-tab predicates + shared row builder.
+ok(M.clashSelfDisc({ test: 'AR-X -vs- AR-Y', bucket: 'Open' }) === 'AR', 'self disc');
+ok(M.clashSelfDisc({ test: 'AR-X -vs- PS-Y', bucket: 'Open' }) === null, 'cross not self');
+ok(M.clashSelfDisc({ test: '', bucket: 'Open' }) === 'Unspecified', 'blank sides self-unspecified');
+ok(M.clashApproved({ auto: { rule: 'A1' } }) === true, 'auto approved');
+ok(M.clashApproved({}) === false && M.clashApproved(null) === false, 'not approved');
+ok(typeof M.clashRowHtml({ test: 'T', clash: '', aName: 'A', bName: 'B', aDisc: 'AR', bDisc: 'PS', distance: '', priority: 'High', bucket: 'Open', statusRaw: '', date: '' }) === 'string', 'row builder returns html');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

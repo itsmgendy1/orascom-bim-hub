@@ -692,13 +692,17 @@ function clashSplitTest(testName){
 var CLASH_TRADE_MECH = ['AC','WS','DR','PS','FS'];
 var CLASH_TRADE_ELEC = ['TE','EL','BS','VT'];
 function clashTestDiscs(c){
-  return [clashDiscipline((c&&(c.setA||''))||''), clashDiscipline((c&&(c.setB||''))||'')];
+  // Live dashboard items carry the raw test string (setA/setB are built only
+  // for the auto engine), so split test here when sides are absent.
+  var a = (c&&(c.setA||''))||'', b = (c&&(c.setB||''))||'';
+  if(!a && !b && c && c.test){ var sp = clashSplitTest(c.test||''); a = sp[0]; b = sp[1]; }
+  return [clashDiscipline(a), clashDiscipline(b)];
 }
 function clashIsOpen(c){ return !!c && c.bucket==='Open' && !c.auto; }
 function clashDiscAnalysis(items){
   var per = {}, selfOpen=0, selfClosed=0, crossOpen=0, crossClosed=0;
   var trades = {mech:{open:0,closed:0}, elec:{open:0,closed:0}, mechElec:{open:0,closed:0}};
-  function slot(d){ if(!per[d]) per[d] = {open:0, closed:0, self:0, cross:0}; return per[d]; }
+  function slot(d){ if(!per[d]) per[d] = {open:0, closed:0, self:0, cross:0, mates:{}}; return per[d]; }
   function inTrade(d, t){ return t.indexOf(d)>-1; }
   (items||[]).forEach(function(c){
     var dd = clashTestDiscs(c);
@@ -713,6 +717,7 @@ function clashDiscAnalysis(items){
       if(open) s.open++; else s.closed++;
       if(self) s.self++; else s.cross++;
     });
+    if(!self){ slot(d1).mates[d2] = (slot(d1).mates[d2]||0)+1; slot(d2).mates[d1] = (slot(d2).mates[d1]||0)+1; }
     var m1 = inTrade(d1,CLASH_TRADE_MECH), m2 = inTrade(d2,CLASH_TRADE_MECH);
     var e1 = inTrade(d1,CLASH_TRADE_ELEC), e2 = inTrade(d2,CLASH_TRADE_ELEC);
     if(m1||m2){ if(open) trades.mech.open++; else trades.mech.closed++; }
@@ -1037,15 +1042,17 @@ function renderTestDiscAnalysis(){
   if(tb){
     var rows = a.discs.map(function(d){
       var s = a.per[d], t = s.open+s.closed;
+      var mates = Object.keys(s.mates||{}).sort(function(x,y){ return s.mates[y]-s.mates[x]; }).slice(0,3);
       return '<tr><td><strong>'+escapeHtml(d)+'</strong></td>'+
         '<td style="text-align:right;color:var(--fail);font-weight:700">'+s.open+'</td>'+
         '<td style="text-align:right;color:var(--ok2);font-weight:700">'+s.closed+'</td>'+
         '<td style="text-align:right;font-weight:800">'+t+'</td>'+
         '<td style="text-align:right;">'+s.self+'</td>'+
-        '<td style="text-align:right;">'+s.cross+'</td></tr>';
+        '<td style="text-align:right;">'+s.cross+'</td>'+
+        '<td style="font-size:.76rem;">'+(mates.length?mates.map(function(m){ return escapeHtml(m)+': '+s.mates[m]; }).join(' · '):'—')+'</td></tr>';
     });
-    tb.innerHTML = '<thead><tr><th>Discipline</th><th style="text-align:right;">Open</th><th style="text-align:right;">Closed</th><th style="text-align:right;">Total</th><th style="text-align:right;">Self</th><th style="text-align:right;">Cross</th></tr></thead><tbody>'+
-      (rows.length?rows.join(''):'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:14px;">Import data first.</td></tr>')+'</tbody>';
+    tb.innerHTML = '<thead><tr><th>Discipline</th><th style="text-align:right;">Open</th><th style="text-align:right;">Closed</th><th style="text-align:right;">Total</th><th style="text-align:right;">Self</th><th style="text-align:right;">Cross</th><th>Top partners</th></tr></thead><tbody>'+
+      (rows.length?rows.join(''):'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:14px;">Import data first.</td></tr>')+'</tbody>';
   }
   var tr = document.getElementById('trade-table');
   if(tr){

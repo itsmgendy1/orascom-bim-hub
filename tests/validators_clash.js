@@ -163,5 +163,18 @@ ok(M.clashDiscUnmapped([{ setA: '', setB: '', aDisc: 'Unspecified', bDisc: 'Unsp
 ok(M.clashDiscUnmapped([{ setA: 'AR-X', setB: '', aDisc: '', bDisc: '' }]) === false, 'unmapped: one side mapped');
 ok(M.clashDiscUnmapped([{ setA: '', setB: '', aDisc: 'AR', bDisc: '' }]) === false, 'unmapped: item disc mapped');
 
+// Live dashboard items carry raw test (no setA/setB): fallback splits test.
+ok(JSON.stringify(M.clashTestDiscs({ test: 'AR-Casework -vs- PS-Pipes' })) === '["AR","PS"]', 'fallback splits test');
+ok(JSON.stringify(M.clashTestDiscs({ test: 'NoSep', setA: '', setB: '' })) === '["NOSEP",""]', 'fallback no-sep');
+const dt = M.clashDiscAnalysis([
+  { test: 'AR-Casework -vs- AR-Furniture', bucket: 'Open' },
+  { test: 'AR-Casework -vs- PS-Pipes', bucket: 'Open' },
+  { test: 'AC-Ducts -vs- TE-Trays', bucket: 'Closed' },
+]);
+ok(dt.per.AR.open === 2 && dt.per.PS.open === 1, 'fallback per-disc');
+ok(JSON.stringify(dt.per.AR.mates) === '{"PS":1}', 'mates counted', JSON.stringify(dt.per.AR.mates));
+ok(dt.per.TE.mates && dt.per.TE.mates.AC === 1, 'cross mates mirrored');
+ok(dt.per.AR.cross === 1 && dt.per.PS.cross === 1, 'cross split');
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

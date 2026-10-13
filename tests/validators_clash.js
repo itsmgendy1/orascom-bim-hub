@@ -47,7 +47,7 @@ global.fetch = () => Promise.reject(new Error('offline'));
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*(?:src=|type="application\/ld\+json"|type="application\/json"))[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
+eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,clashDiscUnmapped,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
 const M = module.exports;
 const rules = JSON.parse(JSON.stringify(M.CLASH_RULES_DEFAULT.rules)).map(M.clashRuleCompile);
 const byId = (id) => rules.filter((r) => r.id === id)[0];
@@ -157,6 +157,11 @@ ok(da.trades.elec.open === 0 && da.trades.elec.closed === 2, 'elec trade');
 ok(da.trades.mechElec.open === 0 && da.trades.mechElec.closed === 2, 'mech-elec pairs');
 ok(M.clashDiscAnalysis([]).discs.length === 0, 'empty input');
 ok(M.clashDiscAnalysis([D('', '', 'Open')]).per.Unspecified.open === 1, 'missing sides unspecified');
+
+ok(M.clashDiscUnmapped([]) === false, 'unmapped: empty is not unmapped');
+ok(M.clashDiscUnmapped([{ setA: '', setB: '', aDisc: 'Unspecified', bDisc: 'Unspecified' }]) === true, 'unmapped: default unspecified strings');
+ok(M.clashDiscUnmapped([{ setA: 'AR-X', setB: '', aDisc: '', bDisc: '' }]) === false, 'unmapped: one side mapped');
+ok(M.clashDiscUnmapped([{ setA: '', setB: '', aDisc: 'AR', bDisc: '' }]) === false, 'unmapped: item disc mapped');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

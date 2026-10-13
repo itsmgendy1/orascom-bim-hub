@@ -264,7 +264,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
     <div class="sec">Discipline pairs</div>
     <div class="ccard"><h3>Clash count by discipline pair</h3><div class="ch" style="height:340px"><canvas id="ch-disc"></canvas></div></div>
     <div class="kpi-row" id="testdisc-kpis" style="margin-top:14px"></div>
-    <div class="ccard"><h3>Open / closed per discipline — from test names (cross pairs count in both)</h3><div class="tbl-wrap"><table class="dtbl" id="testdisc-table"></table></div></div>
+    <div class="ccard"><h3>Open / closed per discipline — from test names (cross pairs count in both)</h3><div id="testdisc-note" style="font-size:.78rem;color:var(--muted);margin:0 0 8px;"></div><div class="tbl-wrap"><table class="dtbl" id="testdisc-table"></table></div></div>
     <div class="ccard"><h3>Trade rollup — Mechanical (AC·WS·DR·PS·FS) vs Electrical (TE·EL·BS·VT)</h3><div class="tbl-wrap"><table class="dtbl" id="trade-table"></table></div></div>
     <div class="ccard"><h3>Open / closed by discipline</h3><div class="ch" style="height:340px"><canvas id="ch-testdisc"></canvas></div></div>
   </div>
@@ -1000,8 +1000,30 @@ function renderDisciplineChart(){
   });
 }
 
+/* True when no item carries a test side or item discipline — i.e. the
+   Test / Item-discipline columns were never mapped at import. */
+function clashDiscUnmapped(items){
+  var xs = items||[];
+  if(!xs.length) return false;
+  function mappedDisc(v){
+    v = String(v||'').trim();
+    return v!=='' && v.toUpperCase()!=='UNSPECIFIED';
+  }
+  for(var i=0;i<xs.length;i++){
+    var c = xs[i];
+    var dd = clashTestDiscs(c);
+    if((dd[0]||'')!=='' || (dd[1]||'')!=='') return false;
+    if(mappedDisc(c.aDisc) || mappedDisc(c.bDisc)) return false;
+  }
+  return true;
+}
 function renderTestDiscAnalysis(){
   var a = clashDiscAnalysis(CLASH_ITEMS);
+  var unmapped = clashDiscUnmapped(CLASH_ITEMS);
+  var nt = document.getElementById('testdisc-note');
+  if(nt) nt.innerHTML = unmapped
+    ? 'All clashes read as Unspecified — map the <strong>Test</strong> column (values like AR-Casework -vs- PS-Pipes) and the <strong>Item A / Item B Discipline</strong> columns at import, then re-import to break this down by discipline.'
+    : '';
   var kh = document.getElementById('testdisc-kpis');
   function card(cls,lbl,val,sub){
     return '<div class="kpi '+cls+'"><div class="kpi-lbl">'+lbl+'</div><div class="kpi-val">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';

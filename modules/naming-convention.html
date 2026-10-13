@@ -46,6 +46,10 @@ body.dark .filter-btn.act{background:#1B4F9B;color:#fff}
 body.dark input[type=text],body.dark input[type=number],body.dark select,body.dark textarea{background:#17223C;border-color:#233252;color:#E7EDF7}
 body.dark footer{background:linear-gradient(135deg,#060F22,#0D1526)}
 body.dark .insp-row td{background:#17223C!important}
+body.dark #det,body.dark #disc-det,body.dark .dc,body.dark .ref-panel,body.dark .bldg-pill{background:#111C33;border-color:#233252}
+body.dark .ref-card{background:#17223C;border-color:#233252}
+body.dark .htable th.sortable:hover{background:#233252}
+body.dark .htable tr.row-sel td{background:#17223C}
 
 
 /* ── IMPORT OVERLAY ─────────────────────────────────────── */
@@ -309,6 +313,7 @@ footer p{color:rgba(255,255,255,.35);font-size:.7rem}
 .bldg-pill{background:#fff;border:1.5px solid var(--border);border-radius:8px;padding:6px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;letter-spacing:1px;color:var(--b3)}
 .bldg-pill small{color:var(--muted);font-weight:600;margin-left:6px}
 tr.row-click{cursor:pointer}
+.htable tr.row-click.row-sel td{background:#F5F8FF}
 
 /* ── NAME SWEEP ──────────────────────────────────────────── */
 .sweep-form{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
@@ -1823,8 +1828,8 @@ function renderDiscSecBreakdown(key){
     return;
   }
   tbody.innerHTML = rows.map(x=>{
-    const sel = ACTIVE_DISC_SECTION===x.sec.id ? ' style="background:#F5F8FF"' : '';
-    return `<tr class="row-click"${sel} onclick="filterDiscSection('${x.sec.id}')" title="Show only ${escapeAttr(x.sec.label)} problems below">
+    const sel = ACTIVE_DISC_SECTION===x.sec.id ? 'row-click row-sel' : 'row-click';
+    return `<tr class="${sel}" onclick="filterDiscSection('${x.sec.id}')" title="Show only ${escapeAttr(x.sec.label)} problems below">
       <td><span class="badge-code">${escapeHtml(x.sec.short)}</span> ${escapeHtml(x.sec.label)}</td>
       <td>${x.s.total}</td>
       <td style="color:var(--ok2);font-weight:700">${x.s.pass}</td>

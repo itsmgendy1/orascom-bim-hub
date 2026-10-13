@@ -56,6 +56,7 @@ global.fetch = () => Promise.reject(new Error('offline'));
 store.ohub_projects = JSON.stringify([
   { id: 'P1', code: 'DP01', name: 'Test Project' },
   { id: 'P2', code: 'DP02', name: '<img src=x onerror=alert(1)>' },
+  { id: 'PP', code: 'P0152', name: 'P0152 Portaluna Sales Resort' },
 ]);
 store.ohub_active_project = JSON.stringify('P1');
 store.ohub_models = JSON.stringify([
@@ -100,6 +101,25 @@ ok(d.length > 0 && d.indexOf('Stage gates') >= 0, 'stages renders for P2');
 const stripped = d.replace(/&lt;.*?&gt;/g, '');
 ok(!/<(img|script|svg)[\s>]/i.test(stripped) && !/ on(error|load)=/i.test(stripped), 'project name renders as text');
 ok(/&lt;img/i.test(d), 'payload visibly escaped');
+
+// 5. Portaluna buildings seed: one package card per building, idempotent,
+//    Portaluna-gated (other projects untouched). PP was seeded pre-boot.
+OHub.setActiveProject('PP');
+OHub.switchView('program');
+const pg0 = (els['program-content'] || {}).innerHTML || '';
+ok(pg0.indexOf('Add 10 Portaluna buildings') >= 0, 'program offers building seed');
+const added = OHub.seedPortalunaBuildings();
+ok(added === 10, 'seed adds 10', added);
+const mods = JSON.parse(store.ohub_models || '[]');
+ok(mods.length === 12 && mods.filter((m) => m.project === 'PP').length === 10, 'models stored for PP');
+const pkgs = Array.from(new Set(mods.filter((m) => m.project === 'PP').map((m) => m.package))).sort();
+ok(pkgs.length === 10 && pkgs[0].indexOf('HT01 MAIN BUILDING') >= 0 && pkgs[9].indexOf('BH01 BOH - GUARD HOUSE') >= 0, 'packages ordered per building', pkgs.join(' | '));
+OHub.switchView('program');
+const pg1 = (els['program-content'] || {}).innerHTML || '';
+ok(pg1.indexOf('HT01 MAIN BUILDING') >= 0 && pg1.indexOf('BH01 BOH - GUARD HOUSE') >= 0, 'program cards render');
+ok(OHub.seedPortalunaBuildings() === 0, 're-seed adds nothing', JSON.parse(store.ohub_models || '[]').length);
+OHub.setActiveProject('P1');
+ok(OHub.seedPortalunaBuildings() === 0, 'non-Portaluna untouched', JSON.parse(store.ohub_models || '[]').length);
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

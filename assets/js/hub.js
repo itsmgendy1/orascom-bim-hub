@@ -1614,7 +1614,8 @@
     if(!pkgs.length){
       host.innerHTML = emptyState('🗂','No packages yet',
         'Add models with a package set (Models tab) and they will appear here as program cards.',
-        '<button class="btn btn-primary" onclick="OHub.switchView(\'models\')">Open Models</button>');
+        '<button class="btn btn-primary" onclick="OHub.switchView(\'models\')">Open Models</button> '+
+        (isPortalunaProject(p) ? '<button class="btn btn-gold" onclick="OHub.seedPortalunaBuildings()">+ Add 10 Portaluna buildings</button>' : ''));
       return;
     }
     var openIss = state.issues.filter(function(i){ return i.project===p.id && (i.status==='Open'||i.status==='In Progress'); });
@@ -1639,7 +1640,9 @@
       '</div>';
     }).join('');
     var totPct = totGates ? Math.round(totAppr/totGates*100) : 0;
+    var seedMissing = isPortalunaProject(p) ? portalunaMissing(p.id).length : 0;
     host.innerHTML =
+      (seedMissing ? '<div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><span style="font-size:.83rem;">'+seedMissing+' of 10 Portaluna buildings missing.</span><button class="btn btn-gold btn-sm" onclick="OHub.seedPortalunaBuildings()">+ Add missing buildings</button></div>' : '')+
       '<div class="grid kpi-grid" style="margin-bottom:14px;">'+
         '<div class="card kpi-card"><div class="kpi-label">Packages</div><div class="kpi-value">'+pkgs.length+'</div></div>'+
         '<div class="card kpi-card"><div class="kpi-label">Models</div><div class="kpi-value">'+models.length+'</div></div>'+
@@ -1647,6 +1650,52 @@
         '<div class="card kpi-card"><div class="kpi-label">Gates approved</div><div class="kpi-value">'+totPct+'%</div></div>'+
       '</div>'+
       '<div class="grid grid-3">'+cards+'</div>';
+  }
+
+  /* ---------------- Portaluna buildings (Program packages) ---------------- */
+  // Owner-provided building list for the P0152 Portaluna Sales Resort: one
+  // package card per building, each backed by a model record (cards only
+  // render for packages that have models). Idempotent: re-running adds only
+  // what is missing, never duplicates.
+  var PORTALUNA_BUILDINGS = [
+    {code:'HT01', name:'HT01 MAIN BUILDING'},
+    {code:'SF01', name:'SF01 STAFF ACCOMMODATION'},
+    {code:'FB01', name:'FB01 SPECIALITY RESTAURANT'},
+    {code:'FB02', name:'FB02 POOL BAR & GRILL'},
+    {code:'FB03', name:'FB03 BEACH CLUB'},
+    {code:'UB01', name:'UB01 Utility Yard'},
+    {code:'UB02', name:'UB02 UTILITY BUILDING'},
+    {code:'CR01', name:'CR01 CHANGING ROOM'},
+    {code:'GB01', name:'GB01 HOTEL - MAIN GATE'},
+    {code:'BH01', name:'BH01 BOH - GUARD HOUSE'}
+  ];
+  function isPortalunaProject(p){
+    if(!p) return false;
+    return String(p.code||'')==='P0152' || /p0152|portaluna/i.test(String(p.name||'')+' '+String(p.code||''));
+  }
+  function portalunaMissing(pid){
+    return PORTALUNA_BUILDINGS.filter(function(b){
+      return !state.models.some(function(m){ return m.project===pid && String(m.code||'')===b.code; });
+    });
+  }
+  function seedPortalunaBuildings(){
+    var p = activeProject();
+    if(!p || !isPortalunaProject(p)){ toast('Select the Portaluna project first'); return 0; }
+    var missing = portalunaMissing(p.id);
+    missing.forEach(function(b, i){
+      state.models.push({id:uid('mod'), project:p.id, name:b.name, code:b.code,
+        package:String(PORTALUNA_BUILDINGS.indexOf(b)+1).padStart(2,'0')+'. '+b.name,
+        discipline:'', revision:'', status:'WIP', owner:'', updated:Date.now()});
+    });
+    if(missing.length){
+      persist('models');
+      logActivity('Added '+missing.length+' Portaluna building(s) to '+p.name);
+      if(currentView==='program') renderProgram();
+      if(currentView==='models') renderModels();
+      renderDashboard();
+      toast('Added '+missing.length+' building(s)');
+    } else { toast('All 10 Portaluna buildings already present'); }
+    return missing.length;
   }
 
   /* ---------------- Models registry ---------------- */
@@ -4701,6 +4750,7 @@
     gisCancelDraw: gisCancelDraw,
     openModelModal: openModelModal,
     programOpenPackage: programOpenPackage,
+    seedPortalunaBuildings: seedPortalunaBuildings,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,
     seedDemo: seedDemo,

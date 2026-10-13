@@ -50,6 +50,7 @@ body.dark #det,body.dark #disc-det,body.dark .dc,body.dark .ref-panel,body.dark 
 body.dark .ref-card{background:#17223C;border-color:#233252}
 body.dark .htable th.sortable:hover{background:#233252}
 body.dark .htable tr.row-sel td{background:#17223C}
+body.dark .tab-btn:hover,body.dark .kpi-val.blue,body.dark code,body.dark .seg:not(.seg-ok):not(.seg-bad),body.dark .insp-title,body.dark .ref-card h4,body.dark .ref-card p,body.dark .bldg-pill,body.dark .filter-btn:hover:not(.act),body.dark .blue-label{color:#fff !important}
 
 
 /* ── IMPORT OVERLAY ─────────────────────────────────────── */
@@ -511,14 +512,14 @@ mark{background:var(--g2);color:var(--b1);padding:0 2px;border-radius:3px;font-w
       <button class="filter-btn" id="disc-sec-clear" style="display:none" onclick="clearDiscSection()">× Show all sections</button>
       <button class="filter-btn" onclick="viewDiscInResults()">View Full Results Table</button>
     </div>
-    <div style="padding:12px 22px 0;font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;color:var(--b3);letter-spacing:1.4px;text-transform:uppercase">Sections in this discipline — click a row to filter the problems below</div>
+    <div class="blue-label" style="padding:12px 22px 0;font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;color:var(--b3);letter-spacing:1.4px;text-transform:uppercase">Sections in this discipline — click a row to filter the problems below</div>
     <div class="mwrap" style="padding:6px 0">
       <table class="htable">
         <thead><tr><th>Section</th><th>Checked</th><th>Pass</th><th>Fail</th><th>Pass Rate</th><th>Top Error</th></tr></thead>
         <tbody id="disc-sec-tbody"></tbody>
       </table>
     </div>
-    <div style="padding:12px 22px 0;font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;color:var(--b3);letter-spacing:1.4px;text-transform:uppercase">Problems (failed first)</div>
+    <div class="blue-label" style="padding:12px 22px 0;font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;color:var(--b3);letter-spacing:1.4px;text-transform:uppercase">Problems (failed first)</div>
     <div class="mwrap" style="padding:6px 0">
       <table class="htable">
         <thead><tr><th>Status</th><th>Section</th><th>Category</th><th>Family / Element</th><th>Actual Name</th><th>Segments</th><th>Expected Rule</th><th>Reason</th></tr></thead>

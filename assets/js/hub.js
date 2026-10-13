@@ -1615,7 +1615,7 @@
       host.innerHTML = emptyState('🗂','No packages yet',
         'Add models with a package set (Models tab) and they will appear here as program cards.',
         '<button class="btn btn-primary" onclick="OHub.switchView(\'models\')">Open Models</button> '+
-        (isPortalunaProject(p) ? '<button class="btn btn-gold" onclick="OHub.seedPortalunaBuildings()">+ Add 10 Portaluna buildings</button>' : ''));
+        (isPortalunaProject(p) ? '<button class="btn btn-gold" onclick="OHub.seedPortalunaBuildings()">+ Add Portaluna building models</button>' : ''));
       return;
     }
     var openIss = state.issues.filter(function(i){ return i.project===p.id && (i.status==='Open'||i.status==='In Progress'); });
@@ -1641,8 +1641,10 @@
     }).join('');
     var totPct = totGates ? Math.round(totAppr/totGates*100) : 0;
     var seedMissing = isPortalunaProject(p) ? portalunaMissing(p.id).length : 0;
+    var seedTotal = 0;
+    PORTALUNA_BUILDINGS.forEach(function(b){ seedTotal += b.models.length; });
     host.innerHTML =
-      (seedMissing ? '<div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><span style="font-size:.83rem;">'+seedMissing+' of 10 Portaluna buildings missing.</span><button class="btn btn-gold btn-sm" onclick="OHub.seedPortalunaBuildings()">+ Add missing buildings</button></div>' : '')+
+      (seedMissing ? '<div class="card" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><span style="font-size:.83rem;">'+seedMissing+' of '+seedTotal+' Portaluna building models missing.</span><button class="btn btn-gold btn-sm" onclick="OHub.seedPortalunaBuildings()">+ Add missing</button></div>' : '')+
       '<div class="grid kpi-grid" style="margin-bottom:14px;">'+
         '<div class="card kpi-card"><div class="kpi-label">Packages</div><div class="kpi-value">'+pkgs.length+'</div></div>'+
         '<div class="card kpi-card"><div class="kpi-label">Models</div><div class="kpi-value">'+models.length+'</div></div>'+
@@ -1653,48 +1655,66 @@
   }
 
   /* ---------------- Portaluna buildings (Program packages) ---------------- */
-  // Owner-provided building list for the P0152 Portaluna Sales Resort: one
-  // package card per building, each backed by a model record (cards only
-  // render for packages that have models). Idempotent: re-running adds only
-  // what is missing, never duplicates.
+  // Owner federation strategy (Appendix 09): one package card per building,
+  // each backed by its federated discipline models (cards only render for
+  // packages that have models). Idempotent: re-running adds only what is
+  // missing, never duplicates. Legacy singletons (one bare model per
+  // building, no discipline) from the first seed are replaced by the full
+  // set — package names are unchanged so gate history survives.
   var PORTALUNA_BUILDINGS = [
-    {code:'HT01', name:'HT01 MAIN BUILDING'},
-    {code:'SF01', name:'SF01 STAFF ACCOMMODATION'},
-    {code:'FB01', name:'FB01 SPECIALITY RESTAURANT'},
-    {code:'FB02', name:'FB02 POOL BAR & GRILL'},
-    {code:'FB03', name:'FB03 BEACH CLUB'},
-    {code:'UB01', name:'UB01 Utility Yard'},
-    {code:'UB02', name:'UB02 UTILITY BUILDING'},
-    {code:'CR01', name:'CR01 CHANGING ROOM'},
-    {code:'GB01', name:'GB01 HOTEL - MAIN GATE'},
-    {code:'BH01', name:'BH01 BOH - GUARD HOUSE'}
+    {code:'HT01', name:'HT01 MAIN BUILDING', models:['Architectural','ID','Drainage','Water Supply','Structural','Steel Structure','Vertical Transportation','HVAC','Fire','Electrical','Telecommunication','BMS','FF&E']},
+    {code:'SF01', name:'SF01 STAFF ACCOMMODATION', models:['Architectural','Drainage','Water Supply','Structural','HVAC','Fire','Electrical','Telecommunication','BMS','FF&E']},
+    {code:'FB01', name:'FB01 SPECIALITY RESTAURANT', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS','FF&E']},
+    {code:'FB02', name:'FB02 POOL BAR & GRILL', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS','FF&E']},
+    {code:'FB03', name:'FB03 BEACH CLUB', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS','FF&E']},
+    {code:'UB01', name:'UB01 Utility Yard', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS']},
+    {code:'UB02', name:'UB02 UTILITY BUILDING', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS']},
+    {code:'CR01', name:'CR01 CHANGING ROOM', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS']},
+    {code:'GB01', name:'GB01 HOTEL - MAIN GATE', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS']},
+    {code:'BH01', name:'BH01 BOH - GUARD HOUSE', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS']}
   ];
+  function portalunaPackage(b){ return String(PORTALUNA_BUILDINGS.indexOf(b)+1).padStart(2,'0')+'. '+b.name; }
   function isPortalunaProject(p){
     if(!p) return false;
     return String(p.code||'')==='P0152' || /p0152|portaluna/i.test(String(p.name||'')+' '+String(p.code||''));
   }
   function portalunaMissing(pid){
-    return PORTALUNA_BUILDINGS.filter(function(b){
-      return !state.models.some(function(m){ return m.project===pid && String(m.code||'')===b.code; });
+    var out = [];
+    PORTALUNA_BUILDINGS.forEach(function(b){
+      b.models.forEach(function(disc){
+        var has = state.models.some(function(m){ return m.project===pid && String(m.code||'')===b.code && String(m.discipline||'')===disc; });
+        if(!has) out.push({b:b, disc:disc});
+      });
     });
+    return out;
   }
   function seedPortalunaBuildings(){
     var p = activeProject();
     if(!p || !isPortalunaProject(p)){ toast('Select the Portaluna project first'); return 0; }
-    var missing = portalunaMissing(p.id);
-    missing.forEach(function(b, i){
-      state.models.push({id:uid('mod'), project:p.id, name:b.name, code:b.code,
-        package:String(PORTALUNA_BUILDINGS.indexOf(b)+1).padStart(2,'0')+'. '+b.name,
-        discipline:'', revision:'', status:'WIP', owner:'', updated:Date.now()});
+    var migrated = 0;
+    PORTALUNA_BUILDINGS.forEach(function(b){
+      var singleton = null;
+      state.models.forEach(function(m){
+        if(m.project===p.id && String(m.code||'')===b.code && !String(m.discipline||'') && String(m.name||'')===b.name) singleton = m;
+      });
+      if(singleton){
+        state.models = state.models.filter(function(m){ return m!==singleton; });
+        migrated++;
+      }
     });
-    if(missing.length){
+    var missing = portalunaMissing(p.id);
+    missing.forEach(function(it){
+      state.models.push({id:uid('mod'), project:p.id, name:it.b.code+' '+it.disc, code:it.b.code,
+        package:portalunaPackage(it.b), discipline:it.disc, revision:'', status:'WIP', owner:'', updated:Date.now()});
+    });
+    if(missing.length || migrated){
       persist('models');
-      logActivity('Added '+missing.length+' Portaluna building(s) to '+p.name);
+      logActivity('Portaluna buildings: +'+missing.length+' model(s)'+(migrated?' (replaced '+migrated+' bare singleton(s))':'')+' in '+p.name);
       if(currentView==='program') renderProgram();
       if(currentView==='models') renderModels();
       renderDashboard();
-      toast('Added '+missing.length+' building(s)');
-    } else { toast('All 10 Portaluna buildings already present'); }
+      toast('Added '+missing.length+' model(s)'+(migrated?' · replaced '+migrated:''));
+    } else { toast('All Portaluna building models already present'); }
     return missing.length;
   }
 

@@ -62,6 +62,7 @@ store.ohub_active_project = JSON.stringify('P1');
 store.ohub_models = JSON.stringify([
   { project: 'P1', package: 'Structures' },
   { project: 'P1', package: 'MEP' },
+  { project: 'PP', name: 'HT01 MAIN BUILDING', code: 'HT01', package: '01. HT01 MAIN BUILDING', discipline: '' },
 ]);
 store.ohub_gates = JSON.stringify({});
 
@@ -107,11 +108,14 @@ ok(/&lt;img/i.test(d), 'payload visibly escaped');
 OHub.setActiveProject('PP');
 OHub.switchView('program');
 const pg0 = (els['program-content'] || {}).innerHTML || '';
-ok(pg0.indexOf('Add 10 Portaluna buildings') >= 0, 'program offers building seed');
+ok(pg0.indexOf('Portaluna building models missing') >= 0, 'program offers building seed');
 const added = OHub.seedPortalunaBuildings();
-ok(added === 10, 'seed adds 10', added);
+ok(added === 90, 'seed adds 90 federation models', added);
 const mods = JSON.parse(store.ohub_models || '[]');
-ok(mods.length === 12 && mods.filter((m) => m.project === 'PP').length === 10, 'models stored for PP');
+const ppm = mods.filter((m) => m.project === 'PP');
+ok(mods.length === 92 && ppm.length === 90, 'models stored for PP');
+ok(!ppm.some((m) => m.name === 'HT01 MAIN BUILDING'), 'legacy singleton replaced');
+ok(ppm.filter((m) => m.code === 'HT01').length === 13, 'HT01 full set');
 const pkgs = Array.from(new Set(mods.filter((m) => m.project === 'PP').map((m) => m.package))).sort();
 ok(pkgs.length === 10 && pkgs[0].indexOf('HT01 MAIN BUILDING') >= 0 && pkgs[9].indexOf('BH01 BOH - GUARD HOUSE') >= 0, 'packages ordered per building', pkgs.join(' | '));
 OHub.switchView('program');

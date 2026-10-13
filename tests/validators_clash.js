@@ -47,7 +47,7 @@ global.fetch = () => Promise.reject(new Error('offline'));
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*(?:src=|type="application\/ld\+json"|type="application\/json"))[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,clashDiscUnmapped,clashSelfDisc,clashApproved,clashSourceApproved,clashRowHtml,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
+eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,clashDiscUnmapped,clashSelfDisc,clashApproved,clashSourceApproved,clashRowHtml,clashNormTest,clashTestHealth,CLASH_TRADE_MECH,CLASH_TRADE_ELEC,CLASH_KNOWN_PREFIX};');
 const M = module.exports;
 const rules = JSON.parse(JSON.stringify(M.CLASH_RULES_DEFAULT.rules)).map(M.clashRuleCompile);
 const byId = (id) => rules.filter((r) => r.id === id)[0];
@@ -188,6 +188,31 @@ ok(M.clashSourceApproved({ statusRaw: 'Active' }) === false, 'active not source-
 ok(M.clashSourceApproved({ statusRaw: 'Resolved' }) === false, 'resolved not source-approved');
 ok(M.clashSourceApproved({}) === false, 'missing status not approved');
 ok(typeof M.clashRowHtml({ test: 'T', clash: '', aName: 'A', bName: 'B', aDisc: 'AR', bDisc: 'PS', distance: '', priority: 'High', bucket: 'Open', statusRaw: '', date: '' }) === 'string', 'row builder returns html');
+
+// Test health / setup QA.
+ok(M.clashNormTest('AR-X  -vs-  PS-Y') === 'ar-x -vs- ps-y', 'norm test');
+const NOW = Date.parse('2026-10-13T00:00:00Z');
+const ago = (d) => new Date(NOW - d * 86400000).toISOString();
+const H = (test, statusRaw, distance, date) => ({ test, statusRaw, distance, date });
+const hClean = M.clashTestHealth([H('AR-A -vs- PS-B', 'Active', '0.005', ago(2))], NOW);
+ok(hClean.score === 100 && hClean.tests === 1, 'clean bill', JSON.stringify(hClean.score));
+const hDup = M.clashTestHealth([H('AR-X -vs- PS-Y', 'Active', '0.005', ago(2)), H('AR-X  -vs-  PS-Y', 'Active', '0.005', ago(2))], NOW);
+ok(hDup.checks.filter((c) => c.name === 'Duplicate test names')[0].status === 'Fail', 'duplicate variants fail');
+const hMir = M.clashTestHealth([H('AR-X -vs- PS-Y', 'Active', '0.005', ago(2)), H('PS-Y -vs- AR-X', 'Active', '0.005', ago(2))], NOW);
+ok(hMir.checks.filter((c) => c.name.indexOf('Mirror') === 0)[0].status === 'Info', 'mirrors info');
+const hSelf = M.clashTestHealth([H('AR-X -vs- AR-X', 'Active', '0.005', ago(2))], NOW);
+ok(hSelf.checks.filter((c) => c.name.indexOf('Self-pair') === 0)[0].status === 'Fail', 'self-pair fails');
+const hBig = M.clashTestHealth([H('T', 'Approved', '0.06', ago(2))], NOW);
+ok(hBig.checks.filter((c) => c.name.indexOf('Big approval') === 0)[0].status === 'Fail', 'big approval fails');
+const hOld = M.clashTestHealth([H('T', 'Active', '0.005', ago(40))], NOW);
+ok(hOld.checks.filter((c) => c.name.indexOf('Stale open') === 0)[0].status === 'Info', 'old open info');
+const hOldOk = M.clashTestHealth([H('T', 'Resolved', '0.005', ago(40))], NOW);
+ok(hOldOk.checks.filter((c) => c.name.indexOf('Stale open') === 0)[0].status === 'Pass', 'resolved not stale');
+const hPre = M.clashTestHealth([H('ZZ-A -vs- QQ-B', 'Active', '0.005', ago(2))], NOW);
+ok(hPre.checks.filter((c) => c.name.indexOf('Unknown') === 0)[0].status === 'Info', 'unknown prefix info');
+const hMix = M.clashTestHealth([H('AR-X -vs- AR-X', 'Active', '0.005', ago(2)), H('AR-X  -vs-  AR-X', 'Active', '0.005', ago(2))], NOW);
+ok(hMix.score === 60, 'score math (3 pass 2 fail, 1 info)', hMix.score);
+ok(M.clashTestHealth([]).score === 100, 'empty scores 100');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

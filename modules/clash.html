@@ -235,6 +235,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
   <button class="tab-btn" data-tab="t-clashes" onclick="switchTab('t-clashes')">Clashes</button>
   <button class="tab-btn" data-tab="t-disc" onclick="switchTab('t-disc')">Disciplines</button>
   <button class="tab-btn" data-tab="t-det" onclick="switchTab('t-det')">Details</button>
+  <button class="tab-btn" data-tab="t-health" onclick="switchTab('t-health')">Test Health</button>
   <button class="tab-btn" data-tab="t-auto" onclick="switchTab('t-auto')">Auto-Approval</button>
 </div>
 <main>
@@ -280,6 +281,14 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
     </div>
     <div class="ccard"><h3>Approved clashes — with approval details</h3>
       <div class="tbl-wrap"><table class="dtbl" id="det-approved-table"></table></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="t-health">
+    <div class="sec">Test Health</div>
+    <div class="kpi-row" id="health-kpis" style="margin-top:0"></div>
+    <div class="ccard"><h3>Setup QA — duplicates, mirrors, self-pairs, audits</h3>
+      <div class="tbl-wrap"><table class="dtbl" id="health-table"></table></div>
     </div>
   </div>
 
@@ -922,6 +931,7 @@ function renderAll(){
   renderClashTable();
   renderTestDiscAnalysis();
   renderDetails();
+  renderTestHealth();
 }
 
 function clashPair(c){ return (c.aDisc||'Unspecified') + ' \u2194 ' + (c.bDisc||'Unspecified'); }
@@ -1004,8 +1014,93 @@ function renderCharts(){
   });
 }
 
-/* True when no item carries a test side or item discipline — i.e. the
-   Test / Item-discipline columns were never mapped at import. */
+/* ═══ TEST HEALTH / SETUP QA (pure) ═══
+   Flat-data subset of the Navisworks suite's QaChecks + TestMatrix, run at
+   import: duplicate test names, mirror pairs (A-vs-B and B-vs-A), self-pairs,
+   big approvals (>50 mm), stale opens (>30 d), unknown discipline prefixes.
+   Score = round(100*Pass/(Pass+Fail)); Info excluded. Verdicts: Fail needs
+   action, Info is review-only. */
+var CLASH_KNOWN_PREFIX = ['AR','ST','AC','WS','DR','PS','FS','EL','BS','LAN','ID','LV','TE','FF','FC','FL','VT'];
+function clashNormTest(t){ return String(t||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function clashTestHealth(items, nowMs){
+  var xs = items||[], now = nowMs||Date.now();
+  var checks = [];
+  function add(name, status, detail){ checks.push({name:name, status:status, detail:detail||''}); }
+  function sample(arr, n){ return arr.slice(0,n).join('; ')+(arr.length>n?' (+'+(arr.length-n)+' more)':''); }
+  // Unique tests: norm name -> distinct raw spellings.
+  var tests = {};
+  xs.forEach(function(c){
+    var raw = String(c.test||'').trim();
+    var k = clashNormTest(raw);
+    if(!k) return;
+    if(!tests[k]) tests[k] = {raw:raw, raws:{}, count:0};
+    tests[k].raws[raw] = 1; tests[k].count++;
+  });
+  var names = Object.keys(tests);
+  var dups = names.filter(function(k){ return Object.keys(tests[k].raws).length>1; });
+  add('Duplicate test names', dups.length?'Fail':'Pass',
+    dups.length ? dups.length+' variant group(s): '+sample(dups.map(function(k){ return Object.keys(tests[k].raws).join(' / '); }), 5) : 'All test names are unique.');
+  // Group by unordered side pair: catches true mirrors (A-vs-B + B-vs-A)
+  // and respellings ('A-vs-B' vs 'A -vs- B'), which normalize differently.
+  var pairGroups = {};
+  names.forEach(function(n){
+    var sp = clashSplitTest(n);
+    var a = sp[0], b = sp[1];
+    if(!a || !b) return;
+    var k = a<b ? a+'|'+b : b+'|'+a;
+    if(!pairGroups[k]) pairGroups[k] = [];
+    pairGroups[k].push(n);
+  });
+  var mirrors = [];
+  Object.keys(pairGroups).forEach(function(k){
+    var raws = [];
+    pairGroups[k].forEach(function(n){
+      Object.keys(tests[n].raws).forEach(function(r){ if(raws.indexOf(r)===-1) raws.push(r); });
+    });
+    if(raws.length>1) mirrors.push(raws.join('  /  '));
+  });
+  add('Mirror pairs (A-vs-B and B-vs-A)', mirrors.length?'Info':'Pass',
+    mirrors.length ? mirrors.length+' mirrored/respelled pair(s): '+sample(mirrors, 5)+'. Mirrors with results are kept; remove only the empty side.' : 'No mirrored test pairs.');
+  var selfs = names.filter(function(n){
+    var sp = clashSplitTest(n);
+    return sp[0] && sp[0]===sp[1];
+  });
+  add('Self-pairs (A-vs-A)', selfs.length?'Fail':'Pass',
+    selfs.length ? selfs.length+' self-pair test(s): '+sample(selfs.map(function(k){ return tests[k].raw; }), 5) : 'No self-pair tests.');
+  var big = [];
+  xs.forEach(function(c){
+    if(!clashSourceApproved(c)) return;
+    var mm = clashParseDist(c.distance)*1000;
+    if(mm>50) big.push((c.test||'?')+': '+(c.clash||'?')+' ('+mm.toFixed(1)+' mm)');
+  });
+  add('Big approvals (>50 mm)', big.length?'Fail':'Pass',
+    big.length ? big.length+' approved clash(es) over 50 mm: '+sample(big, 5) : 'No approval over 50 mm.');
+  var old = [];
+  xs.forEach(function(c){
+    var st = String(c.statusRaw||'').toLowerCase();
+    if(st!=='new' && st!=='active') return;
+    var t = Date.parse(c.date||'');
+    if(isNaN(t)) return;
+    var age = Math.floor((now-t)/86400000);
+    if(age>30) old.push((c.test||'?')+': '+(c.clash||'?')+' ('+age+' d)');
+  });
+  add('Stale opens (>30 d)', old.length?'Info':'Pass',
+    old.length ? old.length+' open clash(es) older than 30 days: '+sample(old, 5) : 'No open clash older than 30 days.');
+  var seenCodes = {}, unknown = [];
+  xs.forEach(function(c){
+    var dd = clashTestDiscs(c);
+    [dd[0], dd[1]].forEach(function(d){
+      if(!d || d==='Unspecified' || seenCodes[d]) return;
+      seenCodes[d] = 1;
+      if(CLASH_KNOWN_PREFIX.indexOf(d)===-1) unknown.push(d);
+    });
+  });
+  add('Unknown discipline prefixes', unknown.length?'Info':'Pass',
+    unknown.length ? 'Outside the known set: '+unknown.sort().join(', ')+'.' : 'All '+Object.keys(seenCodes).length+' code(s) are known.');
+  var np = 0, nf = 0;
+  checks.forEach(function(ch){ if(ch.status==='Pass') np++; else if(ch.status==='Fail') nf++; });
+  return {checks:checks, score:(np+nf)?Math.round(100*np/(np+nf)):100, tests:names.length};
+}
 function clashDiscUnmapped(items){
   var xs = items||[];
   if(!xs.length) return false;
@@ -1147,6 +1242,27 @@ function clashApproved(c){ return !!(c && c.auto); }
 /* Approved in the source report itself (e.g. Navisworks Approved status),
    independent of this dashboard's auto-approval. */
 function clashSourceApproved(c){ return !!c && /approved/i.test(String(c.statusRaw||'')); }
+function renderTestHealth(){
+  var h = clashTestHealth(CLASH_ITEMS);
+  var kh = document.getElementById('health-kpis');
+  function pill(st){
+    if(st==='Pass') return '<span class="badge badge-closed">Pass</span>';
+    if(st==='Fail') return '<span class="badge badge-high">Fail</span>';
+    return '<span class="badge" style="background:#E8EEF7;color:var(--b3);">Info</span>';
+  }
+  if(kh) kh.innerHTML =
+    '<div class="kpi c-blue"><div class="kpi-lbl">Setup QA score</div><div class="kpi-val">'+h.score+'%</div><div class="kpi-sub">'+h.tests+' test(s) checked</div></div>'+
+    '<div class="kpi c-green"><div class="kpi-lbl">Passed</div><div class="kpi-val ok">'+h.checks.filter(function(c){return c.status==='Pass';}).length+'</div><div class="kpi-sub">checks green</div></div>'+
+    '<div class="kpi c-red"><div class="kpi-lbl">Failed</div><div class="kpi-val bad">'+h.checks.filter(function(c){return c.status==='Fail';}).length+'</div><div class="kpi-sub">need action</div></div>';
+  var host = document.getElementById('health-table');
+  if(host){
+    host.innerHTML = '<thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>'+
+      (CLASH_ITEMS.length ? h.checks.map(function(c){
+        return '<tr><td><strong>'+escapeHtml(c.name)+'</strong></td><td>'+pill(c.status)+'</td><td style="font-size:.78rem;">'+escapeHtml(c.detail)+'</td></tr>';
+      }).join('')
+      : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:14px;">Import data first.</td></tr>')+'</tbody>';
+  }
+}
 function renderDetails(){
   var a = clashDiscAnalysis(CLASH_ITEMS);
   var sel = document.getElementById('det-disc-f');

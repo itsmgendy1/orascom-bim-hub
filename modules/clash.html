@@ -1277,7 +1277,15 @@ function reportHubScore(){
   try{
     if(typeof window.OrascomHubReportScore==='function'){
       var stats = computeStats();
-      window.OrascomHubReportScore(stats.resolutionRate, stats.open, {projectField:(document.getElementById('project-name-input')||{}).value||''});
+      var _pn = (document.getElementById('project-name-input')||{}).value||'';
+      var _ff = [];
+      try{
+        CLASH_ITEMS.filter(function(c){ return c.bucket==='Open' && !c.auto; }).slice(0,20).forEach(function(c){
+          var pr = c.priority;
+          _ff.push({desc:'Clash '+(c.test||'?')+': '+(c.aName||'?')+' vs '+(c.bName||'?'), severity:(pr==='High'||pr==='Medium'||pr==='Low')?pr:'Medium'});
+        });
+      }catch(_e){}
+      window.OrascomHubReportScore(stats.resolutionRate, stats.open, {projectField:_pn, findings:_ff});
     }
   }catch(e){}
 }

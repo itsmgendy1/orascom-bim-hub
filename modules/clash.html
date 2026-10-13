@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Clash Analysis Dashboard</title>
-<meta name="description" content="A client-side BIM coordination dashboard for tracking clash detection results: open/resolved rates, priority breakdown, and discipline pairs.">
+<meta name="description" content="A client-side BIM coordination dashboard for tracking clash detection results: open/resolved rates, priority breakdown, and per-discipline open/closed analysis.">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230A1E40' width='100' height='100' rx='15'/><text x='50' y='68' text-anchor='middle' fill='%23F5A623' font-size='44' font-family='Arial' font-weight='bold'>CL</text></svg>">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob: 'self'; connect-src http://localhost:* http://127.0.0.1:* https://cdnjs.cloudflare.com; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -261,12 +261,11 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
   </div>
 
   <div class="tab-content" id="t-disc">
-    <div class="sec">Discipline pairs</div>
-    <div class="ccard"><h3>Clash count by discipline pair</h3><div class="ch" style="height:340px"><canvas id="ch-disc"></canvas></div></div>
+    <div class="sec">Disciplines</div>
+    <div class="ccard"><h3>Open / closed by discipline</h3><div class="ch" style="height:340px"><canvas id="ch-testdisc"></canvas></div></div>
     <div class="kpi-row" id="testdisc-kpis" style="margin-top:14px"></div>
     <div class="ccard"><h3>Open / closed per discipline — from test names (cross pairs count in both)</h3><div id="testdisc-note" style="font-size:.78rem;color:var(--muted);margin:0 0 8px;"></div><div class="tbl-wrap"><table class="dtbl" id="testdisc-table"></table></div></div>
     <div class="ccard"><h3>Trade rollup — Mechanical (AC·WS·DR·PS·FS) vs Electrical (TE·EL·BS·VT)</h3><div class="tbl-wrap"><table class="dtbl" id="trade-table"></table></div></div>
-    <div class="ccard"><h3>Open / closed by discipline</h3><div class="ch" style="height:340px"><canvas id="ch-testdisc"></canvas></div></div>
   </div>
 
   <div class="tab-content" id="t-auto">
@@ -906,7 +905,6 @@ function renderAll(){
   populatePairFilter();
   populateDisciplineFilter();
   renderClashTable();
-  renderDisciplineChart();
   renderTestDiscAnalysis();
 }
 
@@ -990,38 +988,6 @@ function renderCharts(){
   });
 }
 
-function renderDisciplineChart(){
-  var counts = {};
-  CLASH_ITEMS.forEach(function(c){
-    var pair = (c.aDisc||'Unspecified') + ' \u2194 ' + (c.bDisc||'Unspecified');
-    counts[pair] = (counts[pair]||0)+1;
-  });
-  var entries = Object.entries(counts).sort(function(a,b){return b[1]-a[1];}).slice(0,12);
-  if(CHARTS.disc) CHARTS.disc.destroy();
-  CHARTS.disc = new Chart(document.getElementById('ch-disc'), {
-    type:'bar',
-    data:{ labels:entries.map(function(e){return e[0];}), datasets:[{ data:entries.map(function(e){return e[1];}), backgroundColor:'#2563B8' }] },
-    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true,ticks:{precision:0}}} }
-  });
-}
-
-/* True when no item carries a test side or item discipline — i.e. the
-   Test / Item-discipline columns were never mapped at import. */
-function clashDiscUnmapped(items){
-  var xs = items||[];
-  if(!xs.length) return false;
-  function mappedDisc(v){
-    v = String(v||'').trim();
-    return v!=='' && v.toUpperCase()!=='UNSPECIFIED';
-  }
-  for(var i=0;i<xs.length;i++){
-    var c = xs[i];
-    var dd = clashTestDiscs(c);
-    if((dd[0]||'')!=='' || (dd[1]||'')!=='') return false;
-    if(mappedDisc(c.aDisc) || mappedDisc(c.bDisc)) return false;
-  }
-  return true;
-}
 function renderTestDiscAnalysis(){
   var a = clashDiscAnalysis(CLASH_ITEMS);
   var unmapped = clashDiscUnmapped(CLASH_ITEMS);

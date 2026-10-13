@@ -52,7 +52,7 @@ global.indexedDB = undefined;
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={parseOne,parseQAQCWorkbook,normalizeMetric,safePct,rc,hex2rgba,escXml,discLabel,getQAQCFailsForDisc,_setQ:v=>{QAQC_DATA=v}};');
+eval(scripts + '\n;module.exports={parseOne,parseQAQCWorkbook,normalizeMetric,safePct,rc,hex2rgba,escXml,discLabel,getQAQCFailsForDisc,qaqcModelFindings,qaqcDisciplineModels,_setQ:v=>{QAQC_DATA=v}};');
 const M = module.exports;
 
 // 1. parseOne on a synthetic health export.
@@ -118,6 +118,24 @@ ok(M.escXml('<a href="x">y&z</a>') === '&lt;a href=&quot;x&quot;&gt;y&amp;z&lt;/
 ok(M.discLabel({ report_name: 'AR-UB02' }) === 'AR-UB02', 'label report');
 ok(M.discLabel({ code: 'ST', location: 'ZZ' }) === 'ST', 'label code fallback');
 ok(M.discLabel(null) === '', 'label null');
+
+// 4. Hub-bound per-discipline findings (model = code) + models.
+const MQD = [
+  { code: 'AR', pass_rate: 87, failed: 2, fail_checks: ['File Size', { name: 'Warnings' }, 'Purgeable Elements', 'Rooms', 'Extra Five', 'Extra Six'] },
+  { code: 'ST', pass_rate: 100, failed: 0, fail_checks: [] },
+  { code: '', pass_rate: 50, failed: 1, fail_checks: ['X'] },
+];
+const mff = M.qaqcModelFindings(MQD);
+ok(mff.length === 5, 'findings capped (4 AR + 1 codeless)', mff.length);
+ok(mff.every((f) => f.severity === 'High'), 'findings severity');
+ok(mff[0].desc === '[AR] File Size' && mff[0].model === 'AR', 'finding desc+model');
+ok(mff[1].desc === '[AR] Warnings' && mff[1].model === 'AR', 'finding object check');
+ok(mff.filter((f) => f.model === '').length === 1, 'empty code model blank');
+const mdm = M.qaqcDisciplineModels(MQD);
+ok(mdm.length === 2, 'models skip codeless', mdm.length);
+ok(mdm[0].code === 'AR' && mdm[0].score === 87 && mdm[0].issues === 2, 'model shape');
+ok(mdm[1].code === 'ST' && mdm[1].score === 100 && mdm[1].issues === 0, 'clean model');
+ok(M.qaqcModelFindings(null).length === 0 && M.qaqcDisciplineModels(null).length === 0, 'null-safe');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

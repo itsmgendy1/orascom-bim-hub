@@ -30,7 +30,7 @@
   var MODULES = [
     {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=103bc43c', weightKey:'midp'},
     {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=fa5a9ae2',      weightKey:'naming'},
-    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=41d178f0',          weightKey:'qaqc'},
+    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=9e688435',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},
     {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=a83f1a41',   weightKey:'parameters'},
     {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=f508d891',                 weightKey:'clash'}
@@ -376,8 +376,9 @@
       // fall back to whichever project is currently active in the Hub
       var pid = (ev.data.context && ev.data.context.id) || state.active;
       var findings = (ev.data.meta && ev.data.meta.findings) || ev.data.findings || [];
+      var models = (ev.data.meta && ev.data.meta.models) || ev.data.models || null;
       applyModuleScore(pid, srcModId, ev.data.score, ev.data.issues, findings,
-        ev.data.meta && ev.data.meta.projectField, null);
+        ev.data.meta && ev.data.meta.projectField, null, models);
     }
   });
 
@@ -386,7 +387,7 @@
   // postMessages and headless hubscores rollups share it, so dashboard math,
   // issue filing and history snapshots behave identically either way.
   // Hand-entered scores (auto:false) are NEVER clobbered by automation.
-  function applyModuleScore(pid, modId, score, issues, findings, enteredName, batch){
+  function applyModuleScore(pid, modId, score, issues, findings, enteredName, batch, models){
     if(!pid) return false;
     var existing = state.scores[pid] && state.scores[pid][modId];
     if(existing && !existing.auto) return false;
@@ -404,6 +405,7 @@
     var mod = MODULES.find(function(m){return m.id===modId;});
     logActivity((mod?mod.label:modId)+' auto-reported '+s+'%'+(proj?' for '+proj.name:'')+(batch?' (nightly '+batch+')':''), 'ok');
     if(pid && findings && findings.length) fileAutoIssues(pid, modId, findings);
+    if(pid && models && models.length) upsertDisciplineModels(pid, models);
     snapshotHistory(pid);
     if(currentView==='dashboard') renderDashboard();
     if(currentView==='quality-center') renderQualityCenter();
@@ -411,8 +413,31 @@
     return true;
   }
 
-  /* ---------------- validator findings -> Hub issues ---------------- */
-  // Modules may attach up to ~20 concrete findings {desc, severity, model?}
+  /* Discipline models from validator reports (e.g. Model Checker HTMLs,
+     one model per discipline code). Upsert by (project, code-as-name) so the
+     Models tab lists each discipline model with its filed issues; never
+     removes or renames anything, only stamps the discipline. */
+  function upsertDisciplineModels(pid, models){
+    var changed = false;
+    (models||[]).forEach(function(m){
+      var code = String((m&&m.code)||'').trim();
+      if(!code) return;
+      var ex = null;
+      state.models.forEach(function(x){ if(x.project===pid && x.name===code) ex = x; });
+      if(ex){ ex.discipline = code; }
+      else{
+        state.models.push({id:uid('mod'), project:pid, name:code, code:code,
+          package:'', discipline:code, revision:'', status:'WIP', owner:'', updated:Date.now()});
+      }
+      changed = true;
+    });
+    if(changed){
+      persist('models');
+      if(currentView==='models') renderModels();
+    }
+  }
+
+  /* ---------------- validator findings -> Hub issues ---------------- */  // Modules may attach up to ~20 concrete findings {desc, severity, model?}
   // to their score report. They are filed as source:'auto' issues, de-duplicated
   // against still-open auto issues, and capped so one run cannot flood the log.
   function fileAutoIssues(pid, modId, findings){
@@ -3323,7 +3348,7 @@
             if(state.rollups[key]===batch) return;
             var pooled = poolRollupScores(mod, have);
             var proj = state.projects.find(function(p){return p.id===pid;});
-            if(applyModuleScore(pid, mod, pooled.score, pooled.issues, pooled.findings, proj?proj.name:'', batch)){
+            if(applyModuleScore(pid, mod, pooled.score, pooled.issues, pooled.findings, proj?proj.name:'', batch, pooled.models||null)){
               state.rollups[key] = batch;
               applied++;
             }

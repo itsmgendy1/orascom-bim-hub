@@ -2901,6 +2901,30 @@ var QAQC_FILL_MAP = {
 var QAQC_FILL = { tplBuf: null, tplName: '', health: [], plan: null };
 function qaqcFillStatus(m){ var el = document.getElementById('qaqc-fill-status'); if(el) el.textContent = m; }
 // Pure core (unit-tested): rule from C-fill ARGB, score from mapped fails.
+// Hub-bound per-discipline findings (model = discipline code) + models.
+function qaqcModelFindings(disciplines){
+  var out = [];
+  try{
+    (disciplines||[]).forEach(function(d){
+      ((d.fail_checks||[]).slice(0,4)).forEach(function(c){
+        if(out.length>=20) return;
+        var nm = (typeof c==='string') ? c : ((c&&(c.name||c.check))||'?');
+        out.push({desc:'['+(d.code||'?')+'] '+nm, severity:'High', model:(d.code||'')});
+      });
+    });
+  }catch(e){}
+  return out;
+}
+function qaqcDisciplineModels(disciplines){
+  var out = [];
+  try{
+    (disciplines||[]).forEach(function(d){
+      if(!d || !d.code) return;
+      out.push({code:String(d.code), score:(typeof d.pass_rate==='number'?d.pass_rate:null), issues:(d.failed||0)});
+    });
+  }catch(e){}
+  return out;
+}
 function qaqcRuleFromArgb(argb){
   var a = String(argb || '').toUpperCase();
   if(a === 'FF92D050') return 'green';
@@ -4188,7 +4212,7 @@ function launch(data){
   try{renderScenario(data);}catch(e){console.warn('renderScenario:',e);}
   try{renderCounts(data);}catch(e){console.warn('renderCounts:',e);}
   CMP_BASE=data;
-  try{ if(typeof window.OrascomHubReportScore==='function' && data && data.disciplines && data.disciplines.length){ var _d=data.disciplines; var _avgR=Math.round(_d.reduce(function(s,x){return s+x.pass_rate;},0)/_d.length); var _tFail=_d.reduce(function(s,x){return s+(x.failed||0);},0); var _pn=((document.getElementById('project-name-input')||{}).value||''); var _ff=[]; try{ (data.disciplines||[]).forEach(function(d){ ((d.fail_checks||[]).slice(0,4)).forEach(function(c){ if(_ff.length<20){ var nm=(typeof c==='string')?c:((c&&(c.name||c.check))||'?'); _ff.push({desc:'['+(d.code||'?')+'] '+nm, severity:'High'}); } }); }); }catch(_e){} window.OrascomHubReportScore(_avgR, _tFail, {projectField:_pn, findings:_ff}); } }catch(e){}
+  try{ if(typeof window.OrascomHubReportScore==='function' && data && data.disciplines && data.disciplines.length){ var _d=data.disciplines; var _avgR=Math.round(_d.reduce(function(s,x){return s+x.pass_rate;},0)/_d.length); var _tFail=_d.reduce(function(s,x){return s+(x.failed||0);},0); var _pn=((document.getElementById('project-name-input')||{}).value||''); window.OrascomHubReportScore(_avgR, _tFail, {projectField:_pn, findings:qaqcModelFindings(_d), models:qaqcDisciplineModels(_d)}); } }catch(e){}
   const lbl=document.getElementById('cmp-base-label');
   if(lbl)lbl.textContent=`${data.reportDate||'Report'} · ${data.disciplines.length} disciplines`;
 }

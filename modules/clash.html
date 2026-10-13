@@ -27,7 +27,7 @@
 body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
 body.dark{--bg:#0D1526;--white:#111C33;--border:#233252;--muted:#8AA0C4;--text:#E7EDF7;--light:#17223C}
-body.dark header{box-shadow:0 4px 24px rgba(0,0,0,.55)}
+body.dark header{box-shadow:0 4px 24px rgba(0,0,0,.55);background:linear-gradient(135deg,#060F22,#0D1526)}
 body.dark .kpi-val{color:#E7EDF7}
 body.dark .kpi-val.ok{color:#3FB950}
 body.dark .kpi-val.bad{color:#FF7B72}
@@ -85,6 +85,7 @@ header{background:linear-gradient(120deg,#0B2347 0%,#1A5296 40%,#2A70CC 70%,#1B4
   display:flex;align-items:center;justify-content:space-between;height:70px;border-bottom:3px solid var(--g1);
   position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(0,0,0,.3)}
 .hdr-center{text-align:center}
+.hdr-logo img{height:42px;object-fit:contain}
 .hdr-project{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:#fff;
   letter-spacing:2px;text-transform:uppercase;text-shadow:0 2px 8px rgba(0,0,0,.7)}
 .hdr-sub{font-size:.66rem;color:var(--g3);letter-spacing:1.5px;opacity:.85}
@@ -217,7 +218,7 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
 <!-- DASHBOARD -->
 <div id="dash" style="display:none">
 <header>
-  <div style="width:38px"></div>
+  <div class="hdr-logo"><img src="../orascom-logo-classic.png" alt="ORASCOM"></div>
   <div class="hdr-center">
     <div class="hdr-project" id="hdr-proj">&mdash;</div>
     <div class="hdr-sub">CLASH ANALYSIS &middot; COORDINATION DASHBOARD</div>

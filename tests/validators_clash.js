@@ -47,7 +47,7 @@ global.fetch = () => Promise.reject(new Error('offline'));
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*(?:src=|type="application\/ld\+json"|type="application\/json"))[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,clashDiscUnmapped,clashSelfDisc,clashApproved,clashRowHtml,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
+eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,clashDiscUnmapped,clashSelfDisc,clashApproved,clashSourceApproved,clashRowHtml,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
 const M = module.exports;
 const rules = JSON.parse(JSON.stringify(M.CLASH_RULES_DEFAULT.rules)).map(M.clashRuleCompile);
 const byId = (id) => rules.filter((r) => r.id === id)[0];
@@ -182,6 +182,11 @@ ok(M.clashSelfDisc({ test: 'AR-X -vs- PS-Y', bucket: 'Open' }) === null, 'cross 
 ok(M.clashSelfDisc({ test: '', bucket: 'Open' }) === 'Unspecified', 'blank sides self-unspecified');
 ok(M.clashApproved({ auto: { rule: 'A1' } }) === true, 'auto approved');
 ok(M.clashApproved({}) === false && M.clashApproved(null) === false, 'not approved');
+ok(M.clashSourceApproved({ statusRaw: 'Approved' }) === true, 'source approved');
+ok(M.clashSourceApproved({ statusRaw: 'Auto-approved' }) === true, 'source auto-approved text');
+ok(M.clashSourceApproved({ statusRaw: 'Active' }) === false, 'active not source-approved');
+ok(M.clashSourceApproved({ statusRaw: 'Resolved' }) === false, 'resolved not source-approved');
+ok(M.clashSourceApproved({}) === false, 'missing status not approved');
 ok(typeof M.clashRowHtml({ test: 'T', clash: '', aName: 'A', bName: 'B', aDisc: 'AR', bDisc: 'PS', distance: '', priority: 'High', bucket: 'Open', statusRaw: '', date: '' }) === 'string', 'row builder returns html');
 
 console.log(pass + ' passed, ' + fail + ' failed');

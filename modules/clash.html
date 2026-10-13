@@ -1144,6 +1144,9 @@ function clashSelfDisc(c){
   return d1===d2 ? d1 : null;
 }
 function clashApproved(c){ return !!(c && c.auto); }
+/* Approved in the source report itself (e.g. Navisworks Approved status),
+   independent of this dashboard's auto-approval. */
+function clashSourceApproved(c){ return !!c && /approved/i.test(String(c.statusRaw||'')); }
 function renderDetails(){
   var a = clashDiscAnalysis(CLASH_ITEMS);
   var sel = document.getElementById('det-disc-f');
@@ -1168,16 +1171,20 @@ function renderDetails(){
       }).join('') + (self.length>800 ? '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:10px">Showing first 800 of '+self.length+'.</td></tr>' : '')
       : '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:14px;">'+(CLASH_ITEMS.length?'No self clashes'+(df?' for '+escapeHtml(df):'')+'.':'Import data first.')+'</td></tr>')+'</tbody>';
   }
-  var appr = CLASH_ITEMS.filter(clashApproved);
+  var appr = CLASH_ITEMS.filter(function(c){ return clashApproved(c) || clashSourceApproved(c); });
   var host2 = document.getElementById('det-approved-table');
   if(host2){
-    host2.innerHTML = '<thead><tr><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th>Rule</th><th>Tier</th><th>Note</th><th>Batch</th><th>By</th><th>At</th><th>Status</th></tr></thead><tbody>'+
+    host2.innerHTML = '<thead><tr><th>Test</th><th>Clash</th><th>Item A</th><th>Item B</th><th>Src</th><th>Rule</th><th>Tier</th><th>Note</th><th>Batch</th><th>By</th><th>At</th><th>Status</th></tr></thead><tbody>'+
       (appr.length ? appr.slice(0,800).map(function(c){
         var au = c.auto||{};
+        var srcBadge = au.rule
+          ? '<span class="badge badge-closed">Auto</span>'
+          : '<span class="badge" style="background:#E8EEF7;color:var(--b3);">Report</span>';
         return '<tr><td>'+escapeHtml(c.test)+'</td>'+
           '<td>'+escapeHtml(c.clash||'\u2014')+'</td>'+
           '<td>'+escapeHtml(c.aName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.aDisc)+(c.aId?' \u00b7 ID '+escapeHtml(c.aId):'')+'</small></td>'+
           '<td>'+escapeHtml(c.bName)+'<br><small style="color:var(--muted)">'+escapeHtml(c.bDisc)+(c.bId?' \u00b7 ID '+escapeHtml(c.bId):'')+'</small></td>'+
+          '<td>'+srcBadge+'</td>'+
           '<td><strong>'+escapeHtml(au.rule||'\u2014')+'</strong></td>'+
           '<td>'+escapeHtml(au.tier||'\u2014')+'</td>'+
           '<td style="font-size:.76rem;">'+escapeHtml(au.note||'\u2014')+'</td>'+
@@ -1185,8 +1192,8 @@ function renderDetails(){
           '<td>'+escapeHtml(au.by||'\u2014')+'</td>'+
           '<td>'+escapeHtml(au.at||'\u2014')+'</td>'+
           '<td><span class="badge badge-closed">'+escapeHtml(c.statusRaw||c.bucket)+'</span></td></tr>';
-      }).join('') + (appr.length>800 ? '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:10px">Showing first 800 of '+appr.length+'.</td></tr>' : '')
-      : '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:14px;">'+(CLASH_ITEMS.length?'Nothing approved yet — run an evaluation on the Auto-Approval tab.':'Import data first.')+'</td></tr>')+'</tbody>';
+      }).join('') + (appr.length>800 ? '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:10px">Showing first 800 of '+appr.length+'.</td></tr>' : '')
+      : '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:14px;">'+(CLASH_ITEMS.length?'Nothing approved yet — run an evaluation on the Auto-Approval tab.':'Import data first.')+'</td></tr>')+'</tbody>';
   }
 }
 

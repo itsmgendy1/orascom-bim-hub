@@ -263,6 +263,10 @@ table.dtbl td{padding:9px 12px;border-top:1px solid var(--light)}
   <div class="tab-content" id="t-disc">
     <div class="sec">Discipline pairs</div>
     <div class="ccard"><h3>Clash count by discipline pair</h3><div class="ch" style="height:340px"><canvas id="ch-disc"></canvas></div></div>
+    <div class="kpi-row" id="testdisc-kpis" style="margin-top:14px"></div>
+    <div class="ccard"><h3>Open / closed per discipline — from test names (cross pairs count in both)</h3><div class="tbl-wrap"><table class="dtbl" id="testdisc-table"></table></div></div>
+    <div class="ccard"><h3>Trade rollup — Mechanical (AC·WS·DR·PS·FS) vs Electrical (TE·EL·BS·VT)</h3><div class="tbl-wrap"><table class="dtbl" id="trade-table"></table></div></div>
+    <div class="ccard"><h3>Open / closed by discipline</h3><div class="ch" style="height:340px"><canvas id="ch-testdisc"></canvas></div></div>
   </div>
 
   <div class="tab-content" id="t-auto">
@@ -681,6 +685,44 @@ function clashSplitTest(testName){
   var b = parts.length > 1 ? parts.slice(1).join("-vs-").trim() : "";
   return [a, b];
 }
+/* ═══ TEST-DERIVED DISCIPLINE ANALYSIS (pure) ═══
+   Codes come from the TEST name sides: AR-Casework -vs- PS-Pipes counts in
+   AR and PS both; AR-vs-AR is a self clash. Open follows computeStats (Open
+   bucket, auto-approved excluded). Trades locked with the owner. */
+var CLASH_TRADE_MECH = ['AC','WS','DR','PS','FS'];
+var CLASH_TRADE_ELEC = ['TE','EL','BS','VT'];
+function clashTestDiscs(c){
+  return [clashDiscipline((c&&(c.setA||''))||''), clashDiscipline((c&&(c.setB||''))||'')];
+}
+function clashIsOpen(c){ return !!c && c.bucket==='Open' && !c.auto; }
+function clashDiscAnalysis(items){
+  var per = {}, selfOpen=0, selfClosed=0, crossOpen=0, crossClosed=0;
+  var trades = {mech:{open:0,closed:0}, elec:{open:0,closed:0}, mechElec:{open:0,closed:0}};
+  function slot(d){ if(!per[d]) per[d] = {open:0, closed:0, self:0, cross:0}; return per[d]; }
+  function inTrade(d, t){ return t.indexOf(d)>-1; }
+  (items||[]).forEach(function(c){
+    var dd = clashTestDiscs(c);
+    var d1 = dd[0]||'Unspecified', d2 = dd[1]||'Unspecified';
+    var open = clashIsOpen(c), self = (d1===d2);
+    if(self){ if(open) selfOpen++; else selfClosed++; }
+    else { if(open) crossOpen++; else crossClosed++; }
+    var seen = {};
+    [d1,d2].forEach(function(d){
+      if(seen[d]) return; seen[d] = 1;
+      var s = slot(d);
+      if(open) s.open++; else s.closed++;
+      if(self) s.self++; else s.cross++;
+    });
+    var m1 = inTrade(d1,CLASH_TRADE_MECH), m2 = inTrade(d2,CLASH_TRADE_MECH);
+    var e1 = inTrade(d1,CLASH_TRADE_ELEC), e2 = inTrade(d2,CLASH_TRADE_ELEC);
+    if(m1||m2){ if(open) trades.mech.open++; else trades.mech.closed++; }
+    if(e1||e2){ if(open) trades.elec.open++; else trades.elec.closed++; }
+    if((m1&&e2)||(m2&&e1)){ if(open) trades.mechElec.open++; else trades.mechElec.closed++; }
+  });
+  return {per:per, discs:Object.keys(per).sort(),
+    self:{open:selfOpen, closed:selfClosed}, cross:{open:crossOpen, closed:crossClosed},
+    trades:trades};
+}
 function clashRuleHit(re, a, b){
   if(re === null) return true;
   return (a != null && re.test(a)) || (b != null && re.test(b));
@@ -860,6 +902,7 @@ function renderAll(){
   populateDisciplineFilter();
   renderClashTable();
   renderDisciplineChart();
+  renderTestDiscAnalysis();
 }
 
 function clashPair(c){ return (c.aDisc||'Unspecified') + ' \u2194 ' + (c.bDisc||'Unspecified'); }
@@ -955,6 +998,57 @@ function renderDisciplineChart(){
     data:{ labels:entries.map(function(e){return e[0];}), datasets:[{ data:entries.map(function(e){return e[1];}), backgroundColor:'#2563B8' }] },
     options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true,ticks:{precision:0}}} }
   });
+}
+
+function renderTestDiscAnalysis(){
+  var a = clashDiscAnalysis(CLASH_ITEMS);
+  var kh = document.getElementById('testdisc-kpis');
+  function card(cls,lbl,val,sub){
+    return '<div class="kpi '+cls+'"><div class="kpi-lbl">'+lbl+'</div><div class="kpi-val">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';
+  }
+  if(kh) kh.innerHTML =
+    card('c-red','Self — Open', a.self.open, 'same discipline both sides') +
+    card('c-green','Self — Closed', a.self.closed, 'same discipline both sides') +
+    card('c-red','Cross — Open', a.cross.open, 'two disciplines (counts once here)') +
+    card('c-green','Cross — Closed', a.cross.closed, 'two disciplines (counts once here)');
+  var tb = document.getElementById('testdisc-table');
+  if(tb){
+    var rows = a.discs.map(function(d){
+      var s = a.per[d], t = s.open+s.closed;
+      return '<tr><td><strong>'+escapeHtml(d)+'</strong></td>'+
+        '<td style="text-align:right;color:var(--fail);font-weight:700">'+s.open+'</td>'+
+        '<td style="text-align:right;color:var(--ok2);font-weight:700">'+s.closed+'</td>'+
+        '<td style="text-align:right;font-weight:800">'+t+'</td>'+
+        '<td style="text-align:right;">'+s.self+'</td>'+
+        '<td style="text-align:right;">'+s.cross+'</td></tr>';
+    });
+    tb.innerHTML = '<thead><tr><th>Discipline</th><th style="text-align:right;">Open</th><th style="text-align:right;">Closed</th><th style="text-align:right;">Total</th><th style="text-align:right;">Self</th><th style="text-align:right;">Cross</th></tr></thead><tbody>'+
+      (rows.length?rows.join(''):'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:14px;">Import data first.</td></tr>')+'</tbody>';
+  }
+  var tr = document.getElementById('trade-table');
+  if(tr){
+    function trow(lbl, s){
+      var t = s.open+s.closed;
+      return '<tr><td><strong>'+lbl+'</strong></td>'+
+        '<td style="text-align:right;color:var(--fail);font-weight:700">'+s.open+'</td>'+
+        '<td style="text-align:right;color:var(--ok2);font-weight:700">'+s.closed+'</td>'+
+        '<td style="text-align:right;font-weight:800">'+t+'</td></tr>';
+    }
+    tr.innerHTML = '<thead><tr><th>Trade</th><th style="text-align:right;">Open</th><th style="text-align:right;">Closed</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
+      trow('Mechanical — AC·WS·DR·PS·FS', a.trades.mech)+
+      trow('Electrical — TE·EL·BS·VT', a.trades.elec)+
+      trow('Mech ↔ Elec pairs', a.trades.mechElec)+'</tbody>';
+  }
+  var cv = document.getElementById('ch-testdisc');
+  if(cv && typeof Chart!=='undefined'){
+    if(CHARTS.testdisc) CHARTS.testdisc.destroy();
+    CHARTS.testdisc = new Chart(cv, {type:'bar',
+      data:{labels:a.discs, datasets:[
+        {label:'Open', data:a.discs.map(function(d){return a.per[d].open;}), backgroundColor:'#E67E22'},
+        {label:'Closed', data:a.discs.map(function(d){return a.per[d].closed;}), backgroundColor:'#27AE60'}]},
+      options:{indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+        scales:{x:{beginAtZero:true,stacked:true,ticks:{precision:0}},y:{stacked:true}}}});
+  }
 }
 
 function populatePriorityFilter(){

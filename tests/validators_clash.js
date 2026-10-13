@@ -47,7 +47,7 @@ global.fetch = () => Promise.reject(new Error('offline'));
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*(?:src=|type="application\/ld\+json"|type="application\/json"))[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate};');
+eval(scripts + '\n;module.exports={CLASH_RULES_DEFAULT,clashRuleCompile,clashDiscipline,clashSplitTest,clashRuleMatches,clashParseDist,clashBuildRecords,clashEvaluate,clashTestDiscs,clashIsOpen,clashDiscAnalysis,CLASH_TRADE_MECH,CLASH_TRADE_ELEC};');
 const M = module.exports;
 const rules = JSON.parse(JSON.stringify(M.CLASH_RULES_DEFAULT.rules)).map(M.clashRuleCompile);
 const byId = (id) => rules.filter((r) => r.id === id)[0];
@@ -129,6 +129,34 @@ ok(mout[0].rule === 'R1' && mout[1].rule === 'R1', 'direct hits keep priority ov
 const noDup = rules.map((r) => Object.assign({}, r, { enabled: r.id === 'B2' ? false : r.enabled }));
 const nout = M.clashEvaluate(dupRecs, noDup, ['Active']);
 ok(nout[1].rule === null, 'disabled B2 marks nothing');
+
+// Test-derived discipline analysis: codes from TEST sides, cross counts both,
+// self counted once, open excludes auto-approved, owner-locked trade groups.
+ok(M.CLASH_TRADE_MECH.join() === 'AC,WS,DR,PS,FS', 'mech trade locked');
+ok(M.CLASH_TRADE_ELEC.join() === 'TE,EL,BS,VT', 'elec trade locked');
+const D = (setA, setB, bucket, auto) => ({ setA, setB, bucket, auto: auto || null });
+ok(JSON.stringify(M.clashTestDiscs(D('AR-Casework', 'AR-Furniture', 'Open'))) === '["AR","AR"]', 'self sides');
+ok(JSON.stringify(M.clashTestDiscs(D('AR-Casework', 'PS-Pipes', 'Open'))) === '["AR","PS"]', 'cross sides');
+ok(M.clashIsOpen(D('AR-X', 'PS-Y', 'Open')) === true, 'open');
+ok(M.clashIsOpen(D('AR-X', 'PS-Y', 'Open', { rule: 'A1' })) === false, 'auto-approved not open');
+ok(M.clashIsOpen(D('AR-X', 'PS-Y', 'Closed')) === false, 'closed not open');
+const da = M.clashDiscAnalysis([
+  D('AR-Casework', 'AR-Furniture', 'Open'),      // self AR open
+  D('AR-Casework', 'AR-Furniture', 'Closed'),    // self AR closed
+  D('AR-Casework', 'PS-Pipes', 'Open'),          // cross AR+PS open
+  D('AC-Ducts', 'TE-Trays', 'Closed'),           // cross mech+elec closed
+  D('AC-Ducts', 'TE-Trays', 'Open', { rule: 'A1' }), // auto: closed-bucket math
+]);
+ok(da.per.AR.open === 2 && da.per.AR.closed === 1, 'AR open/closed', JSON.stringify(da.per.AR));
+ok(da.per.PS.open === 1 && da.per.PS.closed === 0, 'PS cross counted');
+ok(da.per.AR.self === 2 && da.per.AR.cross === 1, 'AR self/cross split');
+ok(da.self.open === 1 && da.self.closed === 1, 'self totals');
+ok(da.cross.open === 1 && da.cross.closed === 2, 'cross totals (auto counts closed)');
+ok(da.trades.mech.open === 1 && da.trades.mech.closed === 2, 'mech trade', JSON.stringify(da.trades.mech));
+ok(da.trades.elec.open === 0 && da.trades.elec.closed === 2, 'elec trade');
+ok(da.trades.mechElec.open === 0 && da.trades.mechElec.closed === 2, 'mech-elec pairs');
+ok(M.clashDiscAnalysis([]).discs.length === 0, 'empty input');
+ok(M.clashDiscAnalysis([D('', '', 'Open')]).per.Unspecified.open === 1, 'missing sides unspecified');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -988,6 +988,23 @@ function renderCharts(){
   });
 }
 
+/* True when no item carries a test side or item discipline — i.e. the
+   Test / Item-discipline columns were never mapped at import. */
+function clashDiscUnmapped(items){
+  var xs = items||[];
+  if(!xs.length) return false;
+  function mappedDisc(v){
+    v = String(v||'').trim();
+    return v!=='' && v.toUpperCase()!=='UNSPECIFIED';
+  }
+  for(var i=0;i<xs.length;i++){
+    var c = xs[i];
+    var dd = clashTestDiscs(c);
+    if((dd[0]||'')!=='' || (dd[1]||'')!=='') return false;
+    if(mappedDisc(c.aDisc) || mappedDisc(c.bDisc)) return false;
+  }
+  return true;
+}
 function renderTestDiscAnalysis(){
   var a = clashDiscAnalysis(CLASH_ITEMS);
   var unmapped = clashDiscUnmapped(CLASH_ITEMS);

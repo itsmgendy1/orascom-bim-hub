@@ -3164,8 +3164,12 @@ async function qaqcFillGenerate(){
         });
       });
     });
-    var buf = await wb.xlsx.writeBuffer();
-    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    // ExcelJS 4.x cannot round-trip conditional formatting: it emits EMPTY
+    // <conditionalFormatting> wrappers that force desktop Excel to repair the
+    // file on open. Strip the (rule-less) models before saving — values and
+    // static styles survive; template CF coloring does not carry over.
+    try{ wb.eachSheet(function(ws){ if(typeof ws.removeConditionalFormatting==='function') ws.removeConditionalFormatting(); }); }catch(cfe){}
+    var buf = await wb.xlsx.writeBuffer();    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;

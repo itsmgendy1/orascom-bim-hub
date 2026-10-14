@@ -2885,9 +2885,9 @@ var QAQC_FILL_MAP = {
   'QA-GE-036': ['Rooms', 'Spaces'],
   'QA-GE-037': ['Redundant and Unenclosed Rooms', 'Redundant and Unenclosed Spaces'],
   'QA-GE-038': ['Unplaced Rooms', 'Unplaced Spaces'],
-  'QA-GE-051': ['__COUNTS_GENERIC_INPLACE__'],
-  'QA-GE-060': ['Purgeable Elements'],
-  'QA-GE-061': ['Warnings'],
+  'QA-GE-051': ['__COUNTS_INPLACE__'],
+  'QA-GE-060': ['__COUNTS_INPLACE__'],
+  'QA-GE-061': ['__COUNTS_INPLACE__'],
   'QA-GE-062': ['Duplicate Modeled Elements'],
   'QA-GE-064': ['Duplicate Modeled Elements'],
   'QA-AR-029': ['Purgeable Elements'],
@@ -2935,10 +2935,10 @@ function qaqcRuleFromArgb(argb){
 }
 function qaqcScoreFor(mapped, failArr, counts){
   if(!mapped || !mapped.length) return null;
-  // Categories rule: zero tolerance on Generic Models + In-Place Families.
-  if(mapped.length === 1 && mapped[0] === '__COUNTS_GENERIC_INPLACE__'){
-    if(!counts) return null;
-    return (counts.generic === 0 && counts.inplace === 0) ? 100 : 0;
+  // In-Place rule: 0 when In-Place Families has a value, 100 when zero.
+  if(mapped.length === 1 && mapped[0] === '__COUNTS_INPLACE__'){
+    if(!counts || counts.inplace === undefined || counts.inplace === null) return null;
+    return counts.inplace === 0 ? 100 : 0;
   }
   // Browser/views rules: fail when more than 1 view sits off sheets.
   if(mapped.length === 1 && mapped[0] === '__COUNTS_VIEWS_OFF_SHEET__'){
@@ -3067,9 +3067,9 @@ async function qaqcFillBuildPlan(){
         else if(rule === 'cyan'){
           if(!mapped){ src = 'unmapped — left blank'; }
           else if(!hb){ src = 'no ' + mc.code + ' HTML — left blank'; }
-          else if(mapped.length === 1 && mapped[0] === '__COUNTS_GENERIC_INPLACE__'){
+          else if(mapped.length === 1 && mapped[0] === '__COUNTS_INPLACE__'){
             val = qaqcScoreFor(mapped, hb.fails, hb.counts);
-            src = val === null ? 'no counts — left blank' : 'counts: generic=' + hb.counts.generic + ' inplace=' + hb.counts.inplace + ' → ' + val;
+            src = val === null ? 'no counts — left blank' : 'counts: in-place=' + hb.counts.inplace + ' → ' + val;
           }
           else if(mapped.length === 1 && mapped[0] === '__COUNTS_VIEWS_OFF_SHEET__'){
             val = qaqcScoreFor(mapped, hb.fails, hb.counts);
@@ -3106,7 +3106,7 @@ async function qaqcFillPreview(){
     sh.rows.forEach(function(r){
       var badge = r.rule === 'green' ? 'ok' : r.rule === 'red' ? 'bad' : r.rule === 'cyan' ? 'info' : 'muted';
       var srcTxt = (r.mapped || []).join(' + ') || '—';
-      if(r.mapped && r.mapped.length === 1 && r.mapped[0] === '__COUNTS_GENERIC_INPLACE__') srcTxt = 'counts: Generic Models + In-Place Families = 0';
+      if(r.mapped && r.mapped.length === 1 && r.mapped[0] === '__COUNTS_INPLACE__') srcTxt = 'counts: In-Place Families = 0';
       if(r.mapped && r.mapped.length === 1 && r.mapped[0] === '__COUNTS_VIEWS_OFF_SHEET__') srcTxt = 'counts: Views Not On Sheets ≤ 1';
       h += '<tr><td><strong>' + escapeHtml(r.id) + '</strong></td>' +
         '<td><span class="badge badge-' + badge + '">' + r.rule + '</span></td>' +

@@ -187,6 +187,11 @@ OHub.switchView('models');
 const mo = (els['models-grid'] || {}).innerHTML || '';
 ok(mo.indexOf('HT01 AR') >= 0 && mo.indexOf('FF') >= 0, 'no filter shows all models');
 ok(mo.indexOf('BH01 BOH') < mo.indexOf('HT01 MAIN BUILDING'), 'rows sorted by building code', 'order');
+ok(mo.indexOf('Building HT01 \u2014 HT01 MAIN BUILDING') >= 0, 'models: building group header');
+ok(mo.indexOf('Building BH01 \u2014 BH01 BOH - GUARD HOUSE') >= 0, 'models: every building grouped');
+ok(mo.indexOf('Architectural <span') >= 0, 'models: discipline sub-group');
+const iHt = mo.indexOf('Building HT01 \u2014 HT01 MAIN BUILDING');
+ok(iHt >= 0 && mo.indexOf('Architectural <span', iHt) > iHt, 'building header precedes disciplines');
 els['models-bld-filter'].value = '';
 
 // 8. Quality Center rolls issues up per building.
@@ -217,11 +222,28 @@ const qc1 = (els['qc-content'] || {}).innerHTML || '';
 ok(qc1.indexOf('[HT01 AR] Warnings') >= 0, 'building filter keeps its issues');
 ok(qc1.indexOf('[CR01 EL] Views Not On Sheets') === -1, 'building filter hides other buildings');
 ok(qc1.indexOf('<th>Discipline</th>') >= 0, 'issue log has Discipline column');
+ok(qc1.indexOf('Building HT01 \u2014 HT01 MAIN BUILDING') >= 0, 'issue log: building group header');
+ok(qc1.indexOf('AR <span') >= 0, 'issue log: discipline sub-group');
+ok(qc1.indexOf('\u21b3') >= 0, 'building rollup: discipline sub-rows');
 OHub.qcSetFilter('bld', '');
 OHub.qcSetFilter('disc', 'EL');
 const qc2 = (els['qc-content'] || {}).innerHTML || '';
 ok(qc2.indexOf('[CR01 EL] Views Not On Sheets') >= 0 && qc2.indexOf('[BMS] Worksets') === -1, 'discipline filter works');
 OHub.qcSetFilter('disc', '');
+
+// 10. Building-first classification reaches the other tabs too.
+OHub.switchView('program');
+const pg2 = (els['program-content'] || {}).innerHTML || '';
+ok(pg2.indexOf('badge-muted">AR 1</span>') >= 0, 'program: discipline chips per building card');
+
+OHub.switchView('dashboard');
+const dash = (els['dash-content'] || {}).innerHTML || '';
+ok(dash.indexOf('>HT01 \u00b7 AR</span>') >= 0, 'dashboard: open issue tagged building + discipline');
+
+OHub.switchView('reports');
+const rep = (els['reports-content'] || {}).innerHTML || '';
+ok(rep.indexOf('By building &amp; discipline') >= 0, 'reports: building classification card');
+ok(rep.indexOf('<strong>HT01</strong>') >= 0, 'reports: building rows with discipline sub-rows');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

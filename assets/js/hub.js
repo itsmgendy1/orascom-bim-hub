@@ -425,6 +425,44 @@
     var b = String(m.building||'').trim().toUpperCase();
     return isBuildingCode(b) ? b : (isBuildingCode(m.code) ? String(m.code).trim().toUpperCase() : '');
   }
+  /* Building-first grouping shared by every Hub tab: everything is classified
+     building -> discipline. Unassigned entries sort last under their own group. */
+  function bldLabel(code){
+    var v = String(code||'').trim().toUpperCase();
+    var b = portalunaBuildingByCode(v);
+    return b ? (b.code+' \u2014 '+b.name) : v;
+  }
+  function grpRow(cols, label, sub){
+    return '<tr style="background:var(--light);"><td colspan="'+cols+'" style="font-weight:700;font-size:.79rem;letter-spacing:.02em;">'+
+      escapeHtml(label)+(sub?' <span style="font-weight:400;color:var(--muted);">'+escapeHtml(sub)+'</span>':'')+'</td></tr>';
+  }
+  function subGrpRow(cols, label, sub){
+    return '<tr><td colspan="'+cols+'" style="padding-left:22px;font-size:.76rem;font-weight:700;color:var(--muted);">'+
+      escapeHtml(label)+(sub?' <span style="font-weight:400;">'+escapeHtml(sub)+'</span>':'')+'</td></tr>';
+  }
+  function cmpBuilding(a, b){
+    var ba = a || '\uffff', bb = b || '\uffff';
+    return ba===bb ? 0 : (ba<bb ? -1 : 1);
+  }
+  function cmpBuildingThenDisc(a, b){
+    var ab = modelBuilding(a) || '', bb = modelBuilding(b) || '';
+    var c = cmpBuilding(ab, bb);
+    if(c) return c;
+    var ad = String(a.discipline||'').trim().toUpperCase(), bd = String(b.discipline||'').trim().toUpperCase();
+    if(ad!==bd) return cmpBuilding(ad||'\uffff', bd||'\uffff');
+    return 0;
+  }
+  var SEV_RANK = {Critical:0, High:1, Medium:2, Low:3};
+  function cmpIssueOrder(a, b){
+    var ab = String(a.building||'').toUpperCase(), bb = String(b.building||'').toUpperCase();
+    var c = cmpBuilding(ab, bb);
+    if(c) return c;
+    var ad = String(a.discipline||'').toUpperCase(), bd = String(b.discipline||'').toUpperCase();
+    if(ad!==bd) return cmpBuilding(ad||'\uffff', bd||'\uffff');
+    var as = SEV_RANK[a.severity], bs = SEV_RANK[b.severity];
+    if(as!==bs) return (as==null?9:as)-(bs==null?9:bs);
+    return (b.created||0)-(a.created||0);
+  }
   function upsertDisciplineModels(pid, models){
     var changed = false;
     var p = state.projects.find(function(x){return x.id===pid;});
@@ -1702,12 +1740,18 @@
       var ga = GATE_STAGES.filter(function(st){ return state.gates[gateKey(p.id, pkg, st)]==='Approved'; }).length;
       totAppr += ga; totGates += GATE_STAGES.length;
       var pct = Math.round(ga/GATE_STAGES.length*100);
+      var dmap = {};
+      pm.forEach(function(m){ var d = String(m.discipline||'').trim(); if(d) dmap[d] = (dmap[d]||0)+1; });
+      var chips = Object.keys(dmap).sort().map(function(d){
+        return '<span class="badge badge-muted">'+escapeHtml(d)+' '+dmap[d]+'</span>';
+      }).join('');
       return '<div class="card" style="cursor:pointer;" onclick="OHub.programOpenPackage(\''+encodeURIComponent(pkg)+'\')">'+
         '<div class="card-head"><h3>'+escapeHtml(pkg)+'</h3>'+
         (iss>0 ? '<span class="badge badge-fail">'+iss+' open</span>' : '<span class="badge badge-ok">clear</span>')+'</div>'+
         '<div style="display:flex;gap:16px;font-size:.82rem;color:var(--muted);margin-bottom:10px;">'+
           '<span><strong style="font-size:1.2rem;color:var(--ink);">'+pm.length+'</strong> models</span>'+
           '<span><strong style="font-size:1.2rem;color:var(--ink);">'+ga+'/'+GATE_STAGES.length+'</strong> gates</span></div>'+
+        (chips? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">'+chips+'</div>':'')+
         '<div style="height:6px;background:var(--light);border-radius:3px;overflow:hidden;">'+
           '<span style="display:block;height:100%;width:'+pct+'%;background:var(--b2);"></span></div>'+
         '<div style="font-size:.74rem;color:var(--muted);margin-top:6px;">'+pct+'% gates approved · click for models</div>'+
@@ -1836,8 +1880,8 @@
       rows = rows.filter(function(m){ return !cur || (m.package||'')===cur; });
     }
     rows.sort(function(a,b2){
-      var ba = modelBuilding(a), bb = modelBuilding(b2);
-      if(ba!==bb) return ba ? (bb ? ba.localeCompare(bb) : -1) : (bb ? 1 : 0);
+      var c = cmpBuildingThenDisc(a, b2);
+      if(c) return c;
       var pa = (a.package||'').trim(), pb = (b2.package||'').trim();
       if(pa!==pb) return pa.localeCompare(pb);
       return String(a.name||'').localeCompare(String(b2.name||''));
@@ -1850,24 +1894,39 @@
       renderModelRunbar(p);
       return;
     }
+    var gB = '\u0000', gD = '\u0000', body = [];
+    rows.forEach(function(m){
+      var bKey = modelBuilding(m);
+      var bLbl = bKey ? 'Building '+bldLabel(bKey) : 'Unassigned building';
+      if(bKey!==gB){
+        gB = bKey; gD = '\u0000';
+        var bN = rows.filter(function(x){ return modelBuilding(x)===bKey; }).length;
+        body.push(grpRow(11, bLbl, '('+bN+' model'+(bN===1?'':'s')+')'));
+      }
+      var dKey = String(m.discipline||'').trim();
+      if(dKey!==gD){
+        gD = dKey;
+        var dN = rows.filter(function(x){ return modelBuilding(x)===bKey && String(x.discipline||'').trim()===dKey; }).length;
+        body.push(subGrpRow(11, dKey||'No discipline', '('+dN+')'));
+      }
+      var open = state.issues.filter(function(i){ return i.project===p.id && i.model===m.name && (i.status==='Open'||i.status==='In Progress'); }).length;
+      body.push('<tr>'+
+        (m.filePath ? '<td><input type="checkbox" data-msel="'+m.id+'" onchange="OHub.modelToggleSel(this)" '+(m.sel?'checked':'')+' style="accent-color:var(--g1);"></td>' : (m.accRef ? '<td title="Cloud model \u2014 validated via the pyRevit lane (selected_models.json)">\u2601</td>' : '<td></td>'))+
+        '<td><strong>'+escapeHtml(m.name)+'</strong></td>'+
+        '<td>'+escapeHtml(modelBuilding(m)||'\u2014')+'</td>'+
+        '<td>'+escapeHtml(m.code||'\u2014')+'</td>'+
+        '<td>'+escapeHtml(m.package||'\u2014')+'</td>'+
+        '<td>'+escapeHtml(m.discipline||'\u2014')+'</td>'+
+        '<td>'+escapeHtml(m.revision||'\u2014')+'</td>'+
+        '<td>'+escapeHtml(m.status||'\u2014')+'</td>'+
+        '<td>'+escapeHtml(m.owner||'\u2014')+'</td>'+
+        '<td>'+open+'</td>'+
+        '<td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="OHub.openModelModal(\''+m.id+'\')">Edit</button> '+
+        '<button class="btn btn-ghost btn-sm" onclick="OHub.deleteModel(\''+m.id+'\')">Remove</button></td>'+
+      '</tr>');
+    });
     host.innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr><th style="width:30px;">Run</th><th>Model</th><th>Building</th><th>Code</th><th>Package</th><th>Discipline</th><th>Rev</th><th>Status</th><th>Owner</th><th>Open issues</th><th></th></tr></thead><tbody>'+
-      rows.map(function(m){
-        var open = state.issues.filter(function(i){ return i.project===p.id && i.model===m.name && (i.status==='Open'||i.status==='In Progress'); }).length;
-        return '<tr>'+
-          (m.filePath ? '<td><input type="checkbox" data-msel="'+m.id+'" onchange="OHub.modelToggleSel(this)" '+(m.sel?'checked':'')+' style="accent-color:var(--g1);"></td>' : (m.accRef ? '<td title="Cloud model \u2014 validated via the pyRevit lane (selected_models.json)">\u2601</td>' : '<td></td>'))+
-          '<td><strong>'+escapeHtml(m.name)+'</strong></td>'+
-          '<td>'+escapeHtml(modelBuilding(m)||'\u2014')+'</td>'+
-          '<td>'+escapeHtml(m.code||'\u2014')+'</td>'+
-          '<td>'+escapeHtml(m.package||'\u2014')+'</td>'+
-          '<td>'+escapeHtml(m.discipline||'\u2014')+'</td>'+
-          '<td>'+escapeHtml(m.revision||'\u2014')+'</td>'+
-          '<td>'+escapeHtml(m.status||'\u2014')+'</td>'+
-          '<td>'+escapeHtml(m.owner||'\u2014')+'</td>'+
-          '<td>'+open+'</td>'+
-          '<td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="OHub.openModelModal(\''+m.id+'\')">Edit</button> '+
-          '<button class="btn btn-ghost btn-sm" onclick="OHub.deleteModel(\''+m.id+'\')">Remove</button></td>'+
-        '</tr>';
-      }).join('')+'</tbody></table></div>';
+      body.join('')+'</tbody></table></div>';
     renderModelRunbar(p);
   }
   function openModelModal(editId){
@@ -2239,7 +2298,7 @@
       '</div>';
     }).join('');
 
-    var openIssues = state.issues.filter(function(i){ return i.project===p.id && (i.status==='Open'||i.status==='In Progress'); });
+    var openIssues = state.issues.filter(function(i){ return i.project===p.id && (i.status==='Open'||i.status==='In Progress'); }).sort(cmpIssueOrder);
     var upcoming = state.deliverables.filter(function(d){
       return d.project===p.id && (d.status==='Upcoming'||d.status==='In Progress'||d.status==='Delayed');
     }).sort(function(a,b){ return (a.due||'9999') < (b.due||'9999') ? -1 : 1; }).slice(0,5);
@@ -2285,7 +2344,7 @@
             ? '<p style="color:var(--muted);font-size:.85rem;">No open issues logged for this project.</p>'
             : '<div style="display:flex;flex-direction:column;gap:8px;">'+openIssues.slice(0,4).map(function(i){
                 return '<div style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--light);padding-bottom:6px;">'+
-                  '<span style="font-size:.82rem;color:var(--ink);">'+escapeHtml(i.description||'(no description)')+'</span>'+
+                  '<span style="font-size:.82rem;color:var(--ink);">'+(i.building?'<span class="badge badge-muted" style="margin-right:6px;">'+escapeHtml(i.building)+(i.discipline?' \u00b7 '+escapeHtml(i.discipline):'')+'</span>':'')+escapeHtml(i.description||'(no description)')+'</span>'+
                   '<span class="badge badge-'+sevBadge(i.severity)+'">'+escapeHtml(i.severity)+'</span>'+
                 '</div>';
               }).join('')+'</div>')+
@@ -2342,25 +2401,43 @@
     Array.from(new Set(mods.map(modelBuilding).filter(Boolean))).forEach(function(b){ if(codes.indexOf(b)===-1) codes.push(b); });
     return codes.sort().map(function(code){
       var b = portalunaBuildingByCode(code);
-      var open = state.issues.filter(function(i){
+      var bMods = mods.filter(function(m){ return modelBuilding(m)===code; });
+      var dmap = {};
+      bMods.forEach(function(m){
+        var d = String(m.discipline||'').trim() || 'No discipline';
+        if(!dmap[d]) dmap[d] = {code:d, models:0, open:0};
+        dmap[d].models++;
+      });
+      var openIss = state.issues.filter(function(i){
         return i.project===p.id && String(i.building||'').toUpperCase()===code &&
                (i.status==='Open'||i.status==='In Progress');
-      }).length;
-      return {code:code, name:b?b.name:'', models:mods.filter(function(m){ return modelBuilding(m)===code; }).length, open:open};
+      });
+      openIss.forEach(function(i){
+        var d = String(i.discipline||'').trim() || 'No discipline';
+        if(!dmap[d]) dmap[d] = {code:d, models:0, open:0};
+        dmap[d].open++;
+      });
+      var discs = Object.keys(dmap).sort().map(function(k){ return dmap[k]; });
+      return {code:code, name:b?b.name:'', models:bMods.length, open:openIss.length, discs:discs};
     });
+  }
+  function buildingTableHtml(rows){
+    var body = [];
+    rows.forEach(function(r){
+      body.push('<tr style="background:var(--light);"><td><strong>'+escapeHtml(r.code)+'</strong></td><td>'+escapeHtml(r.name||'\u2014')+'</td><td>'+r.models+'</td><td>'+r.open+'</td></tr>');
+      (r.discs||[]).forEach(function(d){
+        body.push('<tr><td style="padding-left:22px;color:var(--muted);">\u21b3</td><td style="color:var(--muted);">'+escapeHtml(d.code)+'</td><td>'+d.models+'</td><td>'+d.open+'</td></tr>');
+      });
+    });
+    return '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Building</th><th>Name</th><th>Models</th><th>Open issues</th></tr></thead><tbody>'+body.join('')+'</tbody></table></div>';
   }
   function renderBuildingRollup(p){
     var rows = buildingRollup(p);
     if(!rows.length) return '';
     return '<div style="height:18px;"></div>'+
       '<div class="card">'+
-        '<div class="card-head"><h3>Issues by building</h3><span class="hint">Open issues filed against each building&rsquo;s models</span></div>'+
-        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Building</th><th>Name</th><th>Models</th><th>Open issues</th></tr></thead><tbody>'+
-        rows.map(function(r){
-          return '<tr><td><strong>'+escapeHtml(r.code)+'</strong></td><td>'+escapeHtml(r.name||'\u2014')+'</td>'+
-            '<td>'+r.models+'</td><td>'+r.open+'</td></tr>';
-        }).join('')+
-        '</tbody></table></div>'+
+        '<div class="card-head"><h3>Issues by building &amp; discipline</h3><span class="hint">Open issues filed against each building&rsquo;s models</span></div>'+
+        buildingTableHtml(rows)+
       '</div>';
   }
   var ISSUE_STATUSES = ['Open','In Progress','Resolved','Closed','Waived'];
@@ -2395,7 +2472,7 @@
     var shown = issueRows.filter(function(i){
       return (!qcBld || String(i.building||'').toUpperCase()===qcBld) &&
              (!qcDisc || String(i.discipline||'').toUpperCase()===qcDisc);
-    });
+    }).sort(cmpIssueOrder);
     var iSelStyle = 'border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);';
     var issuesHtml;
     if(issueRows.length===0){
@@ -2415,25 +2492,40 @@
           '<button class="btn btn-outline btn-sm" onclick="OHub.qcBulkApply(\'all\')">Apply to all</button>'+
           '<button class="btn btn-ghost btn-sm" onclick="OHub.qcBulkDeleteSel()">Delete selected</button>'+
         '</div>';
+      var gB2 = '\u0000', gD2 = '\u0000', iBody = [];
+      shown.forEach(function(i){
+        var bKey = String(i.building||'').toUpperCase();
+        var bLbl = bKey ? 'Building '+bldLabel(bKey) : 'Unassigned building';
+        if(bKey!==gB2){
+          gB2 = bKey; gD2 = '\u0000';
+          var bN2 = shown.filter(function(x){ return String(x.building||'').toUpperCase()===bKey; }).length;
+          iBody.push(grpRow(11, bLbl, '('+bN2+' issue'+(bN2===1?'':'s')+')'));
+        }
+        var dKey2 = String(i.discipline||'').toUpperCase();
+        if(dKey2!==gD2){
+          gD2 = dKey2;
+          var dN2 = shown.filter(function(x){ return String(x.building||'').toUpperCase()===bKey && String(x.discipline||'').toUpperCase()===dKey2; }).length;
+          iBody.push(subGrpRow(11, dKey2||'No discipline', '('+dN2+')'));
+        }
+        iBody.push('<tr>'+
+          '<td><input type="checkbox" class="qc-sel" data-qcid="'+i.id+'" aria-label="Select issue" style="accent-color:var(--g1);"></td>'+
+          '<td>'+escapeHtml(i.description)+'</td>'+
+          '<td>'+escapeHtml(moduleLabel(i.module))+'</td>'+
+          '<td>'+escapeHtml(i.building||'\u2014')+'</td>'+
+          '<td>'+escapeHtml(i.discipline||'\u2014')+'</td>'+
+          '<td>'+escapeHtml(i.model||'\u2014')+'</td>'+
+          '<td><span class="badge badge-'+sevBadge(i.severity)+'">'+escapeHtml(i.severity)+'</span></td>'+
+          '<td>'+statusSelect(i.id, i.status)+'</td>'+
+          '<td>'+fmtDate(i.due)+'</td>'+
+          '<td><span class="badge badge-'+(i.source==='auto'?'info':'muted')+'">'+(i.source==='auto'?'auto':'manual')+'</span></td>'+
+          '<td><button class="btn btn-ghost btn-sm" onclick="OHub.deleteIssue(\''+i.id+'\')">Remove</button></td>'+
+        '</tr>');
+      });
       issuesHtml = filterBar+
         '<div class="tbl-wrap"><table class="tbl"><thead><tr>'+
         '<th style="width:26px;"><input type="checkbox" aria-label="Select all issues" onchange="OHub.qcSelectAll(this.checked)"></th>'+
         '<th>Description</th><th>Area</th><th>Building</th><th>Discipline</th><th>Model</th><th>Severity</th><th>Status</th><th>Due</th><th>Src</th><th></th></tr></thead><tbody>'+
-        shown.map(function(i){
-          return '<tr>'+
-            '<td><input type="checkbox" class="qc-sel" data-qcid="'+i.id+'" aria-label="Select issue" style="accent-color:var(--g1);"></td>'+
-            '<td>'+escapeHtml(i.description)+'</td>'+
-            '<td>'+escapeHtml(moduleLabel(i.module))+'</td>'+
-            '<td>'+escapeHtml(i.building||'\u2014')+'</td>'+
-            '<td>'+escapeHtml(i.discipline||'\u2014')+'</td>'+
-            '<td>'+escapeHtml(i.model||'\u2014')+'</td>'+
-            '<td><span class="badge badge-'+sevBadge(i.severity)+'">'+escapeHtml(i.severity)+'</span></td>'+
-            '<td>'+statusSelect(i.id, i.status)+'</td>'+
-            '<td>'+fmtDate(i.due)+'</td>'+
-            '<td><span class="badge badge-'+(i.source==='auto'?'info':'muted')+'">'+(i.source==='auto'?'auto':'manual')+'</span></td>'+
-            '<td><button class="btn btn-ghost btn-sm" onclick="OHub.deleteIssue(\''+i.id+'\')">Remove</button></td>'+
-          '</tr>';
-        }).join('')+
+        iBody.join('')+
         '</tbody></table></div>'+
         (shown.length? '' : '<div style="padding:8px 2px;font-size:.8rem;color:var(--muted);">No issues match these filters.</div>');
     }
@@ -3934,8 +4026,19 @@
         '<div class="card-head"><h3>BIM Delivery Health summary'+(p?(' \u2014 '+escapeHtml(p.name)):'')+'</h3></div>'+
         (p ? qcSummaryTable(p) : '<p style="color:var(--muted);font-size:.85rem;">Select a project to see its summary.</p>')+
       '</div>'+
+      reportsBuildingCard(p)+
       '<p style="font-size:.78rem;color:var(--muted);margin-bottom:10px;">Each module keeps its own native Excel / CSV / PDF / HTML export \u2014 nothing was removed. Open a module below to generate that report exactly as before; this page just gives you one place to find them.</p>'+
       '<div class="grid grid-2">'+cards+'</div>';
+  }
+  function reportsBuildingCard(p){
+    if(!p) return '';
+    var rows = buildingRollup(p);
+    if(!rows.length) return '';
+    return '<div class="card" style="margin-bottom:18px;">'+
+      '<div class="card-head"><h3>By building &amp; discipline \u2014 '+escapeHtml(p.name)+'</h3>'+
+      '<span class="hint">Models and open issues, classified building first</span></div>'+
+      buildingTableHtml(rows)+
+    '</div>';
   }
   function qcSummaryTable(p){
     var sc = projectScores(p.id);

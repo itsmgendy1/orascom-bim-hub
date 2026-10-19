@@ -79,7 +79,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
         <select id="project-picker-select" aria-label="Active project"></select>
         <button class="btn btn-outline btn-sm" onclick="OHub.openProjectModal()">+ Project</button>
         <button class="btn btn-outline btn-sm" onclick="OHub.editActiveProject()" title="Edit active project info">✎ Edit</button>
-        <button class="btn btn-outline btn-sm" onclick="OHub.openAcc()" title="Open this project in Autodesk Construction Cloud (new tab)">ACC ↗</button>
+        <button class="btn btn-outline btn-sm" id="btn-open-acc" onclick="OHub.openAcc()" title="Open this project in Autodesk Construction Cloud (new tab)">ACC ↗</button>
         <button class="btn btn-outline btn-sm" onclick="OHub.startTour()" title="Guided tour">▶ Tour</button>
         <button class="btn btn-outline btn-sm" id="theme-toggle" onclick="OHub.toggleDark()" title="Toggle dark mode">🌙</button>
         <div style="position:relative;">
@@ -152,10 +152,10 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-outline btn-sm" onclick="OHub.dcSendAllHtml()">Send all HTML &rarr; Naming + Model Quality</button>
             <button class="btn btn-outline btn-sm" onclick="OHub.dcSendAllCsv()">Send all CSV &rarr; Workset + Parameter</button>
-            <button class="btn btn-primary btn-sm" onclick="OHub.syncFromServer(true)">Sync from export server</button>
+            <button class="btn btn-primary btn-sm" id="dc-sync-server" onclick="OHub.syncFromServer(true)">Sync from export server</button>
           </div>
         </div>
-        <div class="card" style="margin-bottom:14px;">
+        <div class="card" style="margin-bottom:14px;" id="card-acc-local">
           <div class="card-head"><h3>ACC models — pick what to test</h3><span class="hint" id="acc-root-label">no folder chosen</span></div>
           <p style="font-size:.83rem;color:var(--muted);margin-bottom:12px;">Browse your <b>Desktop Connector synced</b> ACC project right here — no API key, no admin. Tick the models to test, then download the selection: the nightly job reads it and runs only those. Tip: right-click folders in Connector → <i>Always keep on this device</i> first.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
@@ -172,7 +172,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
             <span id="acc-count" style="font-size:.78rem;color:var(--muted);"></span>
           </div>
         </div>
-        <div class="card" style="margin-bottom:14px;">
+        <div class="card" style="margin-bottom:14px;" id="card-acc-cloud">
           <div class="card-head"><h3>ACC cloud — browse live</h3><span class="hint" id="acc-cloud-status">not connected</span></div>
           <p style="font-size:.83rem;color:var(--muted);margin-bottom:12px;">Sign in with your Autodesk account and browse the live ACC project tree — no Desktop Connector needed. Read-only (<code>data:read</code>); the sign-in is completed by the local runner on this machine, the token never leaves it. Saving writes <code>selected_models.json</code> for the pyRevit cloud lane (<code>batch_export.py</code>).</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
@@ -304,7 +304,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
           </div>
         </div>
         <div style="height:16px;"></div>
-        <div class="card">
+        <div class="card" id="card-sync-server">
           <div class="card-head"><h3>Export server auto-sync</h3></div>
           <p style="font-size:.8rem;color:var(--muted);">Pulls the newest nightly exports (<span style="font-family:monospace;">serve_exports.py</span>) into Data Center and queues them to every module automatically. Mapping modules wait at their mapping screen; Naming and Model Quality run immediately.</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
@@ -319,7 +319,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
           </div>
         </div>
         <div style="height:16px;"></div>
-        <div class="card">
+        <div class="card" id="card-cloud">
           <div class="card-head"><h3>Cloud sync <span class="hint">shared workspace, last-write-wins</span></h3></div>
           <p style="font-size:.8rem;color:var(--muted);">Push this browser's Hub data (projects, models, scores, issues, deliverables, gates, settings) to your personal cloud workspace, or pull it down on another machine. Team sign-in selects your workspace automatically — pull replaces everything here, so push first if unsure. Token lives in this browser only.</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
@@ -335,7 +335,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
           <div id="cloud-last" style="font-size:.74rem;color:var(--muted);margin-top:6px;"></div>
         </div>
         <div style="height:16px;"></div>
-        <div class="card">
+        <div class="card" id="card-team">
           <div class="card-head"><h3>Team access <span class="hint">server-held accounts</span></h3><button class="btn btn-ghost btn-sm" onclick="OHub.teamLoadUsers()">Refresh</button></div>
           <p style="font-size:.8rem;color:var(--muted);">Create sign-in accounts on the sync server (needs its token in Cloud sync above). teammates sign in from any browser via the landing's team-server login. Passwords travel hashed; the server stores salt + hash only.</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:flex-end;">
@@ -349,7 +349,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
           <div id="team-list" style="margin-top:10px;"></div>
         </div>
         <div style="height:16px;"></div>
-        <div class="card">
+        <div class="card" id="card-forma">
           <div class="card-head"><h3>Autodesk Forma <span class="hint">file import · no account needed</span></h3></div>
           <p style="font-size:.8rem;color:var(--muted);">Export Area metrics / Units from Forma (CSV) and drop the file in the <a href="#" onclick="OHub.switchView('datacenter');return false;">Data Center</a> — the Hub detects it and saves the figures to the active project. Works offline, from <span style="font-family:monospace;">file://</span>, with zero accounts or tokens.</p>
           <div style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="OHub.switchView('datacenter')">Open Data Center</button></div>
@@ -420,7 +420,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
         <div class="field"><label>Project name</label><input type="text" id="pm-name" required></div>
         <div class="field"><label>Project code</label><input type="text" id="pm-code" placeholder="e.g. SA39"></div>
         <div class="field"><label>Client</label><input type="text" id="pm-client"></div>
-        <div class="field"><label>ACC link <span style="font-weight:400;color:var(--muted);">(optional — defaults to Ras El Hekma Docs)</span></label><input type="text" id="pm-accurl" placeholder="https://acc.autodesk.com/docs/files/projects/…"></div>
+        <div class="field" id="pm-accrow"><label>ACC link <span style="font-weight:400;color:var(--muted);">(optional — defaults to Ras El Hekma Docs)</span></label><input type="text" id="pm-accurl" placeholder="https://acc.autodesk.com/docs/files/projects/…"></div>
         <div class="field"><label>Stage</label>
           <select id="pm-stage">
             <option>Design</option><option>Construction</option><option>Handover</option><option>Operations</option>
@@ -546,6 +546,6 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
 <script src="assets/js/forma.js?v=70eecd5c"></script>
 <script src="assets/js/site-plots.js?v=ead3de9e"></script>
 <script src="assets/js/ohub-auth.js?v=214d7ab7"></script>
-<script src="assets/js/hub.js?v=2f9a8b75"></script>
+<script src="assets/js/hub.js?v=95cad414"></script>
 </body>
 </html>

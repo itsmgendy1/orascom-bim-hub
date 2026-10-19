@@ -29,6 +29,8 @@ jobs:
         run: node tests/validators_mq.js
       - name: Hub shell suite
         run: node tests/hub_shell.js
+      - name: Role gating suite
+        run: node tests/role_gating.js
       - name: Scoring and persistence suite
         run: node tests/validators_mq2.js
       - name: QAQC checklist fill suite

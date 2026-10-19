@@ -28,12 +28,12 @@
   };
 
   var MODULES = [
-    {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=103bc43c', weightKey:'midp'},
-    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=877b6da0',      weightKey:'naming'},
-    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=8f02a7f6',          weightKey:'qaqc'},
-    {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},
-    {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=acbd0142',   weightKey:'parameters'},
-    {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=f508d891',                 weightKey:'clash'}
+    {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=c683d2bf', weightKey:'midp'},
+    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=599bfa11',      weightKey:'naming'},
+    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=beef365b',          weightKey:'qaqc'},
+    {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=c0ba118e',     weightKey:'workset'},
+    {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=0d9e7a7a',   weightKey:'parameters'},
+    {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=95954d92',                 weightKey:'clash'}
   ];
 
   var DEFAULT_WEIGHTS = {midp:20, naming:15, qaqc:25, workset:15, parameters:15, clash:10};
@@ -348,7 +348,8 @@
     frame.contentWindow.postMessage({
       source:'orascom-hub', type:'set-context',
       context: p ? {id:p.id, name:p.name, code:p.code} : null,
-      theme: hubTheme()
+      theme: hubTheme(),
+      role: authwIsAdmin() ? 'admin' : 'user'
     }, HUB_ORIGIN);
   }
 
@@ -1952,7 +1953,7 @@
       host.innerHTML = emptyState('\uD83E\uDDE9','No models tracked',
         'Register the Revit models that belong to '+p.name+' so issues and scores can be tied to a model.',
         '<button class="btn btn-primary" onclick="OHub.openModelModal()">+ Add model</button> '+
-        '<button class="btn btn-outline" onclick="OHub.switchView(\'datacenter\')">Import from ACC &#8594;</button>');
+        (authwIsAdmin() ? '<button class="btn btn-outline" onclick="OHub.switchView(\'datacenter\')">Import from ACC &#8594;</button>' : ''));
       renderModelRunbar(p);
       return;
     }
@@ -2068,6 +2069,7 @@
   function renderModelRunbar(p){
     var host = document.getElementById('models-runbar');
     if(!host) return;
+    if(!authwIsAdmin()){ host.style.display='none'; host.innerHTML=''; return; }
     var total = p ? projectModels(p.id).length : 0;
     var n = p ? projectModels(p.id).filter(function(m){ return m.sel; }).length : 0;
     if(!total){ host.style.display='none'; host.innerHTML=''; return; }
@@ -2443,7 +2445,7 @@
             '<button class="btn btn-outline" onclick="OHub.switchView(\'clash\')">Review clashes</button>'+
             '<button class="btn btn-outline" onclick="OHub.switchView(\'reports\')">Generate report</button>'+
             '<button class="btn btn-gold" onclick="OHub.switchView(\'quality-center\')">View open issues ('+openIssues.length+')</button>'+
-            '<button class="btn btn-outline" onclick="OHub.openAcc()">Open ACC \u2197</button>'+
+            (authwIsAdmin() ? '<button class="btn btn-outline" onclick="OHub.openAcc()">Open ACC \u2197</button>' : '')+
           '</div>'+
         '</div>'+
         '<div class="card">'+
@@ -3355,6 +3357,7 @@
   }
   function accCloudRefresh(){
     // Called whenever Data Center renders: re-attach to an existing session.
+    if(!authwIsAdmin()) return;
     accCloudApi('/acc-status').then(function(st){
       var was = accCloud.connected;
       accCloud.connected = !!(st && st.signed_in);
@@ -4536,6 +4539,7 @@
       state.authuid = {uid: me.id, username: me.username, role: me.role};
       persist('authuid');
       try{ paintAuthwNav(); }catch(e){}
+      MODULES.forEach(function(m){ if(loadedModules[m.id]) pushContextToModule(m.id); });
       var last = authwLastUid();
       if(last === me.id){ authwGentleSync(); return; }
       authwApi('/api/data/projects').then(function(j){
@@ -4558,6 +4562,14 @@
       else location.replace('index.html');
     });
   }
+  var ADMIN_ONLY_IDS = ['btn-open-acc','pm-accrow','dc-sync-server','card-acc-local','card-acc-cloud','card-sync-server','card-cloud','card-team','card-forma'];
+  function applyRoleGating(){
+    var admin = authwIsAdmin();
+    ADMIN_ONLY_IDS.forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = admin ? '' : 'none';
+    });
+  }
   function paintAuthwNav(){
     // Users & Access is always visible: the view itself explains sign-in
     // state and gates admin tables by role. Hiding it confused local users.
@@ -4565,6 +4577,7 @@
       n.style.display = '';
     });
     try{ renderAccountBtn(); }catch(e){}
+    try{ applyRoleGating(); }catch(e){}
   }
   function renderAccountBtn(){
     var sess = authwSession(), name = 'Account', sub = 'Browser-local session';
@@ -5186,7 +5199,7 @@
     verifyCloudSession();
     try{ authwBoot(); }catch(e){}
     try{ if(!localStorage.getItem(LS.tour)){ setTimeout(function(){ startTour(); }, 800); } }catch(e){}
-    try{ if(syncConfig().auto && syncConfig().url){ setTimeout(function(){ syncFromServer(false); }, 2500); } }catch(e){}
+    try{ if(authwIsAdmin() && syncConfig().auto && syncConfig().url){ setTimeout(function(){ syncFromServer(false); }, 2500); } }catch(e){}
   }
   // If this tab signed in with a team account, confirm the server session
   // is still valid; a revoked/deleted account bounces back to the landing.

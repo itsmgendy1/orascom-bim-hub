@@ -2696,9 +2696,19 @@ document.addEventListener('DOMContentLoaded', function(){
     if (window.OrascomHubOrigin !== "*" && (!ev || ev.origin !== window.OrascomHubOrigin)) return;
     if (ev && ev.data && ev.data.source === "orascom-hub" && ev.data.type === "set-context") {
       window.OrascomHubContext = ev.data.context || null;
+      applyHubRole(ev.data.role);
       try { document.dispatchEvent(new CustomEvent("orascom-hub-context", { detail: window.OrascomHubContext })); } catch(e) {}
     }
   });
+  function applyHubRole(role){
+    try{
+      var hide = (window.parent && window.parent !== window) && String(role || "").toLowerCase() !== "admin";
+      Array.prototype.forEach.call(document.querySelectorAll('[id^="hub-server-url"]'), function(el){
+        var d = el.closest ? el.closest("details") : null;
+        if(d) d.style.display = hide ? "none" : "";
+      });
+    }catch(e){}
+  }
   window.OrascomHubReportScore = function(score, issues, meta){
     try{
       if (window.parent && window.parent !== window) {

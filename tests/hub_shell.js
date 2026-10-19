@@ -208,6 +208,7 @@ const mg = (els['models-grid'] || {}).innerHTML || '';
 ok(mg.indexOf('>Building<') >= 0, 'models table has Building column');
 ok(mg.indexOf('HT01 AR') >= 0 && mg.indexOf('HT01 MAIN BUILDING') >= 0, 'HT01 filter shows HT01 models', mg.slice(0, 300));
 ok(mg.indexOf('UB02 EL') === -1 && mg.indexOf('BH01 BOH') === -1, 'HT01 filter hides other buildings');
+ok(els['models-runbar'].style.display === 'none', 'role gate: models runbar hidden for non-admin');
 ok(els['models-bld-filter'].innerHTML.indexOf('HT01') >= 0 && els['models-bld-filter'].innerHTML.indexOf('UB02') >= 0, 'building filter lists every building');
 els['models-bld-filter'].value = '';
 els['models-pkg-filter'].value = '';
@@ -274,6 +275,7 @@ ok(dash.indexOf('>HT01 \u00b7 AR</span>') >= 0, 'dashboard: open issue tagged bu
 ok(dash.indexOf('Delivery health by building &amp; discipline') >= 0, 'dashboard: building & discipline delivery card');
 ok(dash.indexOf('db-bld-filter') >= 0 && dash.indexOf('<option value="HT01"') >= 0, 'dashboard: building selector lists codes');
 ok(dash.indexOf('<td><strong>HT01</strong></td><td>HT01 MAIN BUILDING</td><td>95%</td>') >= 0, 'dashboard: building row carries code, name and score');
+ok(dash.indexOf('Open ACC') === -1, 'role gate: no dashboard ACC quick action for non-admin');
 OHub.setDashBld('HT01');
 const dashHt = (els['dash-content'] || {}).innerHTML || '';
 ok(dashHt.indexOf('BIM Delivery Health \u2014 P0152 Portaluna Sales Resort \u00b7 HT01') >= 0, 'dashboard: building code next to the health heading');
@@ -297,6 +299,16 @@ ok(OHub.applyModuleScore('PP', 'qaqc', 74, 3, [{ desc: '[BH01 EL] Model quality:
 const el = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[BH01 EL] Model quality: views not on sheets');
 ok(!!el && el.building === 'BH01' && el.discipline === 'EL', 'QAQC findings file with building + discipline');
 ok(!!JSON.parse(store.ohub_models || '[]').find((m) => m.project === 'PP' && m.name === 'BH01 EL' && m.building === 'BH01'), 'QAQC model registered under its building');
+
+// 12. Role gating: localhost/ACC/APS surfaces are admin-only; every other
+//     role (and no role at all) gets them hidden across tabs.
+OHub.switchView('settings');
+ok(els['btn-open-acc'].style.display === 'none', 'role gate: topbar ACC hidden for non-admin');
+ok(els['pm-accrow'].style.display === 'none', 'role gate: project modal ACC link hidden for non-admin');
+ok(els['dc-sync-server'].style.display === 'none', 'role gate: Data Center export-server sync hidden for non-admin');
+ok(els['card-acc-local'].style.display === 'none' && els['card-acc-cloud'].style.display === 'none', 'role gate: Data Center ACC cards hidden for non-admin');
+ok(els['card-sync-server'].style.display === 'none' && els['card-cloud'].style.display === 'none', 'role gate: settings server sync cards hidden for non-admin');
+ok(els['card-team'].style.display === 'none' && els['card-forma'].style.display === 'none', 'role gate: settings team + Forma/APS cards hidden for non-admin');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

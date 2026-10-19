@@ -492,7 +492,7 @@ body.dark #ax-modal-card{background:#111C33;border:1px solid #233252}
     <div class="io-projname" style="margin-top:18px;margin-bottom:22px">
       <label>🎯 Validate only drawings with this in the name <span style="font-weight:400;opacity:.7;letter-spacing:0;text-transform:none">(optional)</span></label>
       <input type="text" id="name-filter" placeholder="e.g. -RL-AB — matches P0152-K00146-OCC-HT01-RL-AB-AC-000001" oninput="onNameFilterChange(this.value)">
-      <small style="display:block;margin-top:6px;color:rgba(255,255,255,.45);font-size:.72rem">Applies to all three runs — As-Built Validation, File Exchange Audit and the MIDP comparison. Only drawings whose file name contains this text are validated; Revit models are always kept so drawings can still be matched to them. Leave empty to validate everything.</small>
+      <small style="display:block;margin-top:6px;color:rgba(255,255,255,.45);font-size:.72rem">Applies to As-Built Validation, File Exchange Audit and the ACC Extra Files + Warnings tabs — the MIDP comparison always checks every file in the MIDP. Only drawings whose file name contains this text are validated; Revit models are always kept so drawings can still be matched to them. Leave empty to validate everything.</small>
     </div>
 
     <div class="io-prog" id="io-prog"><div class="prog-bar"><div class="prog-fill" id="pf"></div></div>
@@ -926,9 +926,14 @@ function isExcludedFormat(v){
   if(ext) return DV_EXCLUDED_EXT.indexOf(ext)!==-1;
   return DV_EXCLUDED_EXT.indexOf(s.replace(/^\./,'').toLowerCase())!==-1;
 }
-/* The ACC rows this run counts anywhere (both the name filter and exclusions applied). */
+/* The ACC rows counted anywhere in the module (.jpg/.pcp never counted). */
+function accCountedItems(){
+  return ACC_ITEMS.filter(function(a){ return !isExcludedFile(a.name); });
+}
+/* The counted set narrowed by the drawing-name filter — used by the ACC Extra Files and Warnings
+   tabs only. The MIDP comparison always covers every file, and AB / AX scope drawings themselves. */
 function accScopedItems(){
-  return ACC_ITEMS.filter(function(a){ return !isExcludedFile(a.name) && nameFilterMatch(a.name); });
+  return accCountedItems().filter(function(a){ return nameFilterMatch(a.name); });
 }
 
 /* AS-BUILT VALIDATION — module state (kept separate from the MIDP state above) */
@@ -1571,7 +1576,6 @@ async function runComparison(){
       const looksPlaceholder = /^(tbd|tbc|n\/a|na|tba|to be (confirmed|advised))$/i.test(keyVal);
       const isHeaderRow = !looksPlaceholder && !/\d/.test(keyVal) && !fmtVal;
       if(isExcludedFile(keyVal) || isExcludedFormat(fmtVal)){ excludedMidpRows++; continue; }
-      if(NAME_FILTER && !isHeaderRow && !nameFilterMatch(keyVal)) continue;
       items.push({
         key: keyVal,
         format: fmtVal,
@@ -1586,9 +1590,7 @@ async function runComparison(){
         showToast('All '+excludedMidpRows+' MIDP row(s) are .jpg/.pcp preview or plot-config entries — nothing to validate.', 'warn');
         return;
       }
-      showToast(NAME_FILTER
-        ? 'No MIDP rows left after applying the drawing name filter "'+NAME_FILTER+'" — clear the filter to see all rows.'
-        : 'No MIDP rows found under the selected header row — check your mapping.', NAME_FILTER?'warn':'error');
+      showToast('No MIDP rows found under the selected header row — check your mapping.', 'error');
       return;
     }
 
@@ -1596,7 +1598,7 @@ async function runComparison(){
     MIDP_META = {
       fileName: MIDP_FILE_NAME, sheetName: sheetName, headerRow: headerRowIdx+1, totalRows: items.length,
       keyColumnName: headers[keyIdx], formatColumnName: formatIdx>=0?headers[formatIdx]:'', titleColumnName: titleIdx>=0?headers[titleIdx]:'',
-      nameFilter: NAME_FILTER, excludedExtRows: excludedMidpRows
+      excludedExtRows: excludedMidpRows
     };
 
     runMatching();
@@ -1687,7 +1689,6 @@ function runMatching(){
     it.norm = normalizeKey(it.name);
     it.matched = false;
     if(isExcludedFile(it.name)) return;
-    if(!nameFilterMatch(it.name)) return;
     if(!accIndex.has(it.norm)) accIndex.set(it.norm, []);
     accIndex.get(it.norm).push(it);
   });
@@ -1773,9 +1774,9 @@ function renderKpiRow(){
   const delivered = MIDP_ITEMS.filter(function(m){ return !m.isHeader && m.matched; }).length;
   const missing = total - delivered;
   const pct = total ? Math.round((delivered/total)*100) : 0;
-  const accScoped = accScopedItems();
-  const accTotal = accScoped.length;
-  const accMatched = accScoped.filter(function(a){ return a.matched; }).length;
+  const accCounted = accCountedItems();
+  const accTotal = accCounted.length;
+  const accMatched = accCounted.filter(function(a){ return a.matched; }).length;
   const accExtra = accTotal - accMatched;
   const rateCls = pct>=90?'ok':(pct>=60?'gold':'bad');
   const rateColor = pct>=90?'c-green':(pct>=60?'c-gold':'c-red');
@@ -1926,7 +1927,7 @@ function renderExtraTable(){
       return 0;
     });
   }
-  document.getElementById('extra-count').textContent = rows.length+' of '+allExtra.length+' shown';
+  document.getElementById('extra-count').textContent = rows.length+' of '+accCountedItems().filter(function(a){ return !a.matched; }).length+' shown';
   const thead = '<thead><tr>'+EXTRA_COLS.map(function(c){
     const sorted = EXTRA_SORT.col===c.key;
     return '<th onclick="sortExtra(\''+c.key+'\')" class="'+(sorted?'sorted':'')+'">'+c.label+'<span class="sort-ico">'+(sorted?(EXTRA_SORT.dir>0?'▲':'▼'):'↕')+'</span></th>';
@@ -1970,14 +1971,13 @@ function renderFormatTab(){
   const extCountAll = {}, extCountExtra = {};
   ACC_ITEMS.forEach(function(a){
     if(isExcludedFile(a.name)) return;
-    if(!nameFilterMatch(a.name)) return;
     const ext = (a.name.match(/\.([A-Za-z0-9]+)$/)||[, ''])[1].toLowerCase() || '(none)';
     extCountAll[ext] = (extCountAll[ext]||0) + 1;
     if(!a.matched) extCountExtra[ext] = (extCountExtra[ext]||0) + 1;
   });
   const sortedAll = Object.keys(extCountAll).sort(function(a,b){ return extCountAll[b]-extCountAll[a]; });
   const sortedExtra = Object.keys(extCountExtra).sort(function(a,b){ return extCountExtra[b]-extCountExtra[a]; });
-  const totalAll = accScopedItems().length || 1, totalExtra = accScopedItems().filter(function(a){ return !a.matched; }).length || 1;
+  const totalAll = accCountedItems().length || 1, totalExtra = accCountedItems().filter(function(a){ return !a.matched; }).length || 1;
 
   document.getElementById('format-all-list').innerHTML = sortedAll.length
     ? sortedAll.map(function(e){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0"><span><b>.'+e+'</b></span><span>'+extCountAll[e]+' ('+Math.round(extCountAll[e]/totalAll*100)+'%)</span></div>'; }).join('')
@@ -2100,8 +2100,7 @@ function renderProvenance(){
     '<div class="prov-row"><span>File Format column</span><b>'+escHtml(MIDP_META.formatColumnName||'auto-detected from name')+'</b></div>'+
     '<div class="prov-row"><span>Rows loaded</span><b>'+MIDP_ITEMS.length+'</b></div>'+
     '<div class="prov-row"><span>Files</span><b>'+MIDP_ITEMS.filter(function(m){return !m.isHeader;}).length+'</b><span style="font-size:.7rem;color:var(--muted)"> ('+(MIDP_ITEMS.filter(function(m){return m.isHeader;}).length)+' headers)</span></div>'+
-    (MIDP_META.excludedExtRows ? '<div class="prov-row"><span>Ignored .jpg/.pcp rows</span><b>'+MIDP_META.excludedExtRows+'</b><span style="font-size:.7rem;color:var(--muted)"> not deliverables</span></div>' : '')+
-    (MIDP_META.nameFilter ? '<div class="prov-row"><span>Drawing name filter</span><b>'+escHtml(MIDP_META.nameFilter)+'</b></div>' : '');
+    (MIDP_META.excludedExtRows ? '<div class="prov-row"><span>Ignored .jpg/.pcp rows</span><b>'+MIDP_META.excludedExtRows+'</b><span style="font-size:.7rem;color:var(--muted)"> not deliverables</span></div>' : '');
 }
 
 /* ═══ RENDER: CHARTS ══════════════════════════════════════════ */
@@ -2175,7 +2174,7 @@ async function exportExcelReport(){
 
     const total = MIDP_ITEMS.filter(function(m){return !m.isHeader;}).length, delivered = MIDP_ITEMS.filter(function(m){return !m.isHeader && m.matched;}).length, missing = total-delivered;
     const pct = total ? Math.round((delivered/total)*100) : 0;
-    const accScoped = accScopedItems();
+    const accScoped = accCountedItems();
     const accTotal = accScoped.length, accMatched = accScoped.filter(function(a){return a.matched;}).length, accExtra = accTotal-accMatched;
     const headerCount = MIDP_ITEMS.filter(function(m){return m.isHeader;}).length;
 
@@ -2202,7 +2201,6 @@ async function exportExcelReport(){
       ['ACC Files Total', accTotal], ['Matched to MIDP', accMatched], ['Extra in ACC', accExtra],
       ['Warnings (File Revisions)', getWarningItems().length],
       ['Warnings (File Size)', getLargeModelItems().length],
-      ['Drawing name filter', (MIDP_META&&MIDP_META.nameFilter) || '(none)'],
       ['Ignored file types', '.jpg / .pcp (previews, plot configs)'],
       ['MIDP rows ignored (.jpg/.pcp)', (MIDP_META&&MIDP_META.excludedExtRows)||0]
     ];
@@ -2262,7 +2260,7 @@ async function exportExcelReport(){
       {header:'Uploaded On', key:'on', width:22}, {header:'Size', key:'size', width:12}, {header:'Revision', key:'rev', width:12}
     ];
     s3.getRow(1).eachCell(function(c){ c.font = {bold:true, color:{argb:white}}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:navy}}; });
-    accScopedItems().filter(function(a){ return !a.matched; }).forEach(function(a){
+    accCountedItems().filter(function(a){ return !a.matched; }).forEach(function(a){
       const row = s3.addRow({ name:a.name, disc:a.autoDiscipline||'', folder:a.folderPath||'', ver:a.versionNumber||'', by:a.versionAddedBy||a.updatedBy||'', on:a.versionAddedAt||a.lastUpdated||'', size:a.fileSize||'', rev:a.revision||'' });
       const folderCell = row.getCell('folder');
       const folderVal = a.folderPath || '';
@@ -2357,7 +2355,7 @@ async function exportPdfSummary(){
     var ti = 0, td = 0;
     MIDP_ITEMS.forEach(function(m){ if(!m.isHeader){ ti++; if(m.matched) td++; } });
     var pct = ti ? Math.round(td/ti*100) : 0;
-    var accMat = 0, accCnt = 0; accScopedItems().forEach(function(a){ accCnt++; if(a.matched) accMat++; });
+    var accMat = 0, accCnt = 0; accCountedItems().forEach(function(a){ accCnt++; if(a.matched) accMat++; });
     var dk = DARK_ON;
     var rCls = pct>=90?'ok':(pct>=60?'gold':'bad');
     var cards = [

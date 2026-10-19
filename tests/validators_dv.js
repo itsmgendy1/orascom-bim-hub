@@ -52,7 +52,7 @@ global.Chart = function () { return { destroy() {}, resize() {}, update() {} }; 
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,axReconcileOne,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml,nameFilterMatch,onNameFilterChange,axNameScope};');
+eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,axReconcileOne,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml,nameFilterMatch,onNameFilterChange,axNameScope,isExcludedFile};');
 const M = module.exports;
 
 // Mirror shipped rule defaults.
@@ -175,6 +175,12 @@ const scoped = M.axNameScope([
 ok(scoped.length === 2 && scoped.some(function(f){ return f.isRevitModel; }) && !scoped.some(function(f){ return f.name === 'A-FL-0002.pdf'; }), 'audit scope keeps models, drops non-matching drawings', JSON.stringify(scoped.map(function(f){ return f.name; })));
 M.onNameFilterChange('  ');
 ok(M.nameFilterMatch('anything') === true && store['dv_name_filter'] === '', 'filter cleared + whitespace trimmed');
+
+// 9. excluded file types: .jpg previews / .pcp plot configs are never validated as deliverables
+ok(M.isExcludedFile('PRINT-0001.pdf.jpg') === true && M.isExcludedFile('X-0001.JPG') === true, 'jpg excluded case-insensitive');
+ok(M.isExcludedFile('DWG-0001.pcp') === true && M.isExcludedFile('a.PCP') === true, 'pcp excluded');
+ok(M.isExcludedFile('A-0001.pdf') === false && M.isExcludedFile('A-0001.dwg') === false && M.isExcludedFile('M-AR-01.rvt') === false, 'deliverable extensions unaffected');
+ok(M.isExcludedFile('') === false && M.isExcludedFile(null) === false && M.isExcludedFile('noext') === false, 'exclusion null-safe');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

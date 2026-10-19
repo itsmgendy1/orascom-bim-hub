@@ -912,6 +912,17 @@ function onNameFilterChange(v){
   try{ localStorage.setItem('dv_name_filter', NAME_FILTER); }catch(e){}
 }
 
+/* EXCLUDED FILE TYPES — .jpg previews and .pcp (AutoCAD plot-config) files are auxiliary
+   uploads, never deliverables: they are ignored by matching, KPIs, extras, warnings and exports. */
+const DV_EXCLUDED_EXT = ['jpg','pcp'];
+function isExcludedFile(name){
+  return DV_EXCLUDED_EXT.indexOf(abGetExt(name))!==-1;
+}
+/* The ACC rows this run counts anywhere (both the name filter and exclusions applied). */
+function accScopedItems(){
+  return ACC_ITEMS.filter(function(a){ return !isExcludedFile(a.name) && nameFilterMatch(a.name); });
+}
+
 /* AS-BUILT VALIDATION — module state (kept separate from the MIDP state above) */
 let AB_FILES = [];              // every classified ACC row (drawings + revit models + excluded)
 let AB_REVIT = [];              // classified Revit model rows only
@@ -1661,6 +1672,7 @@ function runMatching(){
   ACC_ITEMS.forEach(function(it){
     it.norm = normalizeKey(it.name);
     it.matched = false;
+    if(isExcludedFile(it.name)) return;
     if(!nameFilterMatch(it.name)) return;
     if(!accIndex.has(it.norm)) accIndex.set(it.norm, []);
     accIndex.get(it.norm).push(it);
@@ -1747,8 +1759,9 @@ function renderKpiRow(){
   const delivered = MIDP_ITEMS.filter(function(m){ return !m.isHeader && m.matched; }).length;
   const missing = total - delivered;
   const pct = total ? Math.round((delivered/total)*100) : 0;
-  const accTotal = ACC_ITEMS.length;
-  const accMatched = ACC_ITEMS.filter(function(a){ return a.matched; }).length;
+  const accScoped = accScopedItems();
+  const accTotal = accScoped.length;
+  const accMatched = accScoped.filter(function(a){ return a.matched; }).length;
   const accExtra = accTotal - accMatched;
   const rateCls = pct>=90?'ok':(pct>=60?'gold':'bad');
   const rateColor = pct>=90?'c-green':(pct>=60?'c-gold':'c-red');
@@ -1758,7 +1771,7 @@ function renderKpiRow(){
     {lbl:'Delivered', val:delivered, cls:'ok', sub:pct+'% of MIDP scope', color:'c-green', ico:'✅'},
     {lbl:'Missing', val:missing, cls:'bad', sub:'not yet found in ACC log', color:'c-red', ico:'❌'},
     {lbl:'Delivery Rate', val:pct+'%', cls:rateCls, sub:'MIDP items delivered', color:rateColor, ico:'📈'},
-    {lbl:'ACC Files Total', val:accTotal, cls:'blue', sub:'rows in the ACC log', color:'c-blue', ico:'🗂'},
+    {lbl:'ACC Files Total', val:accTotal, cls:'blue', sub:'rows counted (.jpg/.pcp ignored)', color:'c-blue', ico:'🗂'},
     {lbl:'Matched to MIDP', val:accMatched, cls:'ok', sub:'accounted for in MIDP', color:'c-green', ico:'🔗'},
     {lbl:'Extra in ACC', val:accExtra, cls:'gold', sub:'not found in MIDP', color:'c-warn', ico:'⚠️'}
   ];
@@ -1888,7 +1901,7 @@ function sortExtra(col){
 }
 function renderExtraTable(){
   const q = (document.getElementById('extra-search').value||'').toLowerCase();
-  const allExtra = ACC_ITEMS.filter(function(a){ return !a.matched && nameFilterMatch(a.name); });
+  const allExtra = accScopedItems().filter(function(a){ return !a.matched; });
   let rows = allExtra;
   if(q) rows = rows.filter(function(a){ return (a.name+' '+(a.folderPath||'')).toLowerCase().indexOf(q)!==-1; });
   if(EXTRA_SORT.col){
@@ -1942,6 +1955,7 @@ function renderDisciplines(){
 function renderFormatTab(){
   const extCountAll = {}, extCountExtra = {};
   ACC_ITEMS.forEach(function(a){
+    if(isExcludedFile(a.name)) return;
     if(!nameFilterMatch(a.name)) return;
     const ext = (a.name.match(/\.([A-Za-z0-9]+)$/)||[, ''])[1].toLowerCase() || '(none)';
     extCountAll[ext] = (extCountAll[ext]||0) + 1;
@@ -1949,7 +1963,7 @@ function renderFormatTab(){
   });
   const sortedAll = Object.keys(extCountAll).sort(function(a,b){ return extCountAll[b]-extCountAll[a]; });
   const sortedExtra = Object.keys(extCountExtra).sort(function(a,b){ return extCountExtra[b]-extCountExtra[a]; });
-  const totalAll = ACC_ITEMS.filter(function(a){ return nameFilterMatch(a.name); }).length || 1, totalExtra = ACC_ITEMS.filter(function(a){ return !a.matched && nameFilterMatch(a.name); }).length || 1;
+  const totalAll = accScopedItems().length || 1, totalExtra = accScopedItems().filter(function(a){ return !a.matched; }).length || 1;
 
   document.getElementById('format-all-list').innerHTML = sortedAll.length
     ? sortedAll.map(function(e){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0"><span><b>.'+e+'</b></span><span>'+extCountAll[e]+' ('+Math.round(extCountAll[e]/totalAll*100)+'%)</span></div>'; }).join('')
@@ -1970,7 +1984,7 @@ function renderFormatTab(){
 
 /* ═══ RENDER: WARNINGS TAB ═══════════════════════════════════ */
 function getWarningItems(){
-  return ACC_ITEMS.filter(function(a){
+  return accScopedItems().filter(function(a){
     const v = (a.versionNumber||'').toUpperCase().replace(/[^0-9]/g,'');
     const n = parseInt(v,10);
     return !isNaN(n) && n > 1;
@@ -2063,7 +2077,7 @@ function renderProvenance(){
     '<div class="prov-row"><span>Exported on</span><b>'+escHtml(ACC_META.createdOn||'—')+'</b></div>'+
     '<div class="prov-row"><span>Exported by</span><b>'+escHtml(ACC_META.createdBy||'—')+'</b></div>'+
     '<div class="prov-row"><span>Filtered by</span><b>'+escHtml(ACC_META.filteredBy||'—')+'</b></div>'+
-    '<div class="prov-row"><span>Rows loaded</span><b>'+ACC_ITEMS.length+'</b></div>';
+    '<div class="prov-row"><span>Rows loaded</span><b>'+ACC_ITEMS.length+'</b><span style="font-size:.7rem;color:var(--muted)"> · .jpg/.pcp rows ignored in validation</span></div>';
   document.getElementById('prov-midp').innerHTML =
     '<div class="prov-row"><span>File</span><b>'+escHtml(MIDP_META.fileName||'—')+'</b></div>'+
     '<div class="prov-row"><span>Sheet</span><b>'+escHtml(MIDP_META.sheetName||'—')+'</b></div>'+
@@ -2146,7 +2160,7 @@ async function exportExcelReport(){
 
     const total = MIDP_ITEMS.filter(function(m){return !m.isHeader;}).length, delivered = MIDP_ITEMS.filter(function(m){return !m.isHeader && m.matched;}).length, missing = total-delivered;
     const pct = total ? Math.round((delivered/total)*100) : 0;
-    const accScoped = ACC_ITEMS.filter(function(a){ return nameFilterMatch(a.name); });
+    const accScoped = accScopedItems();
     const accTotal = accScoped.length, accMatched = accScoped.filter(function(a){return a.matched;}).length, accExtra = accTotal-accMatched;
     const headerCount = MIDP_ITEMS.filter(function(m){return m.isHeader;}).length;
 
@@ -2173,7 +2187,8 @@ async function exportExcelReport(){
       ['ACC Files Total', accTotal], ['Matched to MIDP', accMatched], ['Extra in ACC', accExtra],
       ['Warnings (File Revisions)', getWarningItems().length],
       ['Warnings (File Size)', getLargeModelItems().length],
-      ['Drawing name filter', (MIDP_META&&MIDP_META.nameFilter) || '(none)']
+      ['Drawing name filter', (MIDP_META&&MIDP_META.nameFilter) || '(none)'],
+      ['Ignored file types', '.jpg / .pcp (previews, plot configs)']
     ];
     kpis.forEach(function(pair){
       s1.getCell('A'+r).value = pair[0]; s1.getCell('B'+r).value = pair[1]; r++;
@@ -2231,7 +2246,7 @@ async function exportExcelReport(){
       {header:'Uploaded On', key:'on', width:22}, {header:'Size', key:'size', width:12}, {header:'Revision', key:'rev', width:12}
     ];
     s3.getRow(1).eachCell(function(c){ c.font = {bold:true, color:{argb:white}}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:navy}}; });
-    ACC_ITEMS.filter(function(a){ return !a.matched; }).forEach(function(a){
+    accScopedItems().filter(function(a){ return !a.matched; }).forEach(function(a){
       const row = s3.addRow({ name:a.name, disc:a.autoDiscipline||'', folder:a.folderPath||'', ver:a.versionNumber||'', by:a.versionAddedBy||a.updatedBy||'', on:a.versionAddedAt||a.lastUpdated||'', size:a.fileSize||'', rev:a.revision||'' });
       const folderCell = row.getCell('folder');
       const folderVal = a.folderPath || '';
@@ -2326,7 +2341,7 @@ async function exportPdfSummary(){
     var ti = 0, td = 0;
     MIDP_ITEMS.forEach(function(m){ if(!m.isHeader){ ti++; if(m.matched) td++; } });
     var pct = ti ? Math.round(td/ti*100) : 0;
-    var accMat = 0; ACC_ITEMS.forEach(function(a){ if(a.matched) accMat++; });
+    var accMat = 0, accCnt = 0; accScopedItems().forEach(function(a){ accCnt++; if(a.matched) accMat++; });
     var dk = DARK_ON;
     var rCls = pct>=90?'ok':(pct>=60?'gold':'bad');
     var cards = [
@@ -2334,9 +2349,9 @@ async function exportPdfSummary(){
       ['Delivered',String(td),pct+'% delivered',[39,174,96]],
       ['Missing',String(ti-td),'not yet in ACC',[224,53,53]],
       ['Delivery Rate',pct+'%','MIDP delivered', rCls==='ok'?[39,174,96]:(rCls==='gold'?[245,166,35]:[224,53,53])],
-      ['ACC Files',String(ACC_ITEMS.length),'rows in ACC log',[27,79,155]],
+      ['ACC Files',String(accCnt),'rows counted (.jpg/.pcp ignored)',[27,79,155]],
       ['Matched',String(accMat),'linked to MIDP',[39,174,96]],
-      ['Extra in ACC',String(ACC_ITEMS.length-accMat),'not in MIDP',[230,126,34]]
+      ['Extra in ACC',String(accCnt-accMat),'not in MIDP',[230,126,34]]
     ];
     pdf.setFontSize(13); pdf.setTextColor(10,30,64); pdf.setFont('helvetica','bold');
     pdf.text('DELIVERY SUMMARY', ml, y); y+=3;
@@ -2680,7 +2695,7 @@ function abClassifyAllFiles(accItems){
     const toks = abLastTokens(it.name);
     const isRevitModel = cls.isRevitModelFolder && ext==='rvt';
     const isDrawing = !!cls.drawingDiscipline && AB_DRAWING_EXT.indexOf(ext)!==-1;
-    const isSupportingFile = !!cls.drawingDiscipline && AB_DRAWING_EXT.indexOf(ext)===-1;
+    const isSupportingFile = (!!cls.drawingDiscipline && AB_DRAWING_EXT.indexOf(ext)===-1) || isExcludedFile(it.name);
     return {
       idx: idx, name: it.name, folderPath: it.folderPath||'',
       building: cls.building, ext: ext,

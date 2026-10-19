@@ -158,6 +158,18 @@ ok(iss.find((i) => i.description === '[BMS] Worksets').building === '', 'unclass
 OHub.fileAutoIssues('PP', 'qaqc', [{ desc: '[HT01 AR] Warnings', model: 'HT01 AR', severity: 'High' }]);
 ok(JSON.parse(store.ohub_issues || '[]').filter((i) => i.description === '[HT01 AR] Warnings').length === 1, 're-report does not duplicate issue');
 
+// 6c. A new report re-opens a resolved issue (auto update) and classification
+//     is stamped on the issue itself, even when no model is registered.
+const hid = iss.find((i) => i.description === '[HT01 AR] Warnings').id;
+OHub.qcBulkStatus('Resolved', [hid]);
+OHub.fileAutoIssues('PP', 'qaqc', [{ desc: '[HT01 AR] Warnings', model: 'HT01 AR', severity: 'High' }]);
+const re = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[HT01 AR] Warnings');
+ok(re.status === 'Open', 'new report reopens a resolved issue');
+ok(re.discipline === 'AR' && typeof re.lastSeen === 'number', 'issue classification + lastSeen stamped', re.discipline);
+OHub.fileAutoIssues('PP', 'naming', [{ desc: '[CR01 EL] Views Not On Sheets', severity: 'High' }]);
+const cr = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[CR01 EL] Views Not On Sheets');
+ok(cr && cr.building === 'CR01' && cr.discipline === 'EL', 'classification inferred from finding text');
+
 // 7. Models tab lists a Building column, filters by building, and sorts grouped.
 OHub.setActiveProject('PP');
 els['models-bld-filter'] = makeEl();
@@ -185,6 +197,31 @@ ok(qc.indexOf('Issues by building') >= 0, 'quality center building rollup');
 ok(qc.indexOf('<td><strong>HT01</strong></td><td>HT01 MAIN BUILDING</td><td>14</td><td>1</td>') >= 0, 'HT01 row: 14 models, 1 open issue');
 ok(qc.indexOf('<td><strong>SF01</strong></td>') >= 0, 'SF01 row present');
 ok(qc.indexOf('<th>Building</th>') >= 0, 'issue log has Building column');
+
+// 9. Issue log filters + batch actions (all / selected).
+const ppIss = () => JSON.parse(store.ohub_issues || '[]').filter((i) => i.project === 'PP');
+ok(OHub.qcBulkStatus('Resolved', null) === ppIss().length, 'batch resolve all');
+ok(ppIss().every((i) => i.status === 'Resolved'), 'all resolved');
+ok(OHub.qcBulkStatus('Open', null) === ppIss().length, 'batch reopen all');
+els['qc-bulk-status'] = makeEl();
+els['qc-bulk-status'].value = 'Waived';
+ok(OHub.qcBulkApply('all') === ppIss().length, 'bulk apply all');
+ok(ppIss().every((i) => i.status === 'Waived'), 'all waived');
+ok(OHub.qcBulkApply('selected') === 0, 'apply to selected needs ticks');
+const sfId = ppIss().find((i) => i.description === '[SF01 AR] Warnings').id;
+ok(OHub.qcBulkDelete([sfId]) === 1, 'bulk delete selected');
+ok(!JSON.parse(store.ohub_issues || '[]').some((i) => i.id === sfId), 'deleted issue removed');
+ok(OHub.qcBulkStatus('Open', null) === ppIss().length, 'reset statuses');
+OHub.qcSetFilter('bld', 'HT01');
+const qc1 = (els['qc-content'] || {}).innerHTML || '';
+ok(qc1.indexOf('[HT01 AR] Warnings') >= 0, 'building filter keeps its issues');
+ok(qc1.indexOf('[CR01 EL] Views Not On Sheets') === -1, 'building filter hides other buildings');
+ok(qc1.indexOf('<th>Discipline</th>') >= 0, 'issue log has Discipline column');
+OHub.qcSetFilter('bld', '');
+OHub.qcSetFilter('disc', 'EL');
+const qc2 = (els['qc-content'] || {}).innerHTML || '';
+ok(qc2.indexOf('[CR01 EL] Views Not On Sheets') >= 0 && qc2.indexOf('[BMS] Worksets') === -1, 'discipline filter works');
+OHub.qcSetFilter('disc', '');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

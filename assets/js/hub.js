@@ -29,7 +29,7 @@
 
   var MODULES = [
     {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=103bc43c', weightKey:'midp'},
-    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=fa5a9ae2',      weightKey:'naming'},
+    {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=877b6da0',      weightKey:'naming'},
     {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=8f02a7f6',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},
     {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=a83f1a41',   weightKey:'parameters'},
@@ -464,12 +464,12 @@
     }
   }
 
-  /* ---------------- validator findings -> Hub issues ---------------- */  // Modules may attach up to ~20 concrete findings {desc, severity, model?}
-  // to their score report. They are filed as source:'auto' issues, de-duplicated
-  // against still-open auto issues, and capped so one run cannot flood the log.
-  // The building a finding belongs to comes from the finding itself ("HT01 AR")
-  // or from the registered model of that name, so issue logs and exports are
-  // classified per building too, not only per model.
+  /* ---------------- validator findings -> Hub issues ---------------- */  // Modules attach up to ~20 concrete findings {desc, severity, model?, building?, discipline?}.
+  // The issue log is kept up to date automatically: re-reported findings are
+  // stamped (building/discipline/lastSeen) instead of duplicated, and issues a
+  // later report still names are re-opened if they had been resolved. Building
+  // and discipline are taken from the finding when a module supplies them and
+  // inferred from the finding text otherwise, so any module classifies.
   function issueBuilding(pid, f){
     var b = String((f && f.building) || '').trim().toUpperCase();
     if(isBuildingCode(b)) return b;
@@ -482,37 +482,66 @@
       var lead = name.match(/^([A-Z]{2}\d{2})\b/i);
       if(lead) return lead[1].toUpperCase();
     }
-    return '';
+    var dm = String((f && f.desc) || '').match(/\b([A-Z]{2}\d{2})\b/i);
+    return dm ? dm[1].toUpperCase() : '';
+  }
+  function issueDiscipline(pid, f){
+    var d = String((f && f.discipline) || '').trim().toUpperCase();
+    if(d) return d.slice(0,24);
+    var name = String((f && f.model) || '').trim();
+    if(name){
+      var mm = null;
+      state.models.forEach(function(x){ if(x.project===pid && String(x.name||'').trim()===name) mm = x; });
+      if(mm && mm.discipline) return String(mm.discipline).trim().toUpperCase().slice(0,24);
+      var parts = name.split(/\s+/);
+      if(parts.length>1) return parts[parts.length-1].toUpperCase().slice(0,24);
+    }
+    var dm = String((f && f.desc) || '').match(/\[([A-Z0-9]{2,12})(?:\s+([A-Z0-9]{2,8}))?\]/);
+    return dm ? String(dm[2]||dm[1]).slice(0,24) : '';
   }
   function fileAutoIssues(pid, modId, findings){
-    var added = 0;
+    var added = 0, reopened = 0, refreshed = 0;
     findings.slice(0,20).forEach(function(f){
       var desc = String((f && f.desc) || '').trim().slice(0,220);
       if(!desc) return;
-      var dup = state.issues.some(function(i){
-        return i.project===pid && i.module===modId && i.description===desc &&
-               i.status!=='Closed' && i.status!=='Waived' && i.status!=='Resolved';
+      var building = issueBuilding(pid, f);
+      var disc = issueDiscipline(pid, f);
+      var sev = (f && f.severity) || 'Medium';
+      if(['Critical','High','Medium','Low'].indexOf(sev)===-1) sev = 'Medium';
+      var ex = null;
+      state.issues.forEach(function(i){
+        if(i.project===pid && i.module===modId && i.description===desc && i.source==='auto') ex = i;
       });
-      if(dup) return;
+      if(ex){
+        ex.lastSeen = Date.now();
+        if(building) ex.building = building;
+        if(disc) ex.discipline = disc;
+        if(ex.status==='Resolved' || ex.status==='Closed'){ ex.status = 'Open'; reopened++; }
+        else refreshed++;
+        return;
+      }
       var openAuto = state.issues.filter(function(i){
         return i.project===pid && i.module===modId && i.source==='auto' &&
                (i.status==='Open' || i.status==='In Progress');
       }).length;
       if(openAuto>=20) return;
-      var sev = (f && f.severity) || 'Medium';
-      if(['Critical','High','Medium','Low'].indexOf(sev)===-1) sev = 'Medium';
       state.issues.push({
         id: uid('iss'), project: pid, module: modId, description: desc,
         severity: sev, status: 'Open', due: null,
-        model: (f && f.model) || '', building: issueBuilding(pid, f),
-        responsible: '', created: Date.now(), source: 'auto'
+        model: (f && f.model) || '', building: building, discipline: disc,
+        responsible: '', created: Date.now(), lastSeen: Date.now(), source: 'auto'
       });
       added++;
     });
-    if(added){
+    if(added || reopened){
       persist('issues');
+      var bits = [];
+      if(added) bits.push('+'+added+' issue'+(added===1?'':'s'));
+      if(reopened) bits.push('reopened '+reopened);
       var mod2 = MODULES.find(function(m){return m.id===modId;});
-      logActivity('Filed '+added+' issue'+(added===1?'':'s')+' from '+(mod2?mod2.label:modId), 'warn');
+      logActivity('Issue log updated from '+(mod2?mod2.label:modId)+': '+bits.join(', '), 'warn');
+    } else if(refreshed){
+      persist('issues');
     }
   }
 
@@ -2334,6 +2363,8 @@
         '</tbody></table></div>'+
       '</div>';
   }
+  var ISSUE_STATUSES = ['Open','In Progress','Resolved','Closed','Waived'];
+  var qcBld = '', qcDisc = '';
   function renderQualityCenter(){
     var p = activeProject();
     var host = document.getElementById('qc-content');
@@ -2357,15 +2388,44 @@
     }).join('');
 
     var issueRows = state.issues.filter(function(i){return i.project===p.id;});
-    var issuesHtml = issueRows.length===0
-      ? emptyState('\uD83D\uDCCB','No issues logged','Add an issue to track something that needs follow-up across any validation area.',
-          '<button class="btn btn-primary" onclick="OHub.openIssueModal()">+ Add issue</button>')
-      : '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Description</th><th>Area</th><th>Building</th><th>Model</th><th>Severity</th><th>Status</th><th>Due</th><th>Src</th><th></th></tr></thead><tbody>'+
-        issueRows.map(function(i){
+    var iBlds = Array.from(new Set(issueRows.map(function(i){ return String(i.building||'').toUpperCase(); }).filter(Boolean))).sort();
+    var iDiscs = Array.from(new Set(issueRows.map(function(i){ return String(i.discipline||'').toUpperCase(); }).filter(Boolean))).sort();
+    if(qcBld && iBlds.indexOf(qcBld)===-1) qcBld = '';
+    if(qcDisc && iDiscs.indexOf(qcDisc)===-1) qcDisc = '';
+    var shown = issueRows.filter(function(i){
+      return (!qcBld || String(i.building||'').toUpperCase()===qcBld) &&
+             (!qcDisc || String(i.discipline||'').toUpperCase()===qcDisc);
+    });
+    var iSelStyle = 'border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);';
+    var issuesHtml;
+    if(issueRows.length===0){
+      issuesHtml = emptyState('\uD83D\uDCCB','No issues logged','Auto-filed issues appear here as soon as any validator reports. You can also add one manually.',
+        '<button class="btn btn-primary" onclick="OHub.openIssueModal()">+ Add issue</button>');
+    } else {
+      var filterBar =
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">'+
+          '<select id="qc-bld-filter" aria-label="Filter issues by building" onchange="OHub.qcSetFilter(\'bld\', this.value)" style="'+iSelStyle+'"><option value="">All buildings</option>'+iBlds.map(function(g){
+            return '<option value="'+escapeHtml(g)+'"'+(g===qcBld?' selected':'')+'>'+escapeHtml(g)+'</option>'; }).join('')+'</select>'+
+          '<select id="qc-disc-filter" aria-label="Filter issues by discipline" onchange="OHub.qcSetFilter(\'disc\', this.value)" style="'+iSelStyle+'"><option value="">All disciplines</option>'+iDiscs.map(function(g){
+            return '<option value="'+escapeHtml(g)+'"'+(g===qcDisc?' selected':'')+'>'+escapeHtml(g)+'</option>'; }).join('')+'</select>'+
+          '<span style="width:1px;height:22px;background:var(--border);"></span>'+
+          '<select id="qc-bulk-status" aria-label="Batch status" style="'+iSelStyle+'">'+ISSUE_STATUSES.map(function(o){
+            return '<option value="'+o+'">'+o+'</option>'; }).join('')+'</select>'+
+          '<button class="btn btn-outline btn-sm" onclick="OHub.qcBulkApply(\'selected\')">Apply to selected</button>'+
+          '<button class="btn btn-outline btn-sm" onclick="OHub.qcBulkApply(\'all\')">Apply to all</button>'+
+          '<button class="btn btn-ghost btn-sm" onclick="OHub.qcBulkDeleteSel()">Delete selected</button>'+
+        '</div>';
+      issuesHtml = filterBar+
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr>'+
+        '<th style="width:26px;"><input type="checkbox" aria-label="Select all issues" onchange="OHub.qcSelectAll(this.checked)"></th>'+
+        '<th>Description</th><th>Area</th><th>Building</th><th>Discipline</th><th>Model</th><th>Severity</th><th>Status</th><th>Due</th><th>Src</th><th></th></tr></thead><tbody>'+
+        shown.map(function(i){
           return '<tr>'+
+            '<td><input type="checkbox" class="qc-sel" data-qcid="'+i.id+'" aria-label="Select issue" style="accent-color:var(--g1);"></td>'+
             '<td>'+escapeHtml(i.description)+'</td>'+
             '<td>'+escapeHtml(moduleLabel(i.module))+'</td>'+
             '<td>'+escapeHtml(i.building||'\u2014')+'</td>'+
+            '<td>'+escapeHtml(i.discipline||'\u2014')+'</td>'+
             '<td>'+escapeHtml(i.model||'\u2014')+'</td>'+
             '<td><span class="badge badge-'+sevBadge(i.severity)+'">'+escapeHtml(i.severity)+'</span></td>'+
             '<td>'+statusSelect(i.id, i.status)+'</td>'+
@@ -2374,7 +2434,9 @@
             '<td><button class="btn btn-ghost btn-sm" onclick="OHub.deleteIssue(\''+i.id+'\')">Remove</button></td>'+
           '</tr>';
         }).join('')+
-        '</tbody></table></div>';
+        '</tbody></table></div>'+
+        (shown.length? '' : '<div style="padding:8px 2px;font-size:.8rem;color:var(--muted);">No issues match these filters.</div>');
+    }
 
     host.innerHTML =
       '<div class="card">'+
@@ -2394,9 +2456,8 @@
     return m? m.label : 'General';
   }
   function statusSelect(issueId, current){
-    var opts = ['Open','In Progress','Resolved','Closed','Waived'];
     return '<select class="status-mini" onchange="OHub.updateIssueStatus(\''+issueId+'\', this.value)" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.78rem;">'+
-      opts.map(function(o){ return '<option value="'+o+'" '+(o===current?'selected':'')+'>'+o+'</option>'; }).join('')+
+      ISSUE_STATUSES.map(function(o){ return '<option value="'+o+'" '+(o===current?'selected':'')+'>'+o+'</option>'; }).join('')+
       '</select>';
   }
   function updateIssueStatus(id, status){
@@ -2410,6 +2471,84 @@
     state.issues = state.issues.filter(function(i){return i.id!==id;});
     persist('issues');
     renderQualityCenter(); renderDashboard();
+  }
+  /* ---------------- issue log filters + batch actions ---------------- */
+  function qcSetFilter(kind, val){
+    if(kind==='bld') qcBld = String(val||'').trim().toUpperCase();
+    else qcDisc = String(val||'').trim().toUpperCase();
+    renderQualityCenter();
+  }
+  function qcSelectedIds(){
+    var out = [];
+    try{
+      var boxes = document.querySelectorAll('.qc-sel:checked');
+      for(var i=0;i<boxes.length;i++){
+        var v = boxes[i].getAttribute('data-qcid');
+        if(v) out.push(v);
+      }
+    }catch(e){}
+    return out;
+  }
+  function qcSelectAll(on){
+    try{
+      var boxes = document.querySelectorAll('.qc-sel');
+      for(var i=0;i<boxes.length;i++) boxes[i].checked = !!on;
+    }catch(e){}
+  }
+  // ids omitted/null -> every issue of the active project (batch "all").
+  function qcBulkStatus(status, ids){
+    var p = activeProject();
+    if(!p) return 0;
+    if(ISSUE_STATUSES.indexOf(status)===-1) return 0;
+    var targets = (ids && ids.length) ? ids : null;
+    var n = 0;
+    state.issues.forEach(function(i){
+      if(i.project!==p.id) return;
+      if(targets && targets.indexOf(i.id)===-1) return;
+      if(i.status!==status){ i.status = status; n++; }
+    });
+    if(n){
+      persist('issues');
+      logActivity('Issue log: '+n+' issue'+(n===1?'':'s')+' set to '+status);
+      renderQualityCenter(); renderDashboard();
+    }
+    return n;
+  }
+  function qcBulkDelete(ids){
+    var p = activeProject();
+    if(!p || !ids || !ids.length) return 0;
+    var n = 0;
+    state.issues = state.issues.filter(function(i){
+      if(i.project!==p.id || ids.indexOf(i.id)===-1) return true;
+      n++; return false;
+    });
+    if(n){
+      persist('issues');
+      logActivity('Issue log: removed '+n+' issue'+(n===1?'':'s'));
+      renderQualityCenter(); renderDashboard();
+    }
+    return n;
+  }
+  function qcBulkApply(scope){
+    var st = ((document.getElementById('qc-bulk-status')||{}).value) || 'Open';
+    if(scope==='all'){
+      var nAll = qcBulkStatus(st, null);
+      toast(nAll ? nAll+' issue(s) set to '+st : 'No changes');
+      return nAll;
+    }
+    var ids = qcSelectedIds();
+    if(!ids.length){ toast('Tick issues first, or use Apply to all'); return 0; }
+    var n = qcBulkStatus(st, ids);
+    toast(n ? n+' issue(s) set to '+st : 'No changes');
+    return n;
+  }
+  function qcBulkDeleteSel(){
+    var ids = qcSelectedIds();
+    if(!ids.length){ toast('Tick the issues to delete'); return 0; }
+    if(!confirm('Remove '+ids.length+' selected issue(s)?')) return 0;
+    var n = qcBulkDelete(ids);
+    toast(n ? n+' removed' : 'No changes');
+    return n;
   }
   function openIssueModal(){
     var p = activeProject();
@@ -3861,9 +4000,9 @@
       ms.addRow(['Model','Building','Code','Discipline','Revision','Status','Owner']);
       projectModels(p.id).forEach(function(m){ ms.addRow([m.name,modelBuilding(m),m.code||'',m.discipline||'',m.revision||'',m.status||'',m.owner||'']); });
       var is = wb.addWorksheet('Issues');
-      is.addRow(['Description','Area','Building','Model','Severity','Status','Source','Due']);
+      is.addRow(['Description','Area','Building','Discipline','Model','Severity','Status','Source','Due']);
       state.issues.filter(function(i){return i.project===p.id;}).forEach(function(i){
-        is.addRow([i.description,moduleLabel(i.module),i.building||'',i.model||'',i.severity,i.status,i.source||'manual',i.due||'']);
+        is.addRow([i.description,moduleLabel(i.module),i.building||'',i.discipline||'',i.model||'',i.severity,i.status,i.source||'manual',i.due||'']);
       });
       var dl = wb.addWorksheet('Deliverables');
       dl.addRow(['Deliverable','Discipline','Due','Status']);
@@ -4875,6 +5014,12 @@
     seedPortalunaBuildings: seedPortalunaBuildings,
     upsertDisciplineModels: upsertDisciplineModels,
     fileAutoIssues: fileAutoIssues,
+    qcSetFilter: qcSetFilter,
+    qcSelectAll: qcSelectAll,
+    qcBulkStatus: qcBulkStatus,
+    qcBulkDelete: qcBulkDelete,
+    qcBulkApply: qcBulkApply,
+    qcBulkDeleteSel: qcBulkDeleteSel,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,
     seedDemo: seedDemo,

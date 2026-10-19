@@ -140,8 +140,10 @@ ok(m2.length === before + 3, 'three models added', m2.length);
 ok(!!pp2.find((m) => m.name === 'HT01 AR' && m.package === '01. HT01 MAIN BUILDING' && m.discipline === 'AR'), 'HT01 AR filed under HT01');
 ok(!!pp2.find((m) => m.name === 'UB02 EL' && m.package === '07. UB02 UTILITY BUILDING'), 'UB02 EL filed under UB02');
 ok(!!pp2.find((m) => m.name === 'FF' && !m.package), 'suite code model stays unassigned');
+ok(pp2.find((m) => m.name === 'HT01 AR').score === 80 && pp2.find((m) => m.name === 'UB02 EL').score === 90, 'discipline scores stored on model rows');
 OHub.upsertDisciplineModels('PP', [{ code: 'AR', name: 'HT01 AR', building: 'HT01', score: 95, issues: 0 }]);
 ok(JSON.parse(store.ohub_models || '[]').length === before + 3, 're-report does not duplicate');
+ok(JSON.parse(store.ohub_models || '[]').find((m) => m.name === 'HT01 AR').score === 95, 'latest discipline score wins');
 OHub.upsertDisciplineModels('P1', [{ code: 'AR', name: 'AR', building: '', score: 50, issues: 9 }]);
 ok(JSON.parse(store.ohub_models || '[]').filter((m) => m.project === 'P1' && m.name === 'AR').length === 1, 'non-Portaluna bare model');
 
@@ -226,8 +228,8 @@ els['models-bld-filter'].value = '';
 OHub.setActiveProject('PP');
 OHub.switchView('quality-center');
 const qc = (els['qc-content'] || {}).innerHTML || '';
-ok(qc.indexOf('Issues by building') >= 0, 'quality center building rollup');
-ok(qc.indexOf('<td><strong>HT01</strong></td><td>HT01 MAIN BUILDING</td><td>14</td><td>1</td>') >= 0, 'HT01 row: 14 models, 1 open issue');
+ok(qc.indexOf('Delivery by building &amp; discipline') >= 0, 'quality center building rollup');
+ok(qc.indexOf('<td><strong>HT01</strong></td><td>HT01 MAIN BUILDING</td><td>95%</td><td>14</td><td>1</td>') >= 0, 'HT01 row: score, 14 models, 1 open issue');
 ok(qc.indexOf('<td><strong>SF01</strong></td>') >= 0, 'SF01 row present');
 ok(qc.indexOf('<th>Building</th>') >= 0, 'issue log has Building column');
 ok(qc.indexOf('Unassigned building') === -1, 'issue log: no unassigned-building group header');
@@ -269,6 +271,16 @@ ok(pg2.indexOf('badge-muted">AR 1</span>') >= 0, 'program: discipline chips per 
 OHub.switchView('dashboard');
 const dash = (els['dash-content'] || {}).innerHTML || '';
 ok(dash.indexOf('>HT01 \u00b7 AR</span>') >= 0, 'dashboard: open issue tagged building + discipline');
+ok(dash.indexOf('Delivery health by building &amp; discipline') >= 0, 'dashboard: building & discipline delivery card');
+ok(dash.indexOf('db-bld-filter') >= 0 && dash.indexOf('<option value="HT01"') >= 0, 'dashboard: building selector lists codes');
+ok(dash.indexOf('<td><strong>HT01</strong></td><td>HT01 MAIN BUILDING</td><td>95%</td>') >= 0, 'dashboard: building row carries code, name and score');
+OHub.setDashBld('HT01');
+const dashHt = (els['dash-content'] || {}).innerHTML || '';
+ok(dashHt.indexOf('BIM Delivery Health \u2014 P0152 Portaluna Sales Resort \u00b7 HT01') >= 0, 'dashboard: building code next to the health heading');
+ok(dashHt.indexOf('<div class="hh-value">95%</div>') >= 0, 'dashboard: scoped hero shows the building score');
+ok(dashHt.indexOf('<td style="color:var(--muted);">AR</td><td style="color:var(--muted);">95%</td>') >= 0, 'dashboard: scoped card drills into disciplines with scores');
+ok(dashHt.indexOf('[HT01 AR] Warnings') >= 0 && dashHt.indexOf('[FB02 BS] Worksets') === -1, 'dashboard: open issues scoped to the building');
+OHub.setDashBld('');
 
 OHub.switchView('reports');
 const rep = (els['reports-content'] || {}).innerHTML || '';

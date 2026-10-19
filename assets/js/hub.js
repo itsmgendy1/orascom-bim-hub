@@ -502,6 +502,13 @@
     state.models = state.models.filter(function(x){ return x!==bare; });
     return moved;
   }
+  // Reports may carry a per-discipline score (Model Quality pass rate). Keep
+  // the latest one on the model row so dashboards can classify health per
+  // building and discipline.
+  function stampModelScore(row, m){
+    var v = m && m.score;
+    if(typeof v==='number' && isFinite(v)){ row.score = Math.round(v*10)/10; row.scoredAt = Date.now(); }
+  }
   function upsertDisciplineModels(pid, models){
     var changed = false, movedIssues = false;
     var p = state.projects.find(function(x){return x.id===pid;});
@@ -531,18 +538,22 @@
         ex.discipline = code;
         if(building && !ex.building) ex.building = building;
         if(pkg && !ex.package) ex.package = pkg;
+        stampModelScore(ex, m);
       }
       else if(bare && building){
         // The building was found: classify the existing model and its issues.
         var oldName = String(bare.name||'').trim();
         bare.name = name; bare.building = building; bare.package = pkg || bare.package;
         bare.discipline = code; bare.code = code; bare.updated = Date.now();
+        stampModelScore(bare, m);
         movedIssues = moveModelIssues(pid, oldName, bare) || movedIssues;
         logActivity('Classified '+code+' model into '+building+' ('+name+')');
       }
       else{
-        state.models.push({id:uid('mod'), project:pid, name:name, code:code, building:building,
-          package:pkg, discipline:code, revision:'', status:'WIP', owner:'', updated:Date.now()});
+        var row = {id:uid('mod'), project:pid, name:name, code:code, building:building,
+          package:pkg, discipline:code, revision:'', status:'WIP', owner:'', updated:Date.now()};
+        stampModelScore(row, m);
+        state.models.push(row);
       }
       changed = true;
     });
@@ -2323,6 +2334,28 @@
   }
 
   /* ---------------- Dashboard ---------------- */
+  // Dashboard classification: pick a building and the hero, the building card
+  // and the open-issue list all scope to it (building first, then discipline).
+  var dashBld = '';
+  function setDashBld(v){
+    var s = String(v||'').trim().toUpperCase();
+    dashBld = isBuildingCode(s) ? s : '';
+    if(currentView==='dashboard') renderDashboard();
+  }
+  function dashBuildingCard(p, scope){
+    var rows = buildingRollup(p);
+    if(!rows.length) return '';
+    var show = rows;
+    if(scope){
+      show = rows.filter(function(r){ return r.code===scope; });
+      if(!show.length) show = rows;
+    }
+    return '<div class="card">'+
+      '<div class="card-head"><h3>Delivery health by building &amp; discipline</h3>'+
+      '<span class="hint">'+(scope ? escapeHtml(bldLabel(show[0].code)) : 'Pick a building above to drill into its disciplines')+'</span></div>'+
+      buildingTableHtml(show, {noDiscs: !scope})+
+    '</div><div style="height:18px;"></div>';
+  }
   function renderDashboard(){
     var p = activeProject();
     var host = document.getElementById('dash-content');
@@ -2335,6 +2368,28 @@
     }
     var health = computeHealth(p.id);
     var sc = projectScores(p.id);
+    var bRows = buildingRollup(p);
+    if(dashBld && !bRows.some(function(r){ return r.code===dashBld; })) dashBld = '';
+    var bSel = null;
+    bRows.forEach(function(r){ if(r.code===dashBld) bSel = r; });
+    var heroVal = bSel ? bSel.score : health.value;
+    var heroNote;
+    if(bSel){
+      var nSc = bSel.discs.filter(function(d){ return d.score!=null; }).length;
+      heroNote = 'Building '+escapeHtml(bldLabel(bSel.code))+' \u2014 '+(nSc ? nSc+' discipline score'+(nSc===1?'':'s')+' reported' : 'no discipline scores reported yet')+'.';
+    } else {
+      heroNote = health.have===0
+        ? 'No module results recorded yet. Use \u201cRecord result\u201d on a KPI card once you\u2019ve run a validation.'
+        : (health.have<health.total
+            ? 'Based on '+health.have+' of '+health.total+' modules \u2014 record the rest for a complete score.'
+            : 'Weighted across all validation modules (weights and status thresholds configurable in Settings).');
+    }
+    var bldPicker = bRows.length
+      ? '<select id="db-bld-filter" aria-label="Classify the dashboard by building" onchange="OHub.setDashBld(this.value)" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);">'+
+          '<option value="">All buildings</option>'+bRows.map(function(r){
+            return '<option value="'+escapeHtml(r.code)+'"'+(r.code===dashBld?' selected':'')+'>'+escapeHtml(r.code)+'</option>';
+          }).join('')+'</select>'
+      : '';
 
     var kpiCards = MODULES.map(function(m){
       var rec = sc[m.id];
@@ -2352,7 +2407,8 @@
       '</div>';
     }).join('');
 
-    var openIssues = state.issues.filter(function(i){ return i.project===p.id && (i.status==='Open'||i.status==='In Progress'); }).sort(cmpIssueOrder);
+    var openAll = state.issues.filter(function(i){ return i.project===p.id && (i.status==='Open'||i.status==='In Progress'); }).sort(cmpIssueOrder);
+    var openIssues = bSel ? openAll.filter(function(i){ return String(i.building||'').toUpperCase()===dashBld; }) : openAll;
     var upcoming = state.deliverables.filter(function(d){
       return d.project===p.id && (d.status==='Upcoming'||d.status==='In Progress'||d.status==='Delayed');
     }).sort(function(a,b){ return (a.due||'9999') < (b.due||'9999') ? -1 : 1; }).slice(0,5);
@@ -2360,18 +2416,16 @@
     host.innerHTML =
       '<div class="hero-health">'+
         '<div>'+
-          '<div class="hh-label">BIM Delivery Health \u2014 '+escapeHtml(p.name)+'</div>'+
-          '<div class="hh-value">'+(health.value==null?'\u2014':health.value+'%')+'</div>'+
-          '<div class="hh-note">'+(health.have===0
-              ? 'No module results recorded yet. Use \u201cRecord result\u201d on a KPI card once you\u2019ve run a validation.'
-              : (health.have<health.total
-                  ? 'Based on '+health.have+' of '+health.total+' modules \u2014 record the rest for a complete score.'
-                  : 'Weighted across all validation modules (weights and status thresholds configurable in Settings).'))+
-          '</div>'+
+          '<div class="hh-label">BIM Delivery Health \u2014 '+escapeHtml(p.name)+(bSel?' \u00b7 '+escapeHtml(bSel.code):'')+'</div>'+
+          '<div class="hh-value">'+(heroVal==null?'\u2014':heroVal+'%')+'</div>'+
+          '<div class="hh-note">'+heroNote+'</div>'+
         '</div>'+
-        '<div class="hh-ring"><span class="badge badge-'+toneBadge(tone(health.value))+'" style="font-size:.78rem;padding:6px 14px;">'+statusLabel(health.value)+'</span></div>'+
+        '<div class="hh-ring" style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">'+bldPicker+
+          '<span class="badge badge-'+toneBadge(tone(heroVal))+'" style="font-size:.78rem;padding:6px 14px;">'+statusLabel(heroVal)+'</span>'+
+        '</div>'+
       '</div>'+
       '<div style="height:18px;"></div>'+
+      dashBuildingCard(p, dashBld)+
       '<div class="grid kpi-grid">'+kpiCards+'</div>'+
       '<div style="height:18px;"></div>'+
       trendCardHtml(p)+
@@ -2393,7 +2447,7 @@
           '</div>'+
         '</div>'+
         '<div class="card">'+
-          '<div class="card-head"><h3>Open issues</h3><span class="hint">'+escapeHtml(p.name)+'</span></div>'+
+          '<div class="card-head"><h3>Open issues</h3><span class="hint">'+escapeHtml(p.name)+(bSel?' \u00b7 '+escapeHtml(bSel.code):'')+'</span></div>'+
           (openIssues.length===0
             ? '<p style="color:var(--muted);font-size:.85rem;">No open issues logged for this project.</p>'
             : '<div style="display:flex;flex-direction:column;gap:8px;">'+openIssues.slice(0,4).map(function(i){
@@ -2459,8 +2513,9 @@
       var dmap = {};
       bMods.forEach(function(m){
         var d = String(m.discipline||'').trim() || 'No discipline';
-        if(!dmap[d]) dmap[d] = {code:d, models:0, open:0};
+        if(!dmap[d]) dmap[d] = {code:d, models:0, open:0, scores:[]};
         dmap[d].models++;
+        if(typeof m.score==='number' && isFinite(m.score)) dmap[d].scores.push(m.score);
       });
       var openIss = state.issues.filter(function(i){
         return i.project===p.id && String(i.building||'').toUpperCase()===code &&
@@ -2468,29 +2523,38 @@
       });
       openIss.forEach(function(i){
         var d = String(i.discipline||'').trim() || 'No discipline';
-        if(!dmap[d]) dmap[d] = {code:d, models:0, open:0};
+        if(!dmap[d]) dmap[d] = {code:d, models:0, open:0, scores:[]};
         dmap[d].open++;
       });
-      var discs = Object.keys(dmap).sort().map(function(k){ return dmap[k]; });
-      return {code:code, name:b?b.name:'', models:bMods.length, open:openIss.length, discs:discs};
+      var discs = Object.keys(dmap).sort().map(function(k){
+        var x = dmap[k];
+        return {code:x.code, models:x.models, open:x.open,
+          score: x.scores.length ? Math.round(x.scores.reduce(function(a,b2){return a+b2;},0)/x.scores.length) : null};
+      });
+      var scored = discs.filter(function(d){ return d.score!=null; });
+      return {code:code, name:b?b.name:'', models:bMods.length, open:openIss.length, discs:discs,
+        score: scored.length ? Math.round(scored.reduce(function(a,b2){return a+b2.score;},0)/scored.length) : null};
     });
   }
-  function buildingTableHtml(rows){
+  function buildingTableHtml(rows, opts){
+    var noDiscs = !!(opts && opts.noDiscs);
     var body = [];
     rows.forEach(function(r){
-      body.push('<tr style="background:var(--light);"><td><strong>'+escapeHtml(r.code)+'</strong></td><td>'+escapeHtml(r.name||'\u2014')+'</td><td>'+r.models+'</td><td>'+r.open+'</td></tr>');
-      (r.discs||[]).forEach(function(d){
-        body.push('<tr><td style="padding-left:22px;color:var(--muted);">\u21b3</td><td style="color:var(--muted);">'+escapeHtml(d.code)+'</td><td>'+d.models+'</td><td>'+d.open+'</td></tr>');
+      body.push('<tr style="background:var(--light);"><td><strong>'+escapeHtml(r.code)+'</strong></td><td>'+escapeHtml(r.name||'\u2014')+'</td>'+
+        '<td>'+(r.score==null?'\u2014':r.score+'%')+'</td><td>'+r.models+'</td><td>'+r.open+'</td></tr>');
+      if(!noDiscs) (r.discs||[]).forEach(function(d){
+        body.push('<tr><td style="padding-left:22px;color:var(--muted);">\u21b3</td><td style="color:var(--muted);">'+escapeHtml(d.code)+'</td>'+
+          '<td style="color:var(--muted);">'+(d.score==null?'\u2014':d.score+'%')+'</td><td>'+d.models+'</td><td>'+d.open+'</td></tr>');
       });
     });
-    return '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Building</th><th>Name</th><th>Models</th><th>Open issues</th></tr></thead><tbody>'+body.join('')+'</tbody></table></div>';
+    return '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Building</th><th>Name</th><th>Score</th><th>Models</th><th>Open issues</th></tr></thead><tbody>'+body.join('')+'</tbody></table></div>';
   }
   function renderBuildingRollup(p){
     var rows = buildingRollup(p);
     if(!rows.length) return '';
     return '<div style="height:18px;"></div>'+
       '<div class="card">'+
-        '<div class="card-head"><h3>Issues by building &amp; discipline</h3><span class="hint">Open issues filed against each building&rsquo;s models</span></div>'+
+        '<div class="card-head"><h3>Delivery by building &amp; discipline</h3><span class="hint">Latest discipline scores, models and open issues per building</span></div>'+
         buildingTableHtml(rows)+
       '</div>';
   }
@@ -4093,7 +4157,7 @@
     if(!rows.length) return '';
     return '<div class="card" style="margin-bottom:18px;">'+
       '<div class="card-head"><h3>By building &amp; discipline \u2014 '+escapeHtml(p.name)+'</h3>'+
-      '<span class="hint">Models and open issues, classified building first</span></div>'+
+      '<span class="hint">Discipline scores, models and open issues per building</span></div>'+
       buildingTableHtml(rows)+
     '</div>';
   }
@@ -5175,6 +5239,7 @@
     upsertDisciplineModels: upsertDisciplineModels,
     fileAutoIssues: fileAutoIssues,
     applyModuleScore: applyModuleScore,
+    setDashBld: setDashBld,
     qcSetFilter: qcSetFilter,
     qcSelectAll: qcSelectAll,
     qcBulkStatus: qcBulkStatus,

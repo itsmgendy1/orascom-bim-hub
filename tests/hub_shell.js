@@ -144,6 +144,20 @@ ok(JSON.parse(store.ohub_models || '[]').length === before + 3, 're-report does 
 OHub.upsertDisciplineModels('P1', [{ code: 'AR', name: 'AR', building: '', score: 50, issues: 9 }]);
 ok(JSON.parse(store.ohub_models || '[]').filter((m) => m.project === 'P1' && m.name === 'AR').length === 1, 'non-Portaluna bare model');
 
+// 6b. Findings carry the building so the issue log is classified per building,
+//     and the same failure in two buildings is not de-duplicated into one.
+OHub.fileAutoIssues('PP', 'qaqc', [
+  { desc: '[HT01 AR] Warnings', model: 'HT01 AR', severity: 'High' },
+  { desc: '[SF01 AR] Warnings', model: 'SF01 AR', severity: 'High' },
+  { desc: '[BMS] Worksets', model: 'BMS', severity: 'High' },
+]);
+const iss = JSON.parse(store.ohub_issues || '[]').filter((i) => i.project === 'PP');
+ok(iss.find((i) => i.description === '[HT01 AR] Warnings').building === 'HT01', 'HT01 issue tagged to building');
+ok(iss.find((i) => i.description === '[SF01 AR] Warnings').building === 'SF01', 'same check in another building kept');
+ok(iss.find((i) => i.description === '[BMS] Worksets').building === '', 'unclassified issue stays blank');
+OHub.fileAutoIssues('PP', 'qaqc', [{ desc: '[HT01 AR] Warnings', model: 'HT01 AR', severity: 'High' }]);
+ok(JSON.parse(store.ohub_issues || '[]').filter((i) => i.description === '[HT01 AR] Warnings').length === 1, 're-report does not duplicate issue');
+
 // 7. Models tab lists a Building column, filters by building, and sorts grouped.
 OHub.setActiveProject('PP');
 els['models-bld-filter'] = makeEl();
@@ -162,6 +176,15 @@ const mo = (els['models-grid'] || {}).innerHTML || '';
 ok(mo.indexOf('HT01 AR') >= 0 && mo.indexOf('FF') >= 0, 'no filter shows all models');
 ok(mo.indexOf('BH01 BOH') < mo.indexOf('HT01 MAIN BUILDING'), 'rows sorted by building code', 'order');
 els['models-bld-filter'].value = '';
+
+// 8. Quality Center rolls issues up per building.
+OHub.setActiveProject('PP');
+OHub.switchView('quality-center');
+const qc = (els['qc-content'] || {}).innerHTML || '';
+ok(qc.indexOf('Issues by building') >= 0, 'quality center building rollup');
+ok(qc.indexOf('<td><strong>HT01</strong></td><td>HT01 MAIN BUILDING</td><td>14</td><td>1</td>') >= 0, 'HT01 row: 14 models, 1 open issue');
+ok(qc.indexOf('<td><strong>SF01</strong></td>') >= 0, 'SF01 row present');
+ok(qc.indexOf('<th>Building</th>') >= 0, 'issue log has Building column');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

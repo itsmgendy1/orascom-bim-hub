@@ -148,9 +148,9 @@ const MQB = [
 ];
 const bff = M.qaqcModelFindings(MQB);
 ok(bff.length === 4, 'one finding per discipline', bff.length);
-ok(bff[0].model === 'HT01 ST', 'finding carries building+code', bff[0].model);
+ok(bff[0].model === 'HT01 ST' && bff[0].desc === '[HT01 ST] Grids', 'finding carries building+code', bff[0].desc);
 ok(bff[1].model === 'UB02 EL', 'lowercase location normalized', bff[1].model);
-ok(bff[2].model === 'FF', 'suite location is not a building', bff[2].model);
+ok(bff[2].model === 'FF' && bff[2].desc === '[FF] Warnings', 'suite location is not a building', bff[2].desc);
 ok(bff[3].model === 'AR', 'ZZ location is not a building', bff[3].model);
 const bdm = M.qaqcDisciplineModels(MQB);
 ok(bdm[0].name === 'HT01 ST' && bdm[0].building === 'HT01', 'model carries building', JSON.stringify(bdm[0]));

@@ -30,7 +30,7 @@
   var MODULES = [
     {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=103bc43c', weightKey:'midp'},
     {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=fa5a9ae2',      weightKey:'naming'},
-    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=3d28e036',          weightKey:'qaqc'},
+    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=8f02a7f6',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},
     {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=a83f1a41',   weightKey:'parameters'},
     {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=f508d891',                 weightKey:'clash'}
@@ -404,8 +404,8 @@
     persist('scores');
     var mod = MODULES.find(function(m){return m.id===modId;});
     logActivity((mod?mod.label:modId)+' auto-reported '+s+'%'+(proj?' for '+proj.name:'')+(batch?' (nightly '+batch+')':''), 'ok');
-    if(pid && findings && findings.length) fileAutoIssues(pid, modId, findings);
     if(pid && models && models.length) upsertDisciplineModels(pid, models);
+    if(pid && findings && findings.length) fileAutoIssues(pid, modId, findings);
     snapshotHistory(pid);
     if(currentView==='dashboard') renderDashboard();
     if(currentView==='quality-center') renderQualityCenter();
@@ -467,6 +467,23 @@
   /* ---------------- validator findings -> Hub issues ---------------- */  // Modules may attach up to ~20 concrete findings {desc, severity, model?}
   // to their score report. They are filed as source:'auto' issues, de-duplicated
   // against still-open auto issues, and capped so one run cannot flood the log.
+  // The building a finding belongs to comes from the finding itself ("HT01 AR")
+  // or from the registered model of that name, so issue logs and exports are
+  // classified per building too, not only per model.
+  function issueBuilding(pid, f){
+    var b = String((f && f.building) || '').trim().toUpperCase();
+    if(isBuildingCode(b)) return b;
+    var name = String((f && f.model) || '').trim();
+    if(name){
+      var mm = null;
+      state.models.forEach(function(x){ if(x.project===pid && String(x.name||'').trim()===name) mm = x; });
+      var mb = modelBuilding(mm);
+      if(mb) return mb;
+      var lead = name.match(/^([A-Z]{2}\d{2})\b/i);
+      if(lead) return lead[1].toUpperCase();
+    }
+    return '';
+  }
   function fileAutoIssues(pid, modId, findings){
     var added = 0;
     findings.slice(0,20).forEach(function(f){
@@ -487,7 +504,8 @@
       state.issues.push({
         id: uid('iss'), project: pid, module: modId, description: desc,
         severity: sev, status: 'Open', due: null,
-        model: (f && f.model) || '', responsible: '', created: Date.now(), source: 'auto'
+        model: (f && f.model) || '', building: issueBuilding(pid, f),
+        responsible: '', created: Date.now(), source: 'auto'
       });
       added++;
     });
@@ -2288,6 +2306,34 @@
     if(sev==='Medium') return 'info';
     return 'muted';
   }
+  function buildingRollup(p){
+    var mods = projectModels(p.id);
+    var codes = [];
+    if(isPortalunaProject(p)) PORTALUNA_BUILDINGS.forEach(function(b){ codes.push(b.code); });
+    Array.from(new Set(mods.map(modelBuilding).filter(Boolean))).forEach(function(b){ if(codes.indexOf(b)===-1) codes.push(b); });
+    return codes.sort().map(function(code){
+      var b = portalunaBuildingByCode(code);
+      var open = state.issues.filter(function(i){
+        return i.project===p.id && String(i.building||'').toUpperCase()===code &&
+               (i.status==='Open'||i.status==='In Progress');
+      }).length;
+      return {code:code, name:b?b.name:'', models:mods.filter(function(m){ return modelBuilding(m)===code; }).length, open:open};
+    });
+  }
+  function renderBuildingRollup(p){
+    var rows = buildingRollup(p);
+    if(!rows.length) return '';
+    return '<div style="height:18px;"></div>'+
+      '<div class="card">'+
+        '<div class="card-head"><h3>Issues by building</h3><span class="hint">Open issues filed against each building&rsquo;s models</span></div>'+
+        '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Building</th><th>Name</th><th>Models</th><th>Open issues</th></tr></thead><tbody>'+
+        rows.map(function(r){
+          return '<tr><td><strong>'+escapeHtml(r.code)+'</strong></td><td>'+escapeHtml(r.name||'\u2014')+'</td>'+
+            '<td>'+r.models+'</td><td>'+r.open+'</td></tr>';
+        }).join('')+
+        '</tbody></table></div>'+
+      '</div>';
+  }
   function renderQualityCenter(){
     var p = activeProject();
     var host = document.getElementById('qc-content');
@@ -2314,11 +2360,12 @@
     var issuesHtml = issueRows.length===0
       ? emptyState('\uD83D\uDCCB','No issues logged','Add an issue to track something that needs follow-up across any validation area.',
           '<button class="btn btn-primary" onclick="OHub.openIssueModal()">+ Add issue</button>')
-      : '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Description</th><th>Area</th><th>Model</th><th>Severity</th><th>Status</th><th>Due</th><th>Src</th><th></th></tr></thead><tbody>'+
+      : '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Description</th><th>Area</th><th>Building</th><th>Model</th><th>Severity</th><th>Status</th><th>Due</th><th>Src</th><th></th></tr></thead><tbody>'+
         issueRows.map(function(i){
           return '<tr>'+
             '<td>'+escapeHtml(i.description)+'</td>'+
             '<td>'+escapeHtml(moduleLabel(i.module))+'</td>'+
+            '<td>'+escapeHtml(i.building||'\u2014')+'</td>'+
             '<td>'+escapeHtml(i.model||'\u2014')+'</td>'+
             '<td><span class="badge badge-'+sevBadge(i.severity)+'">'+escapeHtml(i.severity)+'</span></td>'+
             '<td>'+statusSelect(i.id, i.status)+'</td>'+
@@ -2339,7 +2386,8 @@
       '<div class="card">'+
         '<div class="card-head"><h3>Issue log</h3>'+(issueRows.length? '<button class="btn btn-outline btn-sm" onclick="OHub.openIssueModal()">+ Add issue</button>':'')+'</div>'+
         issuesHtml+
-      '</div>';
+      '</div>'+
+      renderBuildingRollup(p);
   }
   function moduleLabel(id){
     var m = MODULES.find(function(x){return x.id===id;});
@@ -2387,6 +2435,7 @@
     var p = activeProject();
     var desc = document.getElementById('im-desc').value.trim();
     if(!desc){ toast('Describe the issue'); return; }
+    var imModel = (document.getElementById('im-model')||{value:''}).value || '';
     state.issues.push({
       id: uid('iss'), project: p.id,
       module: document.getElementById('im-module').value,
@@ -2394,7 +2443,8 @@
       severity: document.getElementById('im-severity').value,
       status: 'Open',
       due: document.getElementById('im-due').value || null,
-      model: (document.getElementById('im-model')||{value:''}).value || '',
+      model: imModel,
+      building: issueBuilding(p.id, {model:imModel}),
       responsible: (document.getElementById('im-resp')||{value:''}).value.trim(),
       created: Date.now(), source: 'manual'
     });
@@ -3808,12 +3858,12 @@
         ws.addRow([r.area, r.score==null?'\u2014':r.score, r.issues==null?'\u2014':r.issues, r.status, r.weight==null?'\u2014':r.weight]);
       });
       var ms = wb.addWorksheet('Models');
-      ms.addRow(['Model','Code','Discipline','Revision','Status','Owner']);
-      projectModels(p.id).forEach(function(m){ ms.addRow([m.name,m.code||'',m.discipline||'',m.revision||'',m.status||'',m.owner||'']); });
+      ms.addRow(['Model','Building','Code','Discipline','Revision','Status','Owner']);
+      projectModels(p.id).forEach(function(m){ ms.addRow([m.name,modelBuilding(m),m.code||'',m.discipline||'',m.revision||'',m.status||'',m.owner||'']); });
       var is = wb.addWorksheet('Issues');
-      is.addRow(['Description','Area','Model','Severity','Status','Source','Due']);
+      is.addRow(['Description','Area','Building','Model','Severity','Status','Source','Due']);
       state.issues.filter(function(i){return i.project===p.id;}).forEach(function(i){
-        is.addRow([i.description,moduleLabel(i.module),i.model||'',i.severity,i.status,i.source||'manual',i.due||'']);
+        is.addRow([i.description,moduleLabel(i.module),i.building||'',i.model||'',i.severity,i.status,i.source||'manual',i.due||'']);
       });
       var dl = wb.addWorksheet('Deliverables');
       dl.addRow(['Deliverable','Discipline','Due','Status']);
@@ -4824,6 +4874,7 @@
     programOpenPackage: programOpenPackage,
     seedPortalunaBuildings: seedPortalunaBuildings,
     upsertDisciplineModels: upsertDisciplineModels,
+    fileAutoIssues: fileAutoIssues,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,
     seedDemo: seedDemo,

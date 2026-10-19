@@ -2922,7 +2922,8 @@ function qaqcModelFindings(disciplines){
       ((d.fail_checks||[]).slice(0,4)).forEach(function(c){
         if(out.length>=20) return;
         var nm = (typeof c==='string') ? c : ((c&&(c.name||c.check))||'?');
-        out.push({desc:'['+(d.code||'?')+'] '+nm, severity:'High', model:qaqcModelName(d)});
+        var key = qaqcModelName(d) || '?';
+        out.push({desc:'['+key+'] '+nm, severity:'High', model:qaqcModelName(d)});
       });
     });
   }catch(e){}

@@ -426,7 +426,8 @@
     return isBuildingCode(b) ? b : (isBuildingCode(m.code) ? String(m.code).trim().toUpperCase() : '');
   }
   /* Building-first grouping shared by every Hub tab: everything is classified
-     building -> discipline. Unassigned entries sort last under their own group. */
+     building -> discipline. Rows with no building yet sort last without a
+     group header; the next report that names their building classifies them. */
   function bldLabel(code){
     var v = String(code||'').trim().toUpperCase();
     var b = portalunaBuildingByCode(v);
@@ -463,8 +464,35 @@
     if(as!==bs) return (as==null?9:as)-(bs==null?9:bs);
     return (b.created||0)-(a.created||0);
   }
+  function isBareAutoModel(m, pid, code){
+    return !!m && m.project===pid && String(m.name||'').trim().toUpperCase()===code &&
+      !modelBuilding(m) && !String(m.package||'').trim() &&
+      !m.filePath && !m.accRef && !String(m.owner||'').trim();
+  }
+  // Re-point a bare auto model's issues at the classified row: model name,
+  // building/discipline stamping and the description prefix all follow.
+  function moveModelIssues(pid, oldName, target){
+    var rx = new RegExp('^\\['+String(oldName||'').replace(/[^A-Z0-9]/gi,'')+'\\]');
+    var moved = false;
+    state.issues.forEach(function(i){
+      if(i.project!==pid || String(i.model||'').trim()!==String(oldName||'').trim()) return;
+      i.model = target.name;
+      if(target.building) i.building = target.building;
+      if(!i.discipline) i.discipline = target.discipline || '';
+      if(i.description) i.description = i.description.replace(rx, '['+target.name+']');
+      moved = true;
+    });
+    return moved;
+  }
+  // Merge a bare auto model into an existing classified row, then drop the bare
+  // duplicate so the discipline is listed once — under its building.
+  function mergeDisciplineInto(pid, bare, target){
+    var moved = moveModelIssues(pid, String(bare.name||'').trim(), target);
+    state.models = state.models.filter(function(x){ return x!==bare; });
+    return moved;
+  }
   function upsertDisciplineModels(pid, models){
-    var changed = false;
+    var changed = false, movedIssues = false;
     var p = state.projects.find(function(x){return x.id===pid;});
     (models||[]).forEach(function(m){
       if(!m) return;
@@ -474,21 +502,32 @@
       var b = (building && isPortalunaProject(p)) ? portalunaBuildingByCode(building) : null;
       var pkg = b ? portalunaPackage(b) : '';
       var name = String(m.name||'').trim().toUpperCase() || (building ? building+' '+code : code);
+      var ex = null;
+      state.models.forEach(function(x){ if(x.project===pid && String(x.name||'').trim().toUpperCase()===name) ex = x; });
       // Reuse the federation row when the seeded discipline name IS the code
       // (ID, HVAC, BMS...) so a report never splits one discipline in two.
-      if(b && !state.models.some(function(x){ return x.project===pid && String(x.name||'').trim().toUpperCase()===name; })){
+      if(!ex && b){
         var seeded = null;
         state.models.forEach(function(x){
           if(x.project===pid && String(x.code||'').toUpperCase()===b.code && String(x.discipline||'').trim().toUpperCase()===code) seeded = x;
         });
-        if(seeded) name = String(seeded.name||'').trim().toUpperCase();
+        if(seeded){ ex = seeded; name = String(seeded.name||'').trim().toUpperCase(); }
       }
-      var ex = null;
-      state.models.forEach(function(x){ if(x.project===pid && String(x.name||'').trim().toUpperCase()===name) ex = x; });
+      var bare = null;
+      state.models.forEach(function(x){ if(isBareAutoModel(x, pid, code)) bare = x; });
       if(ex){
+        if(bare && bare!==ex) movedIssues = mergeDisciplineInto(pid, bare, ex) || movedIssues;
         ex.discipline = code;
         if(building && !ex.building) ex.building = building;
         if(pkg && !ex.package) ex.package = pkg;
+      }
+      else if(bare && building){
+        // The building was found: classify the existing model and its issues.
+        var oldName = String(bare.name||'').trim();
+        bare.name = name; bare.building = building; bare.package = pkg || bare.package;
+        bare.discipline = code; bare.code = code; bare.updated = Date.now();
+        movedIssues = moveModelIssues(pid, oldName, bare) || movedIssues;
+        logActivity('Classified '+code+' model into '+building+' ('+name+')');
       }
       else{
         state.models.push({id:uid('mod'), project:pid, name:name, code:code, building:building,
@@ -498,6 +537,7 @@
     });
     if(changed){
       persist('models');
+      if(movedIssues) persist('issues');
       if(currentView==='models') renderModels();
     }
   }
@@ -1897,17 +1937,20 @@
     var gB = '\u0000', gD = '\u0000', body = [];
     rows.forEach(function(m){
       var bKey = modelBuilding(m);
-      var bLbl = bKey ? 'Building '+bldLabel(bKey) : 'Unassigned building';
       if(bKey!==gB){
         gB = bKey; gD = '\u0000';
-        var bN = rows.filter(function(x){ return modelBuilding(x)===bKey; }).length;
-        body.push(grpRow(11, bLbl, '('+bN+' model'+(bN===1?'':'s')+')'));
+        if(bKey){
+          var bN = rows.filter(function(x){ return modelBuilding(x)===bKey; }).length;
+          body.push(grpRow(11, 'Building '+bldLabel(bKey), '('+bN+' model'+(bN===1?'':'s')+')'));
+        }
       }
       var dKey = String(m.discipline||'').trim();
       if(dKey!==gD){
         gD = dKey;
-        var dN = rows.filter(function(x){ return modelBuilding(x)===bKey && String(x.discipline||'').trim()===dKey; }).length;
-        body.push(subGrpRow(11, dKey||'No discipline', '('+dN+')'));
+        if(bKey){
+          var dN = rows.filter(function(x){ return modelBuilding(x)===bKey && String(x.discipline||'').trim()===dKey; }).length;
+          body.push(subGrpRow(11, dKey||'No discipline', '('+dN+')'));
+        }
       }
       var open = state.issues.filter(function(i){ return i.project===p.id && i.model===m.name && (i.status==='Open'||i.status==='In Progress'); }).length;
       body.push('<tr>'+
@@ -2495,17 +2538,20 @@
       var gB2 = '\u0000', gD2 = '\u0000', iBody = [];
       shown.forEach(function(i){
         var bKey = String(i.building||'').toUpperCase();
-        var bLbl = bKey ? 'Building '+bldLabel(bKey) : 'Unassigned building';
         if(bKey!==gB2){
           gB2 = bKey; gD2 = '\u0000';
-          var bN2 = shown.filter(function(x){ return String(x.building||'').toUpperCase()===bKey; }).length;
-          iBody.push(grpRow(11, bLbl, '('+bN2+' issue'+(bN2===1?'':'s')+')'));
+          if(bKey){
+            var bN2 = shown.filter(function(x){ return String(x.building||'').toUpperCase()===bKey; }).length;
+            iBody.push(grpRow(11, 'Building '+bldLabel(bKey), '('+bN2+' issue'+(bN2===1?'':'s')+')'));
+          }
         }
         var dKey2 = String(i.discipline||'').toUpperCase();
         if(dKey2!==gD2){
           gD2 = dKey2;
-          var dN2 = shown.filter(function(x){ return String(x.building||'').toUpperCase()===bKey && String(x.discipline||'').toUpperCase()===dKey2; }).length;
-          iBody.push(subGrpRow(11, dKey2||'No discipline', '('+dN2+')'));
+          if(bKey){
+            var dN2 = shown.filter(function(x){ return String(x.building||'').toUpperCase()===bKey && String(x.discipline||'').toUpperCase()===dKey2; }).length;
+            iBody.push(subGrpRow(11, dKey2||'No discipline', '('+dN2+')'));
+          }
         }
         iBody.push('<tr>'+
           '<td><input type="checkbox" class="qc-sel" data-qcid="'+i.id+'" aria-label="Select issue" style="accent-color:var(--g1);"></td>'+

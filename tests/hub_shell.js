@@ -170,6 +170,31 @@ OHub.fileAutoIssues('PP', 'naming', [{ desc: '[CR01 EL] Views Not On Sheets', se
 const cr = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[CR01 EL] Views Not On Sheets');
 ok(cr && cr.building === 'CR01' && cr.discipline === 'EL', 'classification inferred from finding text');
 
+// 6d. A bare auto model is classified the moment a report names its building:
+//     the row is renamed/packaged and its issues follow it — no duplicates.
+OHub.upsertDisciplineModels('PP', [{ code: 'BS', name: 'BS', building: '', score: 60, issues: 4 }]);
+ok(!!JSON.parse(store.ohub_models || '[]').find((m) => m.project === 'PP' && m.name === 'BS' && !m.building), 'bare BS model exists before the building is known');
+OHub.fileAutoIssues('PP', 'qaqc', [{ desc: '[BS] Worksets', model: 'BS', severity: 'Medium' }]);
+ok(JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[BS] Worksets').building === '', 'BS issue starts unclassified');
+OHub.upsertDisciplineModels('PP', [{ code: 'BS', name: 'FB02 BS', building: 'FB02', score: 88, issues: 2 }]);
+const m3 = JSON.parse(store.ohub_models || '[]');
+ok(!m3.some((m) => m.project === 'PP' && m.name === 'BS'), 'bare model adopted, not left behind');
+ok(!!m3.find((m) => m.name === 'FB02 BS' && m.building === 'FB02' && m.package === '04. FB02 POOL BAR & GRILL'), 'FB02 BS classified under building + package');
+const bs2 = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[FB02 BS] Worksets');
+ok(!!bs2 && bs2.model === 'FB02 BS' && bs2.building === 'FB02' && bs2.discipline === 'BS', 'issue followed the model into the building');
+OHub.fileAutoIssues('PP', 'qaqc', [{ desc: '[FB02 BS] Worksets', model: 'FB02 BS', severity: 'Medium' }]);
+ok(JSON.parse(store.ohub_issues || '[]').filter((i) => i.project === 'PP' && /^\[(FB02 BS|BS)\] Worksets$/.test(i.description)).length === 1, 're-report after adoption does not duplicate');
+
+// 6e. If the classified row already exists, the bare duplicate merges into it.
+OHub.upsertDisciplineModels('PP', [{ code: 'ST', name: 'FB02 ST', building: 'FB02', score: 90, issues: 0 }]);
+OHub.upsertDisciplineModels('PP', [{ code: 'ST', name: 'ST', building: '', score: 55, issues: 3 }]);
+OHub.fileAutoIssues('PP', 'qaqc', [{ desc: '[ST] Grids', model: 'ST', severity: 'Medium' }]);
+OHub.upsertDisciplineModels('PP', [{ code: 'ST', name: 'FB02 ST', building: 'FB02', score: 91, issues: 0 }]);
+const m4 = JSON.parse(store.ohub_models || '[]');
+ok(m4.filter((m) => m.project === 'PP' && m.name === 'FB02 ST').length === 1 && !m4.some((m) => m.project === 'PP' && m.name === 'ST'), 'bare duplicate merged into existing row');
+const stIss = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[FB02 ST] Grids');
+ok(!!stIss && stIss.model === 'FB02 ST' && stIss.building === 'FB02', 'merged issue re-pointed to the classified model');
+
 // 7. Models tab lists a Building column, filters by building, and sorts grouped.
 OHub.setActiveProject('PP');
 els['models-bld-filter'] = makeEl();
@@ -189,7 +214,9 @@ ok(mo.indexOf('HT01 AR') >= 0 && mo.indexOf('FF') >= 0, 'no filter shows all mod
 ok(mo.indexOf('BH01 BOH') < mo.indexOf('HT01 MAIN BUILDING'), 'rows sorted by building code', 'order');
 ok(mo.indexOf('Building HT01 \u2014 HT01 MAIN BUILDING') >= 0, 'models: building group header');
 ok(mo.indexOf('Building BH01 \u2014 BH01 BOH - GUARD HOUSE') >= 0, 'models: every building grouped');
+ok(mo.indexOf('Unassigned building') === -1, 'models: no unassigned-building group header');
 ok(mo.indexOf('Architectural <span') >= 0, 'models: discipline sub-group');
+ok(mo.indexOf('>FF</strong>') >= 0, 'models: unclassified row still listed without a group header');
 const iHt = mo.indexOf('Building HT01 \u2014 HT01 MAIN BUILDING');
 ok(iHt >= 0 && mo.indexOf('Architectural <span', iHt) > iHt, 'building header precedes disciplines');
 els['models-bld-filter'].value = '';
@@ -202,6 +229,8 @@ ok(qc.indexOf('Issues by building') >= 0, 'quality center building rollup');
 ok(qc.indexOf('<td><strong>HT01</strong></td><td>HT01 MAIN BUILDING</td><td>14</td><td>1</td>') >= 0, 'HT01 row: 14 models, 1 open issue');
 ok(qc.indexOf('<td><strong>SF01</strong></td>') >= 0, 'SF01 row present');
 ok(qc.indexOf('<th>Building</th>') >= 0, 'issue log has Building column');
+ok(qc.indexOf('Unassigned building') === -1, 'issue log: no unassigned-building group header');
+ok(qc.indexOf('[BMS] Worksets') >= 0, 'unclassified issue still listed without a group header');
 
 // 9. Issue log filters + batch actions (all / selected).
 const ppIss = () => JSON.parse(store.ohub_issues || '[]').filter((i) => i.project === 'PP');

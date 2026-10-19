@@ -4064,7 +4064,7 @@
     }
   }
   function formaCardHtml(p){
-    if(!window.OForma) return '';
+    if(!authwIsAdmin() || !window.OForma) return '';
     var L = null;
     try{ L = (window.OForma.links()||{})[p.id] || null; }catch(e){}
     var body = '';

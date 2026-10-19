@@ -73,6 +73,9 @@ function boot(role) {
   });
   window.OHub.switchView('models');
   ok(els['models-runbar'].style.display === 'none', tag + ': models runbar hidden');
+  window.OHub.switchView('dashboard');
+  const dash = (els['dash-content'] || {}).innerHTML || '';
+  ok(dash.indexOf('Autodesk Forma') === -1, tag + ': dashboard Forma/APS card hidden');
 });
 
 const adminEls = boot('ADMIN');
@@ -82,9 +85,11 @@ GATED_IDS.forEach(function (id) {
 });
 window.OHub.switchView('models');
 ok(adminEls['models-runbar'].style.display === '', 'ADMIN: models runbar visible');
+global.OForma = { links: () => ({}), isConfigured: () => false };
 window.OHub.switchView('dashboard');
 const adminDash = (adminEls['dash-content'] || {}).innerHTML || '';
 ok(adminDash.indexOf('Open ACC') >= 0, 'ADMIN: dashboard ACC quick action visible');
+ok(adminDash.indexOf('Autodesk Forma') >= 0, 'ADMIN: dashboard Forma card visible');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

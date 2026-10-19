@@ -489,6 +489,12 @@ body.dark #ax-modal-card{background:#111C33;border:1px solid #233252}
 
     <div id="scope-panel"></div>
 
+    <div class="io-projname" style="margin-top:18px;margin-bottom:22px">
+      <label>🎯 Validate only drawings with this in the name <span style="font-weight:400;opacity:.7;letter-spacing:0;text-transform:none">(optional)</span></label>
+      <input type="text" id="name-filter" placeholder="e.g. -RL-AB — matches P0152-K00146-OCC-HT01-RL-AB-AC-000001" oninput="onNameFilterChange(this.value)">
+      <small style="display:block;margin-top:6px;color:rgba(255,255,255,.45);font-size:.72rem">Applies to all three runs — As-Built Validation, File Exchange Audit and the MIDP comparison. Only drawings whose file name contains this text are validated; Revit models are always kept so drawings can still be matched to them. Leave empty to validate everything.</small>
+    </div>
+
     <div class="io-prog" id="io-prog"><div class="prog-bar"><div class="prog-fill" id="pf"></div></div>
       <p style="color:rgba(255,255,255,.45);font-size:.76rem;margin-top:6px">Processing…</p></div>
 
@@ -892,6 +898,19 @@ let EXTRA_SORT = {col:null, dir:1};
 let GENERATED_AT = null;
 let DARK_ON = false;
 try{ if(localStorage.getItem("dv-dark")==="1"){ setDarkTheme(true); } }catch(e){}
+
+/* DRAWING-NAME FILTER — scopes drawing validation across the three runs (MIDP comparison,
+   As-Built Validation, File Exchange Audit). Matches files whose name contains the text. */
+let NAME_FILTER = '';
+try{ NAME_FILTER = String(localStorage.getItem('dv_name_filter')||'').trim().toUpperCase(); }catch(e){}
+function nameFilterMatch(name){
+  if(!NAME_FILTER) return true;
+  return String(name==null?'':name).toUpperCase().indexOf(NAME_FILTER)!==-1;
+}
+function onNameFilterChange(v){
+  NAME_FILTER = String(v==null?'':v).trim().toUpperCase();
+  try{ localStorage.setItem('dv_name_filter', NAME_FILTER); }catch(e){}
+}
 
 /* AS-BUILT VALIDATION — module state (kept separate from the MIDP state above) */
 let AB_FILES = [];              // every classified ACC row (drawings + revit models + excluded)
@@ -1531,6 +1550,7 @@ async function runComparison(){
       // are treated as real files so they are counted (and reported missing) instead of hidden.
       const looksPlaceholder = /^(tbd|tbc|n\/a|na|tba|to be (confirmed|advised))$/i.test(keyVal);
       const isHeaderRow = !looksPlaceholder && !/\d/.test(keyVal) && !fmtVal;
+      if(NAME_FILTER && !isHeaderRow && !nameFilterMatch(keyVal)) continue;
       items.push({
         key: keyVal,
         format: fmtVal,
@@ -1541,14 +1561,17 @@ async function runComparison(){
     }
     if(!items.length){
       hideSpinner();
-      showToast('No MIDP rows found under the selected header row — check your mapping.', 'error');
+      showToast(NAME_FILTER
+        ? 'No MIDP rows left after applying the drawing name filter "'+NAME_FILTER+'" — clear the filter to see all rows.'
+        : 'No MIDP rows found under the selected header row — check your mapping.', NAME_FILTER?'warn':'error');
       return;
     }
 
     MIDP_ITEMS = items;
     MIDP_META = {
       fileName: MIDP_FILE_NAME, sheetName: sheetName, headerRow: headerRowIdx+1, totalRows: items.length,
-      keyColumnName: headers[keyIdx], formatColumnName: formatIdx>=0?headers[formatIdx]:'', titleColumnName: titleIdx>=0?headers[titleIdx]:''
+      keyColumnName: headers[keyIdx], formatColumnName: formatIdx>=0?headers[formatIdx]:'', titleColumnName: titleIdx>=0?headers[titleIdx]:'',
+      nameFilter: NAME_FILTER
     };
 
     runMatching();
@@ -1598,7 +1621,8 @@ async function generateAsBuiltValidation(){
     switchTab('t-asbuilt');
     hideSpinner();
     const k = AB_KPIS;
-    showToast('As-Built validation generated — '+k.invalid+' invalid record(s) found.', k.invalid>0?'warn':'success');
+    if(NAME_FILTER && k.drawings===0) showToast('No drawings match the drawing name filter "'+NAME_FILTER+'" — nothing to validate.', 'warn');
+    else showToast('As-Built validation generated'+(NAME_FILTER?' — filter '+NAME_FILTER:'')+' — '+k.invalid+' invalid record(s) found.', k.invalid>0?'warn':'success');
   }catch(err){
     console.error(err);
     hideSpinner();
@@ -1637,6 +1661,7 @@ function runMatching(){
   ACC_ITEMS.forEach(function(it){
     it.norm = normalizeKey(it.name);
     it.matched = false;
+    if(!nameFilterMatch(it.name)) return;
     if(!accIndex.has(it.norm)) accIndex.set(it.norm, []);
     accIndex.get(it.norm).push(it);
   });
@@ -1863,7 +1888,7 @@ function sortExtra(col){
 }
 function renderExtraTable(){
   const q = (document.getElementById('extra-search').value||'').toLowerCase();
-  const allExtra = ACC_ITEMS.filter(function(a){ return !a.matched; });
+  const allExtra = ACC_ITEMS.filter(function(a){ return !a.matched && nameFilterMatch(a.name); });
   let rows = allExtra;
   if(q) rows = rows.filter(function(a){ return (a.name+' '+(a.folderPath||'')).toLowerCase().indexOf(q)!==-1; });
   if(EXTRA_SORT.col){
@@ -1917,13 +1942,14 @@ function renderDisciplines(){
 function renderFormatTab(){
   const extCountAll = {}, extCountExtra = {};
   ACC_ITEMS.forEach(function(a){
+    if(!nameFilterMatch(a.name)) return;
     const ext = (a.name.match(/\.([A-Za-z0-9]+)$/)||[, ''])[1].toLowerCase() || '(none)';
     extCountAll[ext] = (extCountAll[ext]||0) + 1;
     if(!a.matched) extCountExtra[ext] = (extCountExtra[ext]||0) + 1;
   });
   const sortedAll = Object.keys(extCountAll).sort(function(a,b){ return extCountAll[b]-extCountAll[a]; });
   const sortedExtra = Object.keys(extCountExtra).sort(function(a,b){ return extCountExtra[b]-extCountExtra[a]; });
-  const totalAll = ACC_ITEMS.length || 1, totalExtra = ACC_ITEMS.filter(function(a){ return !a.matched; }).length || 1;
+  const totalAll = ACC_ITEMS.filter(function(a){ return nameFilterMatch(a.name); }).length || 1, totalExtra = ACC_ITEMS.filter(function(a){ return !a.matched && nameFilterMatch(a.name); }).length || 1;
 
   document.getElementById('format-all-list').innerHTML = sortedAll.length
     ? sortedAll.map(function(e){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0"><span><b>.'+e+'</b></span><span>'+extCountAll[e]+' ('+Math.round(extCountAll[e]/totalAll*100)+'%)</span></div>'; }).join('')
@@ -2045,7 +2071,8 @@ function renderProvenance(){
     '<div class="prov-row"><span>Key column</span><b>'+escHtml(MIDP_META.keyColumnName||'—')+'</b></div>'+
     '<div class="prov-row"><span>File Format column</span><b>'+escHtml(MIDP_META.formatColumnName||'auto-detected from name')+'</b></div>'+
     '<div class="prov-row"><span>Rows loaded</span><b>'+MIDP_ITEMS.length+'</b></div>'+
-    '<div class="prov-row"><span>Files</span><b>'+MIDP_ITEMS.filter(function(m){return !m.isHeader;}).length+'</b><span style="font-size:.7rem;color:var(--muted)"> ('+(MIDP_ITEMS.filter(function(m){return m.isHeader;}).length)+' headers)</span></div>';
+    '<div class="prov-row"><span>Files</span><b>'+MIDP_ITEMS.filter(function(m){return !m.isHeader;}).length+'</b><span style="font-size:.7rem;color:var(--muted)"> ('+(MIDP_ITEMS.filter(function(m){return m.isHeader;}).length)+' headers)</span></div>'+
+    (MIDP_META.nameFilter ? '<div class="prov-row"><span>Drawing name filter</span><b>'+escHtml(MIDP_META.nameFilter)+'</b></div>' : '');
 }
 
 /* ═══ RENDER: CHARTS ══════════════════════════════════════════ */
@@ -2119,7 +2146,8 @@ async function exportExcelReport(){
 
     const total = MIDP_ITEMS.filter(function(m){return !m.isHeader;}).length, delivered = MIDP_ITEMS.filter(function(m){return !m.isHeader && m.matched;}).length, missing = total-delivered;
     const pct = total ? Math.round((delivered/total)*100) : 0;
-    const accTotal = ACC_ITEMS.length, accMatched = ACC_ITEMS.filter(function(a){return a.matched;}).length, accExtra = accTotal-accMatched;
+    const accScoped = ACC_ITEMS.filter(function(a){ return nameFilterMatch(a.name); });
+    const accTotal = accScoped.length, accMatched = accScoped.filter(function(a){return a.matched;}).length, accExtra = accTotal-accMatched;
     const headerCount = MIDP_ITEMS.filter(function(m){return m.isHeader;}).length;
 
     /* Sheet 1: Summary */
@@ -2144,7 +2172,8 @@ async function exportExcelReport(){
       ['MIDP Required', total], ['Delivered', delivered], ['Missing', missing], ['Delivery Rate', pct+'%'],
       ['ACC Files Total', accTotal], ['Matched to MIDP', accMatched], ['Extra in ACC', accExtra],
       ['Warnings (File Revisions)', getWarningItems().length],
-      ['Warnings (File Size)', getLargeModelItems().length]
+      ['Warnings (File Size)', getLargeModelItems().length],
+      ['Drawing name filter', (MIDP_META&&MIDP_META.nameFilter) || '(none)']
     ];
     kpis.forEach(function(pair){
       s1.getCell('A'+r).value = pair[0]; s1.getCell('B'+r).value = pair[1]; r++;
@@ -2852,7 +2881,9 @@ function abDisciplineLabel(name){
 /* AS-BUILT VALIDATION — MAIN ORCHESTRATOR ═════════════════════════════════ */
 function abRunEngine(){
   const classified = abClassifyAllFiles(ACC_ITEMS);
-  AB_FILES = classified.files;
+  AB_FILES = NAME_FILTER
+    ? classified.files.filter(function(f){ return !f.isDrawing || nameFilterMatch(f.name); })
+    : classified.files;
   AB_CODE_MAP = classified.codeMap;
   AB_REVIT = AB_FILES.filter(function(f){ return f.isRevitModel; });
   const revitIndex = abBuildRevitIndex(AB_FILES);
@@ -2879,7 +2910,7 @@ function abRunEngine(){
     columnMap: abDetectColumnMap(), codeMap: AB_CODE_MAP,
     buildings: Object.keys(buildingsSeen).sort(), disciplines: Object.keys(disciplinesSeen).sort(),
     excludedPointCloud: excludedPointCloud, excludedSupporting: excludedSupporting,
-    fallbackResolved: fallbackResolved
+    fallbackResolved: fallbackResolved, nameFilter: NAME_FILTER
   };
   AB_GENERATED_AT = new Date();
 }
@@ -3220,6 +3251,7 @@ function abRenderProvenance(){
     '<div class="prov-row"><span>Excluded — point cloud files</span><b>'+(AB_META.excludedPointCloud||0)+'</b></div>'+
     '<div class="prov-row"><span>Excluded — preview / plot-config files</span><b>'+(AB_META.excludedSupporting||0)+'</b></div>'+
     '<div class="prov-row"><span>Resolved via discipline fallback</span><b>'+(AB_META.fallbackResolved||0)+'</b></div>'+
+    (AB_META.nameFilter ? '<div class="prov-row"><span>Drawing name filter</span><b>'+escHtml(AB_META.nameFilter)+'</b></div>' : '')+
     '<div class="prov-row"><span>Generated</span><b>'+(AB_GENERATED_AT?AB_GENERATED_AT.toLocaleString():'—')+'</b></div>';
 }
 
@@ -3275,7 +3307,8 @@ async function exportAsBuiltExcel(){
     r++;
     [['Buildings',k.buildings],['Drawings Evaluated',k.drawings],['Revit Models',k.revitModels],
      ['Valid',k.valid],['Invalid',k.invalid],['Unverified',k.unverified],['Validation Rate',k.rate+'%'],
-     ['Resolved via discipline fallback',(AB_META&&AB_META.fallbackResolved)||0]
+     ['Resolved via discipline fallback',(AB_META&&AB_META.fallbackResolved)||0],
+     ['Drawing name filter',(AB_META&&AB_META.nameFilter)||'(none)']
     ].forEach(function(pair){ s1.getCell('A'+r).value=pair[0]; s1.getCell('B'+r).value=pair[1]; r++; });
 
     /* Sheet 2: Building Summary */
@@ -3736,13 +3769,18 @@ function axComplianceForLog(classifiedFiles, codeMap, logTag){
   return out;
 }
 /* Full audit pipeline. Scopes are Sets of folder paths (null = all). */
+function axNameScope(files){
+  if(!NAME_FILTER) return files;
+  return files.filter(function(f){ return !f.isDrawing || nameFilterMatch(f.name); });
+}
 function axRunAudit(){
   const debug = {warnings:[]};
+  debug.nameFilter = NAME_FILTER;
   const ourC = abClassifyAllFiles(OUR_ITEMS);
   const cliC = abClassifyAllFiles(CLIENT_ITEMS);
   debug.ourLoaded = OUR_ITEMS.length; debug.clientLoaded = CLIENT_ITEMS.length;
-  const ourFiles = axScopedFiles(ourC.files, OUR_SCOPE);
-  const cliFiles = axScopedFiles(cliC.files, CLIENT_SCOPE);
+  const ourFiles = axNameScope(axScopedFiles(ourC.files, OUR_SCOPE));
+  const cliFiles = axNameScope(axScopedFiles(cliC.files, CLIENT_SCOPE));
   debug.ourScoped = ourFiles.length; debug.clientScoped = cliFiles.length;
   debug.unmappedModelRoles = {};
   [ourC, cliC].forEach(function(cc){
@@ -3859,7 +3897,8 @@ async function generateAudit(){
     switchTab('t-audit');
     hideSpinner();
     const k = AX.kpis;
-    showToast('Audit complete — '+k.bridged+'/'+k.totalOur+' bridged ('+k.coverage+'%), '+k.missing+' missing, '+k.clientOnly+' client-only.', k.missing||k.fails?'warn':'success');
+    if(NAME_FILTER && k.totalOur===0) showToast('No drawings match the drawing name filter "'+NAME_FILTER+'" — nothing to audit.', 'warn');
+    else showToast('Audit complete'+(NAME_FILTER?' (filter '+NAME_FILTER+')':'')+' — '+k.bridged+'/'+k.totalOur+' bridged ('+k.coverage+'%), '+k.missing+' missing, '+k.clientOnly+' client-only.', k.missing||k.fails?'warn':'success');
   }catch(err){ console.error(err); hideSpinner(); showToast('Audit failed — check the console.', 'error'); }
 }
 
@@ -4198,6 +4237,7 @@ function axRenderProvenance(){
     '<div class="prov-row"><span>CLIENT log</span><b>'+escHtml(AX.clientMeta.fileName||'—')+'</b></div>'+
     '<div class="prov-row"><span>CLIENT scope</span><b>'+escHtml(scopeTxt(CLIENT_SCOPE, AX.debug.clientScoped))+'</b></div>'+
     '<div class="prov-row"><span>Rule</span><b>dateOnly(model) ≥ dateOnly(drawing)</b></div>'+
+    (AX.debug.nameFilter ? '<div class="prov-row"><span>Drawing name filter</span><b>'+escHtml(AX.debug.nameFilter)+'</b></div>' : '')+
     '<div class="prov-row"><span>Generated</span><b>'+AX.generatedAt.toLocaleString()+'</b></div>';
   const d = AX.debug;
   const lines = [
@@ -4354,6 +4394,7 @@ async function exportAuditExcel(){
       ['Overall health', k.health+' — '+k.healthNote],
       ['OUR log', (AX.ourMeta.fileName||'—')+' ('+AX.debug.ourScoped+' in scope)'],
       ['CLIENT log', (AX.clientMeta.fileName||'—')+' ('+AX.debug.clientScoped+' in scope)'],
+      ['Drawing name filter', AX.debug.nameFilter || '(none)'],
       ['Rule', 'dateOnly(Revit LastUpdated) ≥ dateOnly(Drawing LastUpdated); time ignored'],
       ['Our files (relevant)', k.totalOur], ['Client files (relevant)', k.totalClient],
       ['Bridged', k.bridged], ['Bridge coverage', k.coverage+'%'],
@@ -4552,6 +4593,8 @@ window.addEventListener('DOMContentLoaded', function(){
       dz.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); dz.click(); } });
     }
   });
+  const nf = document.getElementById('name-filter');
+  if(nf && NAME_FILTER) nf.value = NAME_FILTER;
 });
 
 </script>

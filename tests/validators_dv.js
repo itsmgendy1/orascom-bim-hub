@@ -52,7 +52,7 @@ global.Chart = function () { return { destroy() {}, resize() {}, update() {} }; 
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,axReconcileOne,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml};');
+eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,axReconcileOne,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml,nameFilterMatch,onNameFilterChange,axNameScope};');
 const M = module.exports;
 
 // Mirror shipped rule defaults.
@@ -158,6 +158,23 @@ ok(M.axBridgePill('<img src=x>').indexOf('<img') === -1, 'pill fallback escaped'
 const provCalls = [...html.matchAll(/axProvRow\((\s*'[^']*'\s*,[^)]*)\)/g)].map((x) => x[1]);
 const unsafe = provCalls.filter((args) => !/escHtml|ax[A-Z][a-zA-Z]*Pill|— none —|mono/.test(args) && /[a-zA-Z_$][\w$]*\.[a-zA-Z_$]/.test(args));
 ok(unsafe.length === 0, 'all provenance values escaped or pill-built', unsafe.slice(0, 2).join(' // '));
+
+// 8. drawing-name filter (rule) scoping
+ok(M.nameFilterMatch('P0152-K00146-OCC-HT01-RL-AB-AC-000001') === true, 'no filter matches all');
+ok(M.nameFilterMatch(null) === true && M.nameFilterMatch(undefined) === true, 'filter null-safe');
+M.onNameFilterChange('-rl-ab');
+ok(store['dv_name_filter'] === '-RL-AB', 'filter upper-cased + persisted');
+ok(M.nameFilterMatch('P0152-K00146-OCC-HT01-RL-AB-AC-000001') === true, 'filter matches roof level drawing');
+ok(M.nameFilterMatch('P0152-K00146-OCC-HT01-FL-AC-AC-000001') === false, 'filter rejects other level');
+ok(M.nameFilterMatch('p0152-k00146-occ-ht01-rl-ab.dwg') === true, 'filter case-insensitive');
+const scoped = M.axNameScope([
+  F('A-RL-AB-0001.pdf', '/Our', 'pdf'),
+  F('A-FL-0002.pdf', '/Our', 'pdf'),
+  F('A-HT01-AR.rvt', '/M', 'rvt', { isDrawing: false, isRevitModel: true }),
+]);
+ok(scoped.length === 2 && scoped.some(function(f){ return f.isRevitModel; }) && !scoped.some(function(f){ return f.name === 'A-FL-0002.pdf'; }), 'audit scope keeps models, drops non-matching drawings', JSON.stringify(scoped.map(function(f){ return f.name; })));
+M.onNameFilterChange('  ');
+ok(M.nameFilterMatch('anything') === true && store['dv_name_filter'] === '', 'filter cleared + whitespace trimmed');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

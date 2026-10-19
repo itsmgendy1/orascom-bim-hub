@@ -918,6 +918,14 @@ const DV_EXCLUDED_EXT = ['jpg','pcp'];
 function isExcludedFile(name){
   return DV_EXCLUDED_EXT.indexOf(abGetExt(name))!==-1;
 }
+/* Same rule for bare format-column values ("JPG", ".pcp") or file names ("X-0001.jpg"). */
+function isExcludedFormat(v){
+  const s = String(v==null?'':v).trim();
+  if(!s) return false;
+  const ext = abGetExt(s);
+  if(ext) return DV_EXCLUDED_EXT.indexOf(ext)!==-1;
+  return DV_EXCLUDED_EXT.indexOf(s.replace(/^\./,'').toLowerCase())!==-1;
+}
 /* The ACC rows this run counts anywhere (both the name filter and exclusions applied). */
 function accScopedItems(){
   return ACC_ITEMS.filter(function(a){ return !isExcludedFile(a.name) && nameFilterMatch(a.name); });
@@ -1550,6 +1558,7 @@ async function runComparison(){
     const headers = (aoa[headerRowIdx]||[]).map(function(h,i){ return String(h||'').trim() || ('Column '+(i+1)); });
 
     const items = [];
+    let excludedMidpRows = 0;
     for(let r=headerRowIdx+1; r<aoa.length; r++){
       const row = aoa[r]||[];
       const keyVal = String(row[keyIdx]==null?'':row[keyIdx]).trim();
@@ -1561,6 +1570,7 @@ async function runComparison(){
       // are treated as real files so they are counted (and reported missing) instead of hidden.
       const looksPlaceholder = /^(tbd|tbc|n\/a|na|tba|to be (confirmed|advised))$/i.test(keyVal);
       const isHeaderRow = !looksPlaceholder && !/\d/.test(keyVal) && !fmtVal;
+      if(isExcludedFile(keyVal) || isExcludedFormat(fmtVal)){ excludedMidpRows++; continue; }
       if(NAME_FILTER && !isHeaderRow && !nameFilterMatch(keyVal)) continue;
       items.push({
         key: keyVal,
@@ -1572,6 +1582,10 @@ async function runComparison(){
     }
     if(!items.length){
       hideSpinner();
+      if(excludedMidpRows){
+        showToast('All '+excludedMidpRows+' MIDP row(s) are .jpg/.pcp preview or plot-config entries — nothing to validate.', 'warn');
+        return;
+      }
       showToast(NAME_FILTER
         ? 'No MIDP rows left after applying the drawing name filter "'+NAME_FILTER+'" — clear the filter to see all rows.'
         : 'No MIDP rows found under the selected header row — check your mapping.', NAME_FILTER?'warn':'error');
@@ -1582,7 +1596,7 @@ async function runComparison(){
     MIDP_META = {
       fileName: MIDP_FILE_NAME, sheetName: sheetName, headerRow: headerRowIdx+1, totalRows: items.length,
       keyColumnName: headers[keyIdx], formatColumnName: formatIdx>=0?headers[formatIdx]:'', titleColumnName: titleIdx>=0?headers[titleIdx]:'',
-      nameFilter: NAME_FILTER
+      nameFilter: NAME_FILTER, excludedExtRows: excludedMidpRows
     };
 
     runMatching();
@@ -2086,6 +2100,7 @@ function renderProvenance(){
     '<div class="prov-row"><span>File Format column</span><b>'+escHtml(MIDP_META.formatColumnName||'auto-detected from name')+'</b></div>'+
     '<div class="prov-row"><span>Rows loaded</span><b>'+MIDP_ITEMS.length+'</b></div>'+
     '<div class="prov-row"><span>Files</span><b>'+MIDP_ITEMS.filter(function(m){return !m.isHeader;}).length+'</b><span style="font-size:.7rem;color:var(--muted)"> ('+(MIDP_ITEMS.filter(function(m){return m.isHeader;}).length)+' headers)</span></div>'+
+    (MIDP_META.excludedExtRows ? '<div class="prov-row"><span>Ignored .jpg/.pcp rows</span><b>'+MIDP_META.excludedExtRows+'</b><span style="font-size:.7rem;color:var(--muted)"> not deliverables</span></div>' : '')+
     (MIDP_META.nameFilter ? '<div class="prov-row"><span>Drawing name filter</span><b>'+escHtml(MIDP_META.nameFilter)+'</b></div>' : '');
 }
 
@@ -2188,7 +2203,8 @@ async function exportExcelReport(){
       ['Warnings (File Revisions)', getWarningItems().length],
       ['Warnings (File Size)', getLargeModelItems().length],
       ['Drawing name filter', (MIDP_META&&MIDP_META.nameFilter) || '(none)'],
-      ['Ignored file types', '.jpg / .pcp (previews, plot configs)']
+      ['Ignored file types', '.jpg / .pcp (previews, plot configs)'],
+      ['MIDP rows ignored (.jpg/.pcp)', (MIDP_META&&MIDP_META.excludedExtRows)||0]
     ];
     kpis.forEach(function(pair){
       s1.getCell('A'+r).value = pair[0]; s1.getCell('B'+r).value = pair[1]; r++;

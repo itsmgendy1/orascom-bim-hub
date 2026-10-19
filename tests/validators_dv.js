@@ -52,7 +52,7 @@ global.Chart = function () { return { destroy() {}, resize() {}, update() {} }; 
 
 const html = fs.readFileSync(MOD, 'utf8');
 const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
-eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,axReconcileOne,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml,nameFilterMatch,onNameFilterChange,axNameScope,isExcludedFile};');
+eval(scripts + '\n;module.exports={normalizeKey,extractDiscipline,axNormName,axNormBase,axDecompose,axDecompKey,axFileType,axIsRelevant,axParseVer,axDayDiff,axGetExt,axSameExt,axBuildFileIndex,axMatchOurFile,axCompareVersions,axReconcileOne,parseFileSizeMB,abParseDate,abHumanizeDiff,abDateOnly,abDayDiffText,axProvRow,axBridgePill,axConfPill,escHtml,nameFilterMatch,onNameFilterChange,axNameScope,isExcludedFile,isExcludedFormat};');
 const M = module.exports;
 
 // Mirror shipped rule defaults.
@@ -181,6 +181,11 @@ ok(M.isExcludedFile('PRINT-0001.pdf.jpg') === true && M.isExcludedFile('X-0001.J
 ok(M.isExcludedFile('DWG-0001.pcp') === true && M.isExcludedFile('a.PCP') === true, 'pcp excluded');
 ok(M.isExcludedFile('A-0001.pdf') === false && M.isExcludedFile('A-0001.dwg') === false && M.isExcludedFile('M-AR-01.rvt') === false, 'deliverable extensions unaffected');
 ok(M.isExcludedFile('') === false && M.isExcludedFile(null) === false && M.isExcludedFile('noext') === false, 'exclusion null-safe');
+
+// 10. MIDP rows carrying .jpg/.pcp keys or format tokens are excluded the same way
+ok(M.isExcludedFormat('JPG') === true && M.isExcludedFormat('.jpg') === true && M.isExcludedFormat('pcp') === true && M.isExcludedFormat('PCP') === true, 'bare format tokens excluded');
+ok(M.isExcludedFormat('X-0001.jpg') === true && M.isExcludedFormat('P0152-K00146-OCC-HT01-RL-AB-AC-000001.PCP') === true, 'file-name keys excluded');
+ok(M.isExcludedFormat('PDF') === false && M.isExcludedFormat('DWG') === false && M.isExcludedFormat('RVT') === false && M.isExcludedFormat('') === false && M.isExcludedFormat(null) === false, 'other formats unaffected');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

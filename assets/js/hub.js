@@ -32,7 +32,7 @@
     {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=877b6da0',      weightKey:'naming'},
     {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=8f02a7f6',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},
-    {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=a83f1a41',   weightKey:'parameters'},
+    {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=acbd0142',   weightKey:'parameters'},
     {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=f508d891',                 weightKey:'clash'}
   ];
 
@@ -389,11 +389,24 @@
   // Hand-entered scores (auto:false) are NEVER clobbered by automation.
   function applyModuleScore(pid, modId, score, issues, findings, enteredName, batch, models){
     if(!pid) return false;
+    // Reports always reach the Hub: discipline models and findings are filed
+    // even when the score itself is hand-managed. A manual score only blocks
+    // the score overwrite below — it must never silence the issue log.
+    if(models && models.length) upsertDisciplineModels(pid, models);
+    if(findings && findings.length) fileAutoIssues(pid, modId, findings);
     var existing = state.scores[pid] && state.scores[pid][modId];
-    if(existing && !existing.auto) return false;
+    if(existing && !existing.auto){
+      if(currentView==='quality-center') renderQualityCenter();
+      if(currentView==='dashboard') renderDashboard();
+      return false;
+    }
     if(!state.scores[pid]) state.scores[pid] = {};
     var s = Math.max(0, Math.min(100, Number(score)));
-    if(isNaN(s)) return false;
+    if(isNaN(s)){
+      if(currentView==='quality-center') renderQualityCenter();
+      if(currentView==='dashboard') renderDashboard();
+      return false;
+    }
     s = Math.round(s*10)/10;
     var proj = state.projects.find(function(p){return p.id===pid;});
     var mismatch = !!(enteredName && proj && enteredName.trim() && enteredName.trim().toLowerCase()!==proj.name.trim().toLowerCase());
@@ -404,8 +417,6 @@
     persist('scores');
     var mod = MODULES.find(function(m){return m.id===modId;});
     logActivity((mod?mod.label:modId)+' auto-reported '+s+'%'+(proj?' for '+proj.name:'')+(batch?' (nightly '+batch+')':''), 'ok');
-    if(pid && models && models.length) upsertDisciplineModels(pid, models);
-    if(pid && findings && findings.length) fileAutoIssues(pid, modId, findings);
     snapshotHistory(pid);
     if(currentView==='dashboard') renderDashboard();
     if(currentView==='quality-center') renderQualityCenter();
@@ -5163,6 +5174,7 @@
     seedPortalunaBuildings: seedPortalunaBuildings,
     upsertDisciplineModels: upsertDisciplineModels,
     fileAutoIssues: fileAutoIssues,
+    applyModuleScore: applyModuleScore,
     qcSetFilter: qcSetFilter,
     qcSelectAll: qcSelectAll,
     qcBulkStatus: qcBulkStatus,

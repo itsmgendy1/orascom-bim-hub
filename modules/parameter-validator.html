@@ -2423,6 +2423,10 @@ function generateDashboard() {
       });
     });
 
+    /* Report to the Hub BEFORE rendering so a render error can never silence
+       the issue log or the score. */
+    try{ if(typeof window.OrascomHubReportScore==='function' && typeof OVERALL!=='undefined' && OVERALL){ var _pn=(document.getElementById('project-name-input')||{}).value||''; var _ff=[]; try{ var _ps=(typeof PARAM_STATS!=='undefined')?PARAM_STATS:{}; Object.keys(_ps).map(function(k){ var s=_ps[k]||{}; var app=(s.filled||0)+(s.empty||0); return {k:k, p: app>0?Math.round((s.filled||0)/app*100):100}; }).filter(function(x){return x.p<100;}).sort(function(a,b){return a.p-b.p;}).slice(0,10).forEach(function(x){ _ff.push({desc:'Parameter gap: '+x.k+' at '+x.p+'% filled', severity: x.p<50?'High':'Medium'}); }); }catch(_e){} window.OrascomHubReportScore(OVERALL.pct, OVERALL.elementCount - OVERALL.completeElements, {projectField:_pn, findings:_ff}); } }catch(e){}
+
     document.getElementById('io-prog').style.display = 'none';
     hideSpinner();
     launchDashboard();
@@ -2474,7 +2478,6 @@ function launchDashboard() {
       setTimeout(function () { startTour(); }, 600);
     }
   } catch (e) {}
-  try{ if(typeof window.OrascomHubReportScore==='function' && typeof OVERALL!=='undefined' && OVERALL){ var _pn=(document.getElementById('project-name-input')||{}).value||''; var _ff=[]; try{ var _ps=(typeof PARAM_STATS!=='undefined')?PARAM_STATS:{}; Object.keys(_ps).map(function(k){ var s=_ps[k]||{}; var app=(s.filled||0)+(s.empty||0); return {k:k, p: app>0?Math.round((s.filled||0)/app*100):100}; }).filter(function(x){return x.p<100;}).sort(function(a,b){return a.p-b.p;}).slice(0,10).forEach(function(x){ _ff.push({desc:'Parameter gap: '+x.k+' at '+x.p+'% filled', severity: x.p<50?'High':'Medium'}); }); }catch(_e){} window.OrascomHubReportScore(OVERALL.pct, OVERALL.elementCount - OVERALL.completeElements, {projectField:_pn, findings:_ff}); } }catch(e){}
 }
 
 

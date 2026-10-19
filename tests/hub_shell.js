@@ -65,6 +65,7 @@ store.ohub_models = JSON.stringify([
   { project: 'PP', name: 'HT01 MAIN BUILDING', code: 'HT01', package: '01. HT01 MAIN BUILDING', discipline: '' },
 ]);
 store.ohub_gates = JSON.stringify({});
+store.ohub_scores = JSON.stringify({ PP: { clash: { score: 88, issues: 0, updated: 1 } } });
 
 eval(fs.readFileSync(path.join(ROOT, 'assets', 'js', 'site-plots.js'), 'utf8'));
 eval(fs.readFileSync(path.join(ROOT, 'assets', 'js', 'ohub-auth.js'), 'utf8'));
@@ -273,6 +274,17 @@ OHub.switchView('reports');
 const rep = (els['reports-content'] || {}).innerHTML || '';
 ok(rep.indexOf('By building &amp; discipline') >= 0, 'reports: building classification card');
 ok(rep.indexOf('<strong>HT01</strong>') >= 0, 'reports: building rows with discipline sub-rows');
+
+// 11. A hand-entered score blocks only the score overwrite — findings from a
+//     module report still file (QAQC/Parameters issues must never vanish).
+ok(OHub.applyModuleScore('PP', 'clash', 55, 2, [{ desc: '[BH01 AR] Clashes left in model', severity: 'High', model: 'BH01 AR' }]) === false, 'manual score kept, report rejected for score');
+ok(JSON.parse(store.ohub_scores || '{}').PP.clash.score === 88, 'manual score not overwritten');
+const cl = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[BH01 AR] Clashes left in model');
+ok(!!cl && cl.building === 'BH01' && cl.discipline === 'AR' && cl.module === 'clash', 'findings still filed with a manual score');
+ok(OHub.applyModuleScore('PP', 'qaqc', 74, 3, [{ desc: '[BH01 EL] Model quality: views not on sheets', severity: 'High', model: 'BH01 EL' }], null, null, [{ code: 'EL', name: 'BH01 EL', building: 'BH01', score: 74, issues: 3 }]) === true, 'auto score recorded when none manual');
+const el = JSON.parse(store.ohub_issues || '[]').find((i) => i.description === '[BH01 EL] Model quality: views not on sheets');
+ok(!!el && el.building === 'BH01' && el.discipline === 'EL', 'QAQC findings file with building + discipline');
+ok(!!JSON.parse(store.ohub_models || '[]').find((m) => m.project === 'PP' && m.name === 'BH01 EL' && m.building === 'BH01'), 'QAQC model registered under its building');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

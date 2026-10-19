@@ -119,7 +119,8 @@ ok(M.discLabel({ report_name: 'AR-UB02' }) === 'AR-UB02', 'label report');
 ok(M.discLabel({ code: 'ST', location: 'ZZ' }) === 'ST', 'label code fallback');
 ok(M.discLabel(null) === '', 'label null');
 
-// 4. Hub-bound per-discipline findings (model = code) + models.
+// 4. Hub-bound per-discipline findings (model = building+code when the health
+//    HTML names a building, else the bare code) + models carrying that building.
 const MQD = [
   { code: 'AR', pass_rate: 87, failed: 2, fail_checks: ['File Size', { name: 'Warnings' }, 'Purgeable Elements', 'Rooms', 'Extra Five', 'Extra Six'] },
   { code: 'ST', pass_rate: 100, failed: 0, fail_checks: [] },
@@ -135,7 +136,27 @@ const mdm = M.qaqcDisciplineModels(MQD);
 ok(mdm.length === 2, 'models skip codeless', mdm.length);
 ok(mdm[0].code === 'AR' && mdm[0].score === 87 && mdm[0].issues === 2, 'model shape');
 ok(mdm[1].code === 'ST' && mdm[1].score === 100 && mdm[1].issues === 0, 'clean model');
+ok(mdm[0].building === '' && mdm[0].name === 'AR', 'no location -> bare code model');
 ok(M.qaqcModelFindings(null).length === 0 && M.qaqcDisciplineModels(null).length === 0, 'null-safe');
+
+// 4b. Building-aware classification: HT01/ST files become "HT01 ST" under HT01.
+const MQB = [
+  { code: 'ST', location: 'HT01', pass_rate: 91, failed: 1, fail_checks: ['Grids'] },
+  { code: 'EL', location: 'ub02', pass_rate: 80, failed: 3, fail_checks: ['Views Not On Sheets'] },
+  { code: 'FF', location: 'EXAD', pass_rate: 77, failed: 2, fail_checks: ['Warnings'] },
+  { code: 'AR', location: 'ZZ', pass_rate: 60, failed: 9, fail_checks: ['Rooms'] },
+];
+const bff = M.qaqcModelFindings(MQB);
+ok(bff.length === 4, 'one finding per discipline', bff.length);
+ok(bff[0].model === 'HT01 ST', 'finding carries building+code', bff[0].model);
+ok(bff[1].model === 'UB02 EL', 'lowercase location normalized', bff[1].model);
+ok(bff[2].model === 'FF', 'suite location is not a building', bff[2].model);
+ok(bff[3].model === 'AR', 'ZZ location is not a building', bff[3].model);
+const bdm = M.qaqcDisciplineModels(MQB);
+ok(bdm[0].name === 'HT01 ST' && bdm[0].building === 'HT01', 'model carries building', JSON.stringify(bdm[0]));
+ok(bdm[1].name === 'UB02 EL' && bdm[1].building === 'UB02', 'second building', JSON.stringify(bdm[1]));
+ok(bdm[2].building === '' && bdm[2].name === 'FF', 'suite code stays bare', JSON.stringify(bdm[2]));
+ok(bdm[3].building === '' && bdm[3].name === 'AR', 'ZZ stays bare', JSON.stringify(bdm[3]));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

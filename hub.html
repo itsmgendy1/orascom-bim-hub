@@ -129,6 +129,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
         <div class="card-head" style="margin-bottom:14px;">
           <h3 style="font-size:1.1rem;">Models</h3>
           <div style="display:flex;gap:10px;align-items:center;">
+            <select id="models-bld-filter" aria-label="Filter by building" onchange="OHub.switchView('models')" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);"><option value="">All buildings</option></select>
             <select id="models-pkg-filter" aria-label="Filter by package" onchange="OHub.switchView('models')" style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--text);"><option value="">All packages</option></select>
             <button class="btn btn-primary btn-sm" onclick="OHub.openModelModal()">+ Add model</button>
           </div>
@@ -545,6 +546,6 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
 <script src="assets/js/forma.js?v=70eecd5c"></script>
 <script src="assets/js/site-plots.js?v=ead3de9e"></script>
 <script src="assets/js/ohub-auth.js?v=214d7ab7"></script>
-<script src="assets/js/hub.js?v=29668336"></script>
+<script src="assets/js/hub.js?v=9842acc3"></script>
 </body>
 </html>

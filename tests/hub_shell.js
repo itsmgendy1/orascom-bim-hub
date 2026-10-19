@@ -125,5 +125,43 @@ ok(OHub.seedPortalunaBuildings() === 0, 're-seed adds nothing', JSON.parse(store
 OHub.setActiveProject('P1');
 ok(OHub.seedPortalunaBuildings() === 0, 'non-Portaluna untouched', JSON.parse(store.ohub_models || '[]').length);
 
+// 6. QAQC reports file their discipline model under the building they name:
+//    HT01/AR -> "HT01 AR" in the HT01 package; suites and other projects stay flat.
+const before = JSON.parse(store.ohub_models || '[]').length;
+OHub.upsertDisciplineModels('PP', [
+  { code: 'AR', name: 'HT01 AR', building: 'HT01', score: 80, issues: 3 },
+  { code: 'EL', name: 'UB02 EL', building: 'UB02', score: 90, issues: 1 },
+  { code: 'FF', name: 'FF', building: '', score: 77, issues: 2 },
+]);
+const m2 = JSON.parse(store.ohub_models || '[]');
+const pp2 = m2.filter((m) => m.project === 'PP');
+ok(m2.length === before + 3, 'three models added', m2.length);
+ok(!!pp2.find((m) => m.name === 'HT01 AR' && m.package === '01. HT01 MAIN BUILDING' && m.discipline === 'AR'), 'HT01 AR filed under HT01');
+ok(!!pp2.find((m) => m.name === 'UB02 EL' && m.package === '07. UB02 UTILITY BUILDING'), 'UB02 EL filed under UB02');
+ok(!!pp2.find((m) => m.name === 'FF' && !m.package), 'suite code model stays unassigned');
+OHub.upsertDisciplineModels('PP', [{ code: 'AR', name: 'HT01 AR', building: 'HT01', score: 95, issues: 0 }]);
+ok(JSON.parse(store.ohub_models || '[]').length === before + 3, 're-report does not duplicate');
+OHub.upsertDisciplineModels('P1', [{ code: 'AR', name: 'AR', building: '', score: 50, issues: 9 }]);
+ok(JSON.parse(store.ohub_models || '[]').filter((m) => m.project === 'P1' && m.name === 'AR').length === 1, 'non-Portaluna bare model');
+
+// 7. Models tab lists a Building column, filters by building, and sorts grouped.
+OHub.setActiveProject('PP');
+els['models-bld-filter'] = makeEl();
+els['models-pkg-filter'] = makeEl();
+els['models-bld-filter'].value = 'HT01';
+OHub.switchView('models');
+const mg = (els['models-grid'] || {}).innerHTML || '';
+ok(mg.indexOf('>Building<') >= 0, 'models table has Building column');
+ok(mg.indexOf('HT01 AR') >= 0 && mg.indexOf('HT01 MAIN BUILDING') >= 0, 'HT01 filter shows HT01 models', mg.slice(0, 300));
+ok(mg.indexOf('UB02 EL') === -1 && mg.indexOf('BH01 BOH') === -1, 'HT01 filter hides other buildings');
+ok(els['models-bld-filter'].innerHTML.indexOf('HT01') >= 0 && els['models-bld-filter'].innerHTML.indexOf('UB02') >= 0, 'building filter lists every building');
+els['models-bld-filter'].value = '';
+els['models-pkg-filter'].value = '';
+OHub.switchView('models');
+const mo = (els['models-grid'] || {}).innerHTML || '';
+ok(mo.indexOf('HT01 AR') >= 0 && mo.indexOf('FF') >= 0, 'no filter shows all models');
+ok(mo.indexOf('BH01 BOH') < mo.indexOf('HT01 MAIN BUILDING'), 'rows sorted by building code', 'order');
+els['models-bld-filter'].value = '';
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -2901,7 +2901,20 @@ var QAQC_FILL_MAP = {
 var QAQC_FILL = { tplBuf: null, tplName: '', health: [], plan: null };
 function qaqcFillStatus(m){ var el = document.getElementById('qaqc-fill-status'); if(el) el.textContent = m; }
 // Pure core (unit-tested): rule from C-fill ARGB, score from mapped fails.
-// Hub-bound per-discipline findings (model = discipline code) + models.
+// Building codes are two letters + two digits (HT01, FB03, UB02...). Anything
+// else in the location slot (suite names like EXAD, ZZ, 00) is not a building.
+function qaqcBuildingCode(loc){
+  var v = String(loc||'').trim().toUpperCase();
+  return /^[A-Z]{2}\d{2}$/.test(v) ? v : '';
+}
+// Hub-bound per-discipline findings (model = "BUILDING CODE" when the report
+// names a building, else the bare discipline code) + models carrying that
+// building so the Hub can file them under the right building package.
+function qaqcModelName(d){
+  var code = String((d&&d.code)||'').trim().toUpperCase();
+  var b = qaqcBuildingCode(d&&d.location);
+  return (b && code) ? b+' '+code : code;
+}
 function qaqcModelFindings(disciplines){
   var out = [];
   try{
@@ -2909,7 +2922,7 @@ function qaqcModelFindings(disciplines){
       ((d.fail_checks||[]).slice(0,4)).forEach(function(c){
         if(out.length>=20) return;
         var nm = (typeof c==='string') ? c : ((c&&(c.name||c.check))||'?');
-        out.push({desc:'['+(d.code||'?')+'] '+nm, severity:'High', model:(d.code||'')});
+        out.push({desc:'['+(d.code||'?')+'] '+nm, severity:'High', model:qaqcModelName(d)});
       });
     });
   }catch(e){}
@@ -2920,7 +2933,8 @@ function qaqcDisciplineModels(disciplines){
   try{
     (disciplines||[]).forEach(function(d){
       if(!d || !d.code) return;
-      out.push({code:String(d.code), score:(typeof d.pass_rate==='number'?d.pass_rate:null), issues:(d.failed||0)});
+      out.push({code:String(d.code), name:qaqcModelName(d), building:qaqcBuildingCode(d.location),
+        score:(typeof d.pass_rate==='number'?d.pass_rate:null), issues:(d.failed||0)});
     });
   }catch(e){}
   return out;

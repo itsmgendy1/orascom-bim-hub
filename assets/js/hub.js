@@ -30,7 +30,7 @@
   var MODULES = [
     {id:'midp',       label:'Delivery Verification',  file:'modules/delivery-verification.html?v=103bc43c', weightKey:'midp'},
     {id:'naming',     label:'Naming Convention',      file:'modules/naming-convention.html?v=fa5a9ae2',      weightKey:'naming'},
-    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=e0de993f',          weightKey:'qaqc'},
+    {id:'qaqc',       label:'Model Quality',          file:'modules/model-quality.html?v=3d28e036',          weightKey:'qaqc'},
     {id:'workset',    label:'Workset Validator',      file:'modules/workset-validator.html?v=0cf9e6ed',     weightKey:'workset'},
     {id:'parameters', label:'Parameter Validator',    file:'modules/parameter-validator.html?v=a83f1a41',   weightKey:'parameters'},
     {id:'clash',      label:'Clash Analysis',         file:'modules/clash.html?v=f508d891',                 weightKey:'clash'}
@@ -413,21 +413,48 @@
     return true;
   }
 
-  /* Discipline models from validator reports (e.g. Model Checker HTMLs,
-     one model per discipline code). Upsert by (project, code-as-name) so the
-     Models tab lists each discipline model with its filed issues; never
-     removes or renames anything, only stamps the discipline. */
+  /* Discipline models from validator reports (e.g. Model Checker HTMLs, one
+     model per discipline code). Upsert by (project, model name) so the Models
+     tab lists each discipline model with its filed issues; never removes or
+     renames anything. When the report names a building ("HT01 AR") the model
+     is stamped with that building and filed under its package, so the registry
+     is classified per building rather than as one flat list of codes. */
+  function isBuildingCode(v){ return /^[A-Z]{2}\d{2}$/.test(String(v||'').trim().toUpperCase()); }
+  function modelBuilding(m){
+    if(!m) return '';
+    var b = String(m.building||'').trim().toUpperCase();
+    return isBuildingCode(b) ? b : (isBuildingCode(m.code) ? String(m.code).trim().toUpperCase() : '');
+  }
   function upsertDisciplineModels(pid, models){
     var changed = false;
+    var p = state.projects.find(function(x){return x.id===pid;});
     (models||[]).forEach(function(m){
-      var code = String((m&&m.code)||'').trim();
+      if(!m) return;
+      var code = String(m.code||'').trim().toUpperCase();
       if(!code) return;
+      var building = isBuildingCode(m.building) ? String(m.building).trim().toUpperCase() : '';
+      var b = (building && isPortalunaProject(p)) ? portalunaBuildingByCode(building) : null;
+      var pkg = b ? portalunaPackage(b) : '';
+      var name = String(m.name||'').trim().toUpperCase() || (building ? building+' '+code : code);
+      // Reuse the federation row when the seeded discipline name IS the code
+      // (ID, HVAC, BMS...) so a report never splits one discipline in two.
+      if(b && !state.models.some(function(x){ return x.project===pid && String(x.name||'').trim().toUpperCase()===name; })){
+        var seeded = null;
+        state.models.forEach(function(x){
+          if(x.project===pid && String(x.code||'').toUpperCase()===b.code && String(x.discipline||'').trim().toUpperCase()===code) seeded = x;
+        });
+        if(seeded) name = String(seeded.name||'').trim().toUpperCase();
+      }
       var ex = null;
-      state.models.forEach(function(x){ if(x.project===pid && x.name===code) ex = x; });
-      if(ex){ ex.discipline = code; }
+      state.models.forEach(function(x){ if(x.project===pid && String(x.name||'').trim().toUpperCase()===name) ex = x; });
+      if(ex){
+        ex.discipline = code;
+        if(building && !ex.building) ex.building = building;
+        if(pkg && !ex.package) ex.package = pkg;
+      }
       else{
-        state.models.push({id:uid('mod'), project:pid, name:code, code:code,
-          package:'', discipline:code, revision:'', status:'WIP', owner:'', updated:Date.now()});
+        state.models.push({id:uid('mod'), project:pid, name:name, code:code, building:building,
+          package:pkg, discipline:code, revision:'', status:'WIP', owner:'', updated:Date.now()});
       }
       changed = true;
     });
@@ -1674,6 +1701,11 @@
     {code:'BH01', name:'BH01 BOH - GUARD HOUSE', models:['Architectural','Plumbing','Structural','HVAC','Fire','Electrical','Telecommunication','BMS']}
   ];
   function portalunaPackage(b){ return String(PORTALUNA_BUILDINGS.indexOf(b)+1).padStart(2,'0')+'. '+b.name; }
+  function portalunaBuildingByCode(code){
+    var v = String(code||'').trim().toUpperCase();
+    for(var i=0;i<PORTALUNA_BUILDINGS.length;i++) if(PORTALUNA_BUILDINGS[i].code===v) return PORTALUNA_BUILDINGS[i];
+    return null;
+  }
   function isPortalunaProject(p){
     if(!p) return false;
     return String(p.code||'')==='P0152' || /p0152|portaluna/i.test(String(p.name||'')+' '+String(p.code||''));
@@ -1734,6 +1766,18 @@
       return;
     }
     var rows = projectModels(p.id);
+    var blds = Array.from(new Set(rows.map(modelBuilding).filter(Boolean))).sort();
+    var bldSel = document.getElementById('models-bld-filter');
+    var bld = '';
+    if(bldSel){
+      var curB = bldSel.value || '';
+      bldSel.innerHTML = '<option value="">All buildings</option>'+blds.map(function(g){
+        return '<option value="'+escapeHtml(g)+'"'+(g===curB?' selected':'')+'>'+escapeHtml(g)+'</option>';
+      }).join('');
+      if(curB && blds.indexOf(curB)===-1) curB = '';
+      bld = curB;
+      if(bld) rows = rows.filter(function(m){ return modelBuilding(m)===bld; });
+    }
     var pkgs = Array.from(new Set(rows.map(function(m){ return (m.package||'').trim(); }).filter(Boolean))).sort();
     var pkgSel = document.getElementById('models-pkg-filter');
     if(pkgSel){
@@ -1744,6 +1788,13 @@
       if(cur && pkgs.indexOf(cur)===-1) cur = '';
       rows = rows.filter(function(m){ return !cur || (m.package||'')===cur; });
     }
+    rows.sort(function(a,b2){
+      var ba = modelBuilding(a), bb = modelBuilding(b2);
+      if(ba!==bb) return ba ? (bb ? ba.localeCompare(bb) : -1) : (bb ? 1 : 0);
+      var pa = (a.package||'').trim(), pb = (b2.package||'').trim();
+      if(pa!==pb) return pa.localeCompare(pb);
+      return String(a.name||'').localeCompare(String(b2.name||''));
+    });
     if(rows.length===0){
       host.innerHTML = emptyState('\uD83E\uDDE9','No models tracked',
         'Register the Revit models that belong to '+p.name+' so issues and scores can be tied to a model.',
@@ -1752,12 +1803,13 @@
       renderModelRunbar(p);
       return;
     }
-    host.innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr><th style="width:30px;">Run</th><th>Model</th><th>Code</th><th>Package</th><th>Discipline</th><th>Rev</th><th>Status</th><th>Owner</th><th>Open issues</th><th></th></tr></thead><tbody>'+
+    host.innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr><th style="width:30px;">Run</th><th>Model</th><th>Building</th><th>Code</th><th>Package</th><th>Discipline</th><th>Rev</th><th>Status</th><th>Owner</th><th>Open issues</th><th></th></tr></thead><tbody>'+
       rows.map(function(m){
         var open = state.issues.filter(function(i){ return i.project===p.id && i.model===m.name && (i.status==='Open'||i.status==='In Progress'); }).length;
         return '<tr>'+
           (m.filePath ? '<td><input type="checkbox" data-msel="'+m.id+'" onchange="OHub.modelToggleSel(this)" '+(m.sel?'checked':'')+' style="accent-color:var(--g1);"></td>' : (m.accRef ? '<td title="Cloud model \u2014 validated via the pyRevit lane (selected_models.json)">\u2601</td>' : '<td></td>'))+
           '<td><strong>'+escapeHtml(m.name)+'</strong></td>'+
+          '<td>'+escapeHtml(modelBuilding(m)||'\u2014')+'</td>'+
           '<td>'+escapeHtml(m.code||'\u2014')+'</td>'+
           '<td>'+escapeHtml(m.package||'\u2014')+'</td>'+
           '<td>'+escapeHtml(m.discipline||'\u2014')+'</td>'+
@@ -4771,6 +4823,7 @@
     openModelModal: openModelModal,
     programOpenPackage: programOpenPackage,
     seedPortalunaBuildings: seedPortalunaBuildings,
+    upsertDisciplineModels: upsertDisciplineModels,
     closeModelModal: closeModelModal,
     deleteModel: deleteModel,
     seedDemo: seedDemo,

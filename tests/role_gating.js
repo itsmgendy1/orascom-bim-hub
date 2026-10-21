@@ -91,5 +91,41 @@ const adminDash = (adminEls['dash-content'] || {}).innerHTML || '';
 ok(adminDash.indexOf('Open ACC') >= 0, 'ADMIN: dashboard ACC quick action visible');
 ok(adminDash.indexOf('Autodesk Forma') >= 0, 'ADMIN: dashboard Forma card visible');
 
+/* ----- project registry: add/edit visible to ADMIN + MANAGER only ----- */
+const PROJECT_MANAGER_IDS = ['btn-add-project', 'btn-edit-project', 'btn-add-project-view'];
+
+['', 'USER', 'VIEWER', 'QA', 'COORDINATOR'].forEach(function (role) {
+  const els = boot(role);
+  const tag = role || 'NO-ROLE';
+  window.OHub.switchView('dashboard');
+  ok(window.OHub.canManageProjects() === false, tag + ': project management denied');
+  PROJECT_MANAGER_IDS.forEach(function (id) {
+    ok(!!els[id] && els[id].style.display === 'none', tag + ': hidden ' + id);
+  });
+});
+
+['ADMIN', 'MANAGER'].forEach(function (role) {
+  const els = boot(role);
+  window.OHub.switchView('dashboard');
+  ok(window.OHub.canManageProjects() === true, role + ': project management allowed');
+  PROJECT_MANAGER_IDS.forEach(function (id) {
+    ok(!!els[id] && els[id].style.display === '', role + ': visible ' + id);
+  });
+});
+
+/* ----- shared registry plumbing is present (worker + hub wiring) ----- */
+const workerSrc = fs.readFileSync(path.join(ROOT, 'worker', 'src', 'index.js'), 'utf8');
+ok(workerSrc.indexOf('SHARED_STORES') >= 0, 'worker: shared store allowlist present');
+ok(workerSrc.indexOf('SHARED_WRITER_ROLES') >= 0, 'worker: shared writer roles present');
+ok(workerSrc.indexOf('shared_data') >= 0, 'worker: shared_data table used');
+const schemaSrc = fs.readFileSync(path.join(ROOT, 'worker', 'schema.sql'), 'utf8');
+ok(schemaSrc.indexOf('shared_data') >= 0, 'schema: shared_data table defined');
+const hubHtml = fs.readFileSync(path.join(ROOT, 'hub.html'), 'utf8');
+ok(hubHtml.indexOf('id="btn-add-project"') >= 0, 'hub.html: + Project button id');
+ok(hubHtml.indexOf('id="btn-edit-project"') >= 0, 'hub.html: Edit button id');
+const hubSrc = fs.readFileSync(path.join(ROOT, 'assets', 'js', 'hub.js'), 'utf8');
+ok(hubSrc.indexOf('authwSharedProjectsPull()') >= 0, 'hub.js: shared projects pulled on boot');
+ok(hubSrc.indexOf('/api/shared/projects') >= 0, 'hub.js: shared projects endpoint wired');
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

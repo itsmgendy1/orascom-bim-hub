@@ -14,6 +14,11 @@ const MAX_SNAPSHOT = 5 * 1024 * 1024;
 const STORES = ['projects', 'scores', 'issues', 'deliverables', 'models',
   'gates', 'weights', 'thresholds', 'activity', 'reports', 'history', 'dark'];
 
+// Team-shared stores: every signed-in user reads them; only ADMIN / MANAGER
+// may write. Used for the project registry so all roles see the same projects.
+const SHARED_STORES = ['projects'];
+const SHARED_WRITER_ROLES = ['ADMIN', 'MANAGER'];
+
 // Role -> permissions. Frontend mirrors for visibility only; enforced HERE.
 const PERMS = {
   ADMIN: ['VIEW_OWN_DATA', 'EDIT_OWN_DATA', 'DELETE_OWN_DATA', 'VIEW_ALL_USERS',
@@ -467,6 +472,31 @@ export default {
         if (err) return err;
         await env.DB.prepare('DELETE FROM user_data WHERE user_id=? AND store_key=?').bind(u.id, store).run();
         ctx.waitUntil(audit(env, ctx, { action: 'DATA_DELETED', actor_id: u.id, actor_username: u.username, target_id: store }));
+        return json(req, { ok: true });
+      }
+      return json(req, { ok: false, error: 'method not allowed' }, 405);
+    }
+
+    /* ----- team-shared stores (read: any signed-in user; write: admin/manager) ----- */
+    const shm = path.match(/^\/api\/shared\/([a-z_]+)$/);
+    if (shm) {
+      const store = shm[1];
+      if (!SHARED_STORES.includes(store)) return json(req, { ok: false, error: 'unknown store' }, 400);
+      if (req.method === 'GET') {
+        const { err } = await need('VIEW_OWN_DATA');
+        if (err) return err;
+        const r = await env.DB.prepare('SELECT snapshot_json,updated_at FROM shared_data WHERE store_key=?').bind(store).first();
+        return json(req, { ok: true, snapshot: r ? JSON.parse(r.snapshot_json) : null, updated_at: r ? r.updated_at : 0 });
+      }
+      if (req.method === 'PUT') {
+        const { err, u } = await need('EDIT_OWN_DATA');
+        if (err) return err;
+        if (!SHARED_WRITER_ROLES.includes(u.role)) return json(req, { ok: false, error: 'only admin or manager can change shared data' }, 403);
+        const snap = JSON.stringify(body.snapshot ?? null);
+        if (snap.length > MAX_SNAPSHOT) return json(req, { ok: false, error: 'snapshot too large' }, 413);
+        await env.DB.prepare('INSERT INTO shared_data(store_key,snapshot_json,updated_at) VALUES (?,?,?) ON CONFLICT(store_key) DO UPDATE SET snapshot_json=excluded.snapshot_json,updated_at=excluded.updated_at')
+          .bind(store, snap, now()).run();
+        ctx.waitUntil(audit(env, ctx, { action: 'SHARED_DATA_PUT', actor_id: u.id, actor_username: u.username, target_id: store }));
         return json(req, { ok: true });
       }
       return json(req, { ok: false, error: 'method not allowed' }, 405);

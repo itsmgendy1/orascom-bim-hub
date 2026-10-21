@@ -77,8 +77,8 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
 
       <div class="project-picker">
         <select id="project-picker-select" aria-label="Active project"></select>
-        <button class="btn btn-outline btn-sm" onclick="OHub.openProjectModal()">+ Project</button>
-        <button class="btn btn-outline btn-sm" onclick="OHub.editActiveProject()" title="Edit active project info">✎ Edit</button>
+        <button class="btn btn-outline btn-sm" id="btn-add-project" onclick="OHub.openProjectModal()">+ Project</button>
+        <button class="btn btn-outline btn-sm" id="btn-edit-project" onclick="OHub.editActiveProject()" title="Edit active project info">✎ Edit</button>
         <button class="btn btn-outline btn-sm" id="btn-open-acc" onclick="OHub.openAcc()" title="Open this project in Autodesk Construction Cloud (new tab)">ACC ↗</button>
         <button class="btn btn-outline btn-sm" onclick="OHub.startTour()" title="Guided tour">▶ Tour</button>
         <button class="btn btn-outline btn-sm" id="theme-toggle" onclick="OHub.toggleDark()" title="Toggle dark mode">🌙</button>
@@ -116,7 +116,7 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
               <button type="button" class="view-toggle-btn" data-mode="map">Map</button>
               <button type="button" class="view-toggle-btn" data-mode="compare">Compare</button>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="OHub.openProjectModal()">+ Add project</button>
+            <button class="btn btn-primary btn-sm" id="btn-add-project-view" onclick="OHub.openProjectModal()">+ Add project</button>
           </div>
         </div>
         <div class="grid grid-3" id="projects-grid"></div>
@@ -546,6 +546,6 @@ try{if(!sessionStorage.getItem('ohub_session')){if(location.hash&&location.hash.
 <script src="assets/js/forma.js?v=70eecd5c"></script>
 <script src="assets/js/site-plots.js?v=ead3de9e"></script>
 <script src="assets/js/ohub-auth.js?v=214d7ab7"></script>
-<script src="assets/js/hub.js?v=b420e71a"></script>
+<script src="assets/js/hub.js?v=6186fc0f"></script>
 </body>
 </html>

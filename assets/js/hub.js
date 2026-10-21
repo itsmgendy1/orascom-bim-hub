@@ -721,6 +721,11 @@
   }
 
   /* ---------------- project picker + projects view ---------------- */
+  function projectEmptyActions(withDemo){
+    if(!authwCanManageProjects()) return '';
+    return '<button class="btn btn-primary" onclick="OHub.openProjectModal()">+ Add project</button>' +
+      (withDemo ? ' <button class="btn btn-outline" onclick="OHub.seedDemo()">Load Demo SA39</button>' : '');
+  }
   function refreshProjectPicker(){
     var sel = document.getElementById('project-picker-select');
     sel.innerHTML = '';
@@ -776,8 +781,7 @@
     if(state.projects.length===0){
       host.innerHTML = emptyState('\uD83C\uDFE2','No projects yet',
         'Add a project to start tracking its BIM Digital Delivery status across delivery, naming, model quality, worksets, parameters and clashes.',
-        '<button class="btn btn-primary" onclick="OHub.openProjectModal()">+ Add project</button> '+
-        '<button class="btn btn-outline" onclick="OHub.seedDemo()">Load Demo SA39</button>');
+        projectEmptyActions(true));
       return;
     }
     host.innerHTML = state.projects.map(function(p){
@@ -804,7 +808,7 @@
     if(state.projects.length<2){
       host.innerHTML = emptyState('\uD83D\uDCCA','Nothing to compare',
         'Add at least two projects with recorded results to compare them side by side.',
-        '<button class="btn btn-primary" onclick="OHub.openProjectModal()">+ Add project</button>');
+        projectEmptyActions(false));
       return;
     }
     function cell(v){ return v==null ? '<span style="color:var(--muted);">\u2014</span>' : v+'%'; }
@@ -860,12 +864,14 @@
     return (typeof c==='string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : null;
   }
   function zoneColorSet(pid, val){
+    if(!authwCanManageProjects()){ toast('Only admins and managers can edit projects'); return; }
     if(!/^#[0-9a-fA-F]{6}$/.test(val||'')){ toast('Invalid color'); return; }
     var p = null;
     state.projects.forEach(function(x){ if(x.id===pid) p = x; });
     if(!p) return;
     p.color = val;
     persist('projects');
+    sharedProjectsPushNow();
     renderProjects();
     if(currentView==='gis') renderGis();
     if(currentView==='program') renderProgram();
@@ -1129,6 +1135,7 @@
     return parts.join(' \u00b7 ');
   }
   function gisAssignPlot(code){
+    if(!authwCanManageProjects()){ toast('Only admins and managers can edit projects'); return; }
     var p = activeProject();
     if(!p){ toast('Select a project first, then assign the plot to it'); switchView('projects'); return; }
     var found = null;
@@ -1138,6 +1145,7 @@
     p.boundary = {type:'MultiPolygon', coordinates:[found.rings]};
     p.plotCode = code; p.plotRev = 2;
     persist('projects');
+    sharedProjectsPushNow();
     logActivity('Assigned plot '+code+' to '+p.name);
     gisSearchFocus = false;
     renderProjects(); renderDashboard();
@@ -1371,6 +1379,7 @@
     }
   }
   function gisNewProjectFromPlot(code){
+    if(!authwCanManageProjects()){ toast('Only admins and managers can add projects'); return; }
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code && pl.kpi) found = pl; });
     if(!found){ toast('No data for '+code+' \u2014 Orascom holds DP01 and DP05'); return; }
@@ -1381,6 +1390,7 @@
     state.projects.push(p);
     state.active = id;
     persist('projects'); persist('active');
+    sharedProjectsPushNow();
     logActivity('Added project '+p.name+' from plot '+code);
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
     if(currentView==='models') renderModels();
@@ -1464,7 +1474,8 @@
     if(!state.active){ toast('Select a project first'); return; }
     openProjectModal(state.active);
   }
-  function openProjectModal(editId){    var editing = editId ? state.projects.find(function(p){return p.id===editId;}) : null;
+  function openProjectModal(editId){    if(!authwCanManageProjects()){ toast('Only admins and managers can add or edit projects'); return; }
+    var editing = editId ? state.projects.find(function(p){return p.id===editId;}) : null;
     document.getElementById('pm-title').textContent = editing ? 'Edit project' : 'Add project';
     document.getElementById('pm-name').value = editing? editing.name:'';
     document.getElementById('pm-code').value = editing? editing.code:'';
@@ -1503,6 +1514,7 @@
   function closeProjectModal(){ document.getElementById('project-modal').classList.remove('show'); }
   function saveProjectForm(ev){
     ev.preventDefault();
+    if(!authwCanManageProjects()){ toast('Only admins and managers can add or edit projects'); return; }
     var editId = document.getElementById('pm-form').getAttribute('data-edit-id');
     var name = document.getElementById('pm-name').value.trim();
     if(!name){ toast('Project name is required'); return; }
@@ -1560,6 +1572,7 @@
       logActivity('Added project '+payload.name);
     }
     persist('projects'); persist('active');
+    sharedProjectsPushNow();
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
     if(currentView==='models') renderModels();
     if(currentView==='reports') renderReports();
@@ -1687,6 +1700,7 @@
     boundaryStatus('Boundary removed \u2014 saved on Save.');
   }
   function deleteActiveProjectPrompt(pid){
+    if(!authwCanManageProjects()){ toast('Only admins and managers can remove projects'); return; }
     var p = state.projects.find(function(pr){return pr.id===pid;});
     if(!p) return;
     if(!confirm('Remove "'+p.name+'" from the Hub? This only removes it from the Hub registry \u2014 it will not touch any files.')) return;
@@ -1699,6 +1713,7 @@
     if(state.active===pid) state.active = state.projects[0] ? state.projects[0].id : null;
     persist('projects'); persist('scores'); persist('active'); persist('deliverables');
     persist('issues'); persist('models'); persist('gates');
+    sharedProjectsPushNow();
     refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
     if(currentView==='models') renderModels();
     if(currentView==='reports') renderReports();
@@ -1736,7 +1751,7 @@
     if(!p){
       host.innerHTML = emptyState('\uD83D\uDEA6','No project selected',
         'Select a project to track its design-stage sign-offs.',
-        '<button class="btn btn-primary" onclick="OHub.openProjectModal()">+ Add project</button>');
+        projectEmptyActions(false));
       return;
     }
     var pkgs = Array.from(new Set(projectModels(p.id).map(function(m){ return ((m.package||'').trim()||'General'); }))).sort();
@@ -1914,8 +1929,7 @@
     if(!p){
       host.innerHTML = emptyState('\uD83E\uDDE9','No project selected',
         'Select a project to see its models, or seed the demo project.',
-        '<button class="btn btn-primary" onclick="OHub.openProjectModal()">+ Add project</button> '+
-        '<button class="btn btn-outline" onclick="OHub.seedDemo()">Load Demo SA39</button>');
+        projectEmptyActions(true));
       renderModelRunbar(null);
       return;
     }
@@ -2284,6 +2298,7 @@
 
   /* ---------------- Demo seed (project + models only, never scores) ---------------- */
   function seedDemo(){
+    if(!authwCanManageProjects()){ toast('Only admins and managers can add projects'); return; }
     var existing = state.projects.find(function(pr){return pr.code==='SA39';});
     if(existing){
       setActiveProject(existing.id);
@@ -2298,6 +2313,7 @@
     });
     state.active = id;
     persist('projects'); persist('models'); persist('active');
+    sharedProjectsPushNow();
     logActivity('Demo project SA39 seeded (no validation scores \u2014 run the modules to record real ones)');
     refreshProjectPicker(); renderProjects(); renderModels(); renderDashboard(); renderQualityCenter();
     switchView('dashboard');
@@ -2364,8 +2380,7 @@
     if(!p){
       host.innerHTML = emptyState('\uD83C\uDFE0','No project selected',
         'Select a project from the top bar, or add your first project, to see its BIM Digital Delivery health here.',
-        '<button class="btn btn-primary" onclick="OHub.openProjectModal()">+ Add project</button> '+
-        '<button class="btn btn-outline" onclick="OHub.seedDemo()">Load Demo SA39</button>');
+        projectEmptyActions(true));
       return;
     }
     var health = computeHealth(p.id);
@@ -4397,6 +4412,44 @@
   function authwSession(){ try{ if(window.OHubAuth && window.OHubAuth.v2session) return window.OHubAuth.v2session(); }catch(e){} return null; }
   function authwMe(){ return (state.authuid && state.authuid.uid) ? state.authuid : null; }
   function authwIsAdmin(){ var m = authwMe(); return !!(m && m.role==='ADMIN'); }
+  /* ----- team-shared project registry: admin/manager edit, every role reads ----- */
+  function authwCanManageProjects(){
+    var m = authwMe();
+    return !!(m && (m.role==='ADMIN' || m.role==='MANAGER'));
+  }
+  function sharedProjectsPushNow(){
+    if(!authwCanManageProjects()) return;
+    try{ if(!authwSession()) return; }catch(e){ return; }
+    authwApi('/api/shared/projects', {method:'PUT', body:{snapshot: state.projects}}).catch(function(){});
+  }
+  function authwApplyProjectList(list){
+    state.projects = list;
+    persist('projects');
+    if(!state.projects.some(function(p){ return p.id===state.active; })){
+      state.active = state.projects.length ? state.projects[0].id : null;
+      persist('active');
+    }
+    refreshProjectPicker(); renderProjects(); renderDashboard(); renderQualityCenter();
+    if(currentView==='models') renderModels();
+    if(currentView==='reports') renderReports();
+    if(currentView==='delivery') renderDeliverables();
+    if(currentView==='stages') renderStages();
+    if(currentView==='gis') renderGis();
+    if(currentView==='program') renderProgram();
+    MODULES.forEach(function(m){ if(loadedModules[m.id]) pushContextToModule(m.id); });
+  }
+  function authwSharedProjectsPull(){
+    try{ if(!authwSession()) return; }catch(e){ return; }
+    authwApi('/api/shared/projects').then(function(j){
+      var list = j && j.snapshot;
+      if(Object.prototype.toString.call(list)==='[object Array]' && list.length){
+        authwApplyProjectList(list);
+        logActivity('Loaded team project registry ('+list.length+' project(s))');
+      } else if(authwCanManageProjects() && state.projects.length){
+        sharedProjectsPushNow();
+      }
+    }).catch(function(){});
+  }
   function authwApi(path, opts){
     if(!window.OHubAuth || !window.OHubAuth.wapi) return Promise.reject(new Error('Auth library too old — reload the landing page.'));
     return window.OHubAuth.wapi(path, opts);
@@ -4541,21 +4594,22 @@
       try{ paintAuthwNav(); }catch(e){}
       MODULES.forEach(function(m){ if(loadedModules[m.id]) pushContextToModule(m.id); });
       var last = authwLastUid();
-      if(last === me.id){ authwGentleSync(); return; }
+      if(last === me.id){ authwSharedProjectsPull(); authwGentleSync(); return; }
       authwApi('/api/data/projects').then(function(j){
         var hasCloud = !!(j && j.snapshot && j.snapshot.length);
         var hasLocal = authwLocalHasData();
         if(hasCloud && hasLocal){
           authwStash('switch_' + Date.now());
-          toast('Switched account — previous browser data stashed, loading yours');
+          toast('Switched account \u2014 previous browser data stashed, loading yours');
           authwPullAll(function(){});
         } else if(hasCloud){
           authwPullAll(function(){});
         } else if(hasLocal){
-          toast('Migrating this browser data to your cloud account…');
+          toast('Migrating this browser data to your cloud account\u2026');
           authwPushAll(function(){});
         }
         authwSetLastUid(me.id);
+        try{ authwSharedProjectsPull(); }catch(e){}
       }).catch(function(){ /* offline: keep local dataset untouched */ });
     }).catch(function(){
       if(window.OHubAuth && window.OHubAuth.bounceToLogin) window.OHubAuth.bounceToLogin();
@@ -4563,11 +4617,19 @@
     });
   }
   var ADMIN_ONLY_IDS = ['btn-open-acc','pm-accrow','dc-sync-server','card-acc-local','card-acc-cloud','card-sync-server','card-cloud','card-team','card-forma'];
+  // Project registry add/edit: ADMIN and MANAGER only. Everyone else keeps
+  // the project picker (read-only choose from the dropdown).
+  var PROJECT_MANAGER_IDS = ['btn-add-project','btn-edit-project','btn-add-project-view'];
   function applyRoleGating(){
     var admin = authwIsAdmin();
     ADMIN_ONLY_IDS.forEach(function(id){
       var el = document.getElementById(id);
       if(el) el.style.display = admin ? '' : 'none';
+    });
+    var manage = authwCanManageProjects();
+    PROJECT_MANAGER_IDS.forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = manage ? '' : 'none';
     });
   }
   function paintAuthwNav(){
@@ -5225,6 +5287,7 @@
     logout: logout,
     setActiveProject: setActiveProject,
     openProjectModal: openProjectModal,
+    canManageProjects: authwCanManageProjects,
     editActiveProject: editActiveProject,
     closeProjectModal: closeProjectModal,
     deleteActiveProjectPrompt: deleteActiveProjectPrompt,

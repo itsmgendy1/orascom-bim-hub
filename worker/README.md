@@ -33,6 +33,16 @@ wrangler secret put BOOTSTRAP_KEY   # random 32+ chars, one-time admin setup
 wrangler deploy                     # -> https://orascom-hub-auth.<account>.workers.dev
 ```
 
+## Updates (shared project registry)
+
+Pull this repo, then re-run the idempotent schema + deploy (the `shared_data`
+table and `/api/shared/*` routes are additive — existing users/data untouched):
+
+```powershell
+wrangler d1 execute orascom-hub-db --file=./schema.sql --remote
+wrangler deploy
+```
+
 ## First admin (once)
 
 ```powershell
@@ -51,6 +61,9 @@ Public: `POST /api/auth/request|login`, `POST /api/auth/logout`,
 `GET /api/auth/me`, `POST /api/auth/password`.
 Own data: `GET|PUT|DELETE /api/data/:store` (stores: projects scores issues
 deliverables models gates weights thresholds activity reports history dark).
+Shared team data: `GET /api/shared/:store` (any signed-in user),
+`PUT /api/shared/:store` (ADMIN / MANAGER only). Store: projects — the team
+project registry every role sees in the Hub picker.
 Admin: `GET|POST /api/admin/users`, `PATCH|DELETE /api/admin/users/:id`,
 `GET /api/admin/data/:uid[/:store]`, `GET /api/admin/audit`,
 `GET|PUT /api/admin/settings` (registration_open 0/1).

@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS user_data (
   PRIMARY KEY (user_id, store_key)
 );
 
+-- Team-shared Hub stores (project registry). Read: any signed-in user.
+-- Write: ADMIN / MANAGER only (enforced in code, not by SQL).
+CREATE TABLE IF NOT EXISTS shared_data (
+  store_key TEXT PRIMARY KEY,
+  snapshot_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

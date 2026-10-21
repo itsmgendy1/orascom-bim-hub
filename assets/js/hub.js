@@ -666,8 +666,7 @@
     {view:'quality-center', el:'#qc-content', title:'5 \u00b7 Quality Center', text:'Per-area scores plus the issue log. Validator findings arrive here automatically; manual entries stay separate.'},
     {view:'reports', el:'#reports-content', title:'6 \u00b7 Reports', text:'One-click executive Excel and PDF across all areas. Each module keeps its own native exports too.'},
     {view:'delivery', el:'#deliverables-content', title:'7 \u00b7 Delivery overview', text:'Planned deliverables on a timeline with schedule health. Dates you track here feed the dashboard.'},
-    {view:'stages', el:'#stages-content', title:'8 \u00b7 Stage gates', text:'Design-stage sign-offs per package \u2014 click a cell to advance it. Hand-recorded, never inferred.'},
-    {view:'settings', el:'#settings-weights', title:'9 \u00b7 Weighting', text:'Decide how much each module counts toward overall health. Thresholds for Good / Attention / Critical live here too.'}
+    {view:'settings', el:'#settings-weights', title:'8 \u00b7 Weighting', text:'Decide how much each module counts toward overall health. Thresholds for Good / Attention / Critical live here too.'}
   ];
   var TOUR_CURRENT = -1;
   function startTour(){
@@ -857,8 +856,8 @@
     if(spec.urls) return L.layerGroup(spec.urls.map(function(u){ return L.tileLayer(u, {maxZoom:18, attribution:spec.attr}); }));
     return L.tileLayer(spec.url, {maxZoom:18, attribution:spec.attr});
   }
-  // Per-project zone color override (project form). Wins in package/overall
-  // modes; review/stage/issues modes keep their honest status colors.
+  // Per-project zone color override (project form). Wins in overall mode;
+  // review/issues modes keep their honest status colors.
   function customColor(p){
     var c = p && p.color;
     return (typeof c==='string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : null;
@@ -878,7 +877,7 @@
     toast('Zone color updated');
   }
   function zoneColor(p, fallback){
-    if((gisMode==='package'||gisMode==='overall') && customColor(p)) return customColor(p);
+    if(gisMode==='overall' && customColor(p)) return customColor(p);
     return fallback;
   }
   var mapTileTheme = '', mapTileLayer = null;
@@ -993,13 +992,11 @@
   // plus any custom project boundary. Assign actions write through the
   // same validated boundary path as the project form.
   var gisMapObj = null, gisLayers = [], gisTileTheme = '', gisTileLayer = null;
-  var gisMode = 'package', gisBase = 'auto', gisQuery = '', gisSearchFocus = false;
+  var gisMode = 'review', gisBase = 'auto', gisQuery = '', gisSearchFocus = false;
   var gisPlotBounds = {};
   var DP_COLORS = {DP01:'#14b8a6',DP05:'#8b5cf6'};
   var GIS_MODES = [
-    {id:'package', label:'Design Package'},
     {id:'review', label:'Review Status'},
-    {id:'stage', label:'Current Stage'},
     {id:'overall', label:'Overall'},
     {id:'issues', label:'Issues'}
   ];
@@ -1085,21 +1082,12 @@
     return '<span class="badge badge-muted">Not Started</span>';
   }
   function plotModeStyle(pl, holder, g, overdue, open){
-    if(gisMode==='package'){
-      if(DP_COLORS[pl.code]) return {color:DP_COLORS[pl.code], fill:0.30, dash:null, tag:pl.code};
-      return {color:'#8E9BB3', fill:0.10, dash:null, tag:pl.code}; // neighbours: grey context, no data
-    }
     if(!holder) return {color:'#8E9BB3', fill:0.06, dash:'4 4', tag:pl.code+'<br>Unassigned'};
     var h = computeHealth(holder.id);
     if(gisMode==='review'){
       var b0 = plotBucket(holder, g, overdue);
       if(overdue>0) return {color:'#E03535', fill:0.32, dash:null, tag:pl.code+'<br>'+b0+' \u26a0'+overdue+' overdue'};
       return {color:TONE_HEX[tone(h.value)], fill:0.24, dash:null, tag:pl.code+'<br>'+b0};
-    }
-    if(gisMode==='stage'){
-      var sc = ['#8E9BB3','#E67E22','#E67E22','#4A5FBB','#27AE60','#27AE60'][Math.min(5, g.furthest+1)];
-      var sn = g.furthest<0 ? 'Not started' : GATE_STAGES[g.furthest];
-      return {color:sc, fill:0.30, dash:null, tag:pl.code+'<br>'+escapeHtml(sn)};
     }
     if(gisMode==='issues'){
       var ic = open===0 ? '#27AE60' : open<=2 ? '#E67E22' : '#E03535';
@@ -1336,7 +1324,7 @@
         var bucket = plotBucket(holder, g, overdue);
         var stageName = g.furthest<0 ? '\u2014' : GATE_STAGES[g.furthest];
         var prog = g.total ? Math.round(g.approved/g.total*100) : 0;
-        var dot = gisMode==='package' ? zoneColor(holder, (DP_COLORS[pl.code]||'#8E9BB3')) : plotModeStyle(pl, holder, g, overdue, holder?holderOpenIssues(holder.id):0).color;
+        var dot = plotModeStyle(pl, holder, g, overdue, holder?holderOpenIssues(holder.id):0).color;
         return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="OHub.gisFocusPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))">'+
           '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">'+
             '<span style="width:12px;height:12px;border-radius:3px;background:'+dot+';flex-shrink:0;"></span>'+
@@ -1408,7 +1396,8 @@
   function paintGisDrawSeg(){
     var host = document.getElementById('gis-draw');
     if(!host) return;
-    if(!authwCanDrawGis()){ host.innerHTML = ''; return; }
+    if(!authwCanDrawGis()){ host.innerHTML = ''; host.style.display = 'none'; return; }
+    host.style.display = '';
     host.innerHTML = gisDrawing
       ? '<button class="seg-btn" onclick="OHub.gisFinishDraw()">Finish ('+gisDrawPts.length+')</button>'+
         '<button class="seg-btn" onclick="OHub.gisCancelDraw()">Cancel</button>'

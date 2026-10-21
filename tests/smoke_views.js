@@ -60,6 +60,7 @@ global.alert = () => {};
 global.confirm = () => false;
 
 const HUB = 'assets/js/hub.js';
+store.ohub_authuid = JSON.stringify({ uid: 'u1', username: 'smoke.admin', role: 'ADMIN' });
 eval(fs.readFileSync('assets/js/site-plots.js', 'utf8'));
 eval(fs.readFileSync('assets/js/ohub-auth.js', 'utf8'));
 eval(fs.readFileSync(HUB, 'utf8'));

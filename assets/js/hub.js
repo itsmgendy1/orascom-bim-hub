@@ -1135,7 +1135,7 @@
     return parts.join(' \u00b7 ');
   }
   function gisAssignPlot(code){
-    if(!authwCanManageProjects()){ toast('Only admins and managers can edit projects'); return; }
+    if(!authwCanDrawGis()){ toast('Only admins, managers and coordinators can edit zones'); return; }
     var p = activeProject();
     if(!p){ toast('Select a project first, then assign the plot to it'); switchView('projects'); return; }
     var found = null;
@@ -1351,9 +1351,11 @@
           '<div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;"><strong>'+(kpi.units==null?'\u2014':numFmt(kpi.units))+'</strong> units \u00b7 <strong>'+(kpi.population==null?'\u2014':numFmt(kpi.population))+'</strong> pop \u00b7 <strong>'+(kpi.buildings==null?'\u2014':numFmt(kpi.buildings))+'</strong> bldgs</div>'+alertLine(holder?holder.id:null)+
           (holder
             ? '<div style="font-size:.78rem;">Assigned: <a href="#" onclick="OHub.setActiveProject(\''+holder.id+'\');return false;"><strong>'+escapeHtml(holder.name)+'</strong></a></div>'
-            : '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
-              '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))"'+(ap?'':' disabled')+'>Assign to active project</button>'+
-              '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();OHub.gisNewProjectFromPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))">\uff0b New project</button></div>')+
+            : (authwCanDrawGis()
+              ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+                '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();OHub.gisAssignPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))"'+(ap?'':' disabled')+'>Assign to active project</button>'+
+                '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();OHub.gisNewProjectFromPlot(decodeURIComponent(\''+encodeURIComponent(pl.code)+'\'))">\uff0b New project</button></div>'
+              : ''))+
         '</div>';
       }).join('');
     if(gisSearchFocus){
@@ -1379,7 +1381,7 @@
     }
   }
   function gisNewProjectFromPlot(code){
-    if(!authwCanManageProjects()){ toast('Only admins and managers can add projects'); return; }
+    if(!authwCanDrawGis()){ toast('Only admins, managers and coordinators can add zones'); return; }
     var found = null;
     sitePlots().forEach(function(pl){ if(pl.code===code && pl.kpi) found = pl; });
     if(!found){ toast('No data for '+code+' \u2014 Orascom holds DP01 and DP05'); return; }
@@ -1402,16 +1404,18 @@
     toast(code+' added as a project and selected');
   }
   /* ----- hand-drawn zones: click to trace, finish to create a project ----- */
-  var gisDrawing = false, gisDrawPts = [], gisDrawLayers = [], gisDrawLine = null;
+  var gisDrawing = false, gisDrawPts = [], gisDrawLayers = [], gisDrawLine = null, gisDrawProjectStaged = false;
   function paintGisDrawSeg(){
     var host = document.getElementById('gis-draw');
     if(!host) return;
+    if(!authwCanDrawGis()){ host.innerHTML = ''; return; }
     host.innerHTML = gisDrawing
       ? '<button class="seg-btn" onclick="OHub.gisFinishDraw()">Finish ('+gisDrawPts.length+')</button>'+
         '<button class="seg-btn" onclick="OHub.gisCancelDraw()">Cancel</button>'
       : '<button class="seg-btn" onclick="OHub.gisStartDraw()">Draw new zone</button>';
   }
   function gisStartDraw(){
+    if(!authwCanDrawGis()){ toast('Only admins, managers and coordinators can draw zones'); return; }
     if(!gisMapObj || typeof L==='undefined'){ toast('Open the GIS tab first'); return; }
     gisCancelDraw(true);
     gisDrawing = true;
@@ -1446,9 +1450,11 @@
   }
   function gisFinishDraw(){
     if(!gisDrawing) return;
+    if(!authwCanDrawGis()){ gisCancelDraw(true); toast('Only admins, managers and coordinators can draw zones'); return; }
     if(gisDrawPts.length<3){ toast('Trace at least 3 points first'); return; }
     var geo = drawGeoJson(gisDrawPts);
     gisCancelDraw(true);
+    gisDrawProjectStaged = true;
     openProjectModal(null);
     document.getElementById('pm-name').value = '';
     document.getElementById('pm-boundary').value = JSON.stringify(geo);
@@ -1474,7 +1480,9 @@
     if(!state.active){ toast('Select a project first'); return; }
     openProjectModal(state.active);
   }
-  function openProjectModal(editId){    if(!authwCanManageProjects()){ toast('Only admins and managers can add or edit projects'); return; }
+  function openProjectModal(editId){
+    var drawFlow = !editId && gisDrawProjectStaged && authwCanDrawGis();
+    if(!authwCanManageProjects() && !drawFlow){ toast('Only admins and managers can add or edit projects'); return; }
     var editing = editId ? state.projects.find(function(p){return p.id===editId;}) : null;
     document.getElementById('pm-title').textContent = editing ? 'Edit project' : 'Add project';
     document.getElementById('pm-name').value = editing? editing.name:'';
@@ -1511,10 +1519,11 @@
     document.getElementById('pm-plot').value = plotCodeStaged||'';
     document.getElementById('project-modal').classList.add('show');
   }
-  function closeProjectModal(){ document.getElementById('project-modal').classList.remove('show'); }
+  function closeProjectModal(){ gisDrawProjectStaged = false; document.getElementById('project-modal').classList.remove('show'); }
   function saveProjectForm(ev){
     ev.preventDefault();
-    if(!authwCanManageProjects()){ toast('Only admins and managers can add or edit projects'); return; }
+    var drawFlow = !document.getElementById('pm-form').getAttribute('data-edit-id') && gisDrawProjectStaged && authwCanDrawGis();
+    if(!authwCanManageProjects() && !drawFlow){ toast('Only admins and managers can add or edit projects'); return; }
     var editId = document.getElementById('pm-form').getAttribute('data-edit-id');
     var name = document.getElementById('pm-name').value.trim();
     if(!name){ toast('Project name is required'); return; }
@@ -4417,8 +4426,14 @@
     var m = authwMe();
     return !!(m && (m.role==='ADMIN' || m.role==='MANAGER'));
   }
+  // GIS zone drawing (trace / assign plot / new project from plot): ADMIN,
+  // MANAGER and COORDINATOR. Everyone else views the GIS tab read-only.
+  function authwCanDrawGis(){
+    var m = authwMe();
+    return !!(m && (m.role==='ADMIN' || m.role==='MANAGER' || m.role==='COORDINATOR'));
+  }
   function sharedProjectsPushNow(){
-    if(!authwCanManageProjects()) return;
+    if(!authwCanDrawGis()) return;
     try{ if(!authwSession()) return; }catch(e){ return; }
     authwApi('/api/shared/projects', {method:'PUT', body:{snapshot: state.projects}}).catch(function(){});
   }
@@ -5288,6 +5303,7 @@
     setActiveProject: setActiveProject,
     openProjectModal: openProjectModal,
     canManageProjects: authwCanManageProjects,
+    canDrawGis: authwCanDrawGis,
     editActiveProject: editActiveProject,
     closeProjectModal: closeProjectModal,
     deleteActiveProjectPrompt: deleteActiveProjectPrompt,

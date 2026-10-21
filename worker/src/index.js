@@ -14,10 +14,11 @@ const MAX_SNAPSHOT = 5 * 1024 * 1024;
 const STORES = ['projects', 'scores', 'issues', 'deliverables', 'models',
   'gates', 'weights', 'thresholds', 'activity', 'reports', 'history', 'dark'];
 
-// Team-shared stores: every signed-in user reads them; only ADMIN / MANAGER
-// may write. Used for the project registry so all roles see the same projects.
+// Team-shared stores: every signed-in user reads them; only ADMIN / MANAGER /
+// COORDINATOR may write. Used for the project registry so all roles see the
+// same projects (coordinators add zones from the GIS tab).
 const SHARED_STORES = ['projects'];
-const SHARED_WRITER_ROLES = ['ADMIN', 'MANAGER'];
+const SHARED_WRITER_ROLES = ['ADMIN', 'MANAGER', 'COORDINATOR'];
 
 // Role -> permissions. Frontend mirrors for visibility only; enforced HERE.
 const PERMS = {

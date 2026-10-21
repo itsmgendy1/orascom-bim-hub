@@ -113,6 +113,17 @@ const PROJECT_MANAGER_IDS = ['btn-add-project', 'btn-edit-project', 'btn-add-pro
   });
 });
 
+/* ----- GIS zone drawing: ADMIN + MANAGER + COORDINATOR only ----- */
+['', 'USER', 'VIEWER', 'QA'].forEach(function (role) {
+  boot(role);
+  ok(window.OHub.canDrawGis() === false, (role || 'NO-ROLE') + ': GIS drawing denied');
+});
+
+['ADMIN', 'MANAGER', 'COORDINATOR'].forEach(function (role) {
+  boot(role);
+  ok(window.OHub.canDrawGis() === true, role + ': GIS drawing allowed');
+});
+
 /* ----- shared registry plumbing is present (worker + hub wiring) ----- */
 const workerSrc = fs.readFileSync(path.join(ROOT, 'worker', 'src', 'index.js'), 'utf8');
 ok(workerSrc.indexOf('SHARED_STORES') >= 0, 'worker: shared store allowlist present');
@@ -126,6 +137,8 @@ ok(hubHtml.indexOf('id="btn-edit-project"') >= 0, 'hub.html: Edit button id');
 const hubSrc = fs.readFileSync(path.join(ROOT, 'assets', 'js', 'hub.js'), 'utf8');
 ok(hubSrc.indexOf('authwSharedProjectsPull()') >= 0, 'hub.js: shared projects pulled on boot');
 ok(hubSrc.indexOf('/api/shared/projects') >= 0, 'hub.js: shared projects endpoint wired');
+ok(hubSrc.indexOf('authwCanDrawGis') >= 0 && hubSrc.indexOf('Only admins, managers and coordinators can draw zones') >= 0, 'hub.js: GIS drawing gated');
+ok(/SHARED_WRITER_ROLES = \[[^\]]*COORDINATOR/.test(workerSrc), 'worker: coordinator may write shared projects');
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

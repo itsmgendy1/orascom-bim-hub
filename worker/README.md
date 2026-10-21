@@ -62,7 +62,7 @@ Public: `POST /api/auth/request|login`, `POST /api/auth/logout`,
 Own data: `GET|PUT|DELETE /api/data/:store` (stores: projects scores issues
 deliverables models gates weights thresholds activity reports history dark).
 Shared team data: `GET /api/shared/:store` (any signed-in user),
-`PUT /api/shared/:store` (ADMIN / MANAGER only). Store: projects — the team
+`PUT /api/shared/:store` (ADMIN / MANAGER / COORDINATOR). Store: projects — the team
 project registry every role sees in the Hub picker.
 Admin: `GET|POST /api/admin/users`, `PATCH|DELETE /api/admin/users/:id`,
 `GET /api/admin/data/:uid[/:store]`, `GET /api/admin/audit`,

@@ -25,10 +25,8 @@
     background:
       linear-gradient(to bottom, rgba(4,11,24,.92) 0%, rgba(4,11,24,.35) 22%, rgba(4,11,24,.15) 50%, rgba(4,11,24,.55) 78%, rgba(4,11,24,.94) 100%),
       radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(2,6,14,.6) 100%);}
-  body.cinema #bgVideo{opacity:.85;transform:scale(1)}
-  body.cinema .panel{opacity:0;pointer-events:none}
   .panel{transition:opacity .6s}
-  /* cinema dock */
+  /* video dock */
   #dock{position:absolute;z-index:11;left:50%;bottom:86px;transform:translateX(-50%);
     display:flex;align-items:center;gap:12px;
     background:rgba(4,12,26,.62);border:1px solid rgba(56,198,255,.22);
@@ -209,9 +207,6 @@
   <div id="dock">
     <button id="btnEnter" onclick="enterHubFlow()">ENTER HUB →</button>
     <button id="btnModules" onclick="toggleModules()">MODULES</button>
-    <button id="btnPlay">PAUSE</button>
-    <button id="btnMute">MUTED</button>
-    <button id="btnCinema">CINEMA</button>
     <button id="btnLoad">LOAD VIDEO</button>
     <input type="file" id="filePick" accept="video/*" style="display:none" />
     <div id="vprog"><i id="vbar"></i></div>
@@ -543,8 +538,7 @@ const frameGroup = new THREE.Group(); frameGroup.position.copy(screenMesh.positi
 }
 
 /* ---------- cinema dock controls ---------- */
-const btnPlay=document.getElementById('btnPlay'), btnMute=document.getElementById('btnMute'),
-      btnCinema=document.getElementById('btnCinema'), btnLoad=document.getElementById('btnLoad'),
+const btnLoad=document.getElementById('btnLoad'),
       filePick=document.getElementById('filePick'), vbar=document.getElementById('vbar'),
       vlabel=document.getElementById('vlabel');
 function setVideoVisible(ok){
@@ -555,12 +549,9 @@ function setVideoVisible(ok){
 function tryPlay(){ bgVideo.play().catch(()=>{ /* waits for user gesture */ }); }
 bgVideo.addEventListener('error', ()=>setVideoVisible(false));
 bgVideo.addEventListener('canplay', ()=>{ setVideoVisible(true); tryPlay(); });
-btnPlay.onclick=()=>{ if(bgVideo.paused){bgVideo.play();btnPlay.textContent='PAUSE';} else {bgVideo.pause();btnPlay.textContent='PLAY';} };
-btnMute.onclick=()=>{ bgVideo.muted=!bgVideo.muted; btnMute.textContent=bgVideo.muted?'MUTED':'SOUND'; btnMute.classList.toggle('on',!bgVideo.muted); };
-btnCinema.onclick=()=>{ document.body.classList.toggle('cinema'); btnCinema.classList.toggle('on',document.body.classList.contains('cinema')); };
 btnLoad.onclick=()=>filePick.click();
 filePick.onchange=()=>{ const f=filePick.files[0]; if(!f) return;
-  bgVideo.src=URL.createObjectURL(f); bgVideo.muted=false; btnMute.textContent='SOUND';
+  bgVideo.src=URL.createObjectURL(f); bgVideo.muted=false;
   setVideoVisible(true); bgVideo.play().catch(()=>{}); };
 // graceful fallback: if the mp4 is missing/blocked, hide black boxes and keep pure 3D hero
 setTimeout(()=>{ if(bgVideo.readyState<2 && !bgVideo.currentSrc) setVideoVisible(false);
